@@ -8,17 +8,13 @@ function generateUUID() {
   );
 }
 
-// Create container for React app with shadow DOM
+// Create container for React app
 const rootDiv = document.createElement('div');
-rootDiv.id = 'annotation-root';
-const shadowRoot = rootDiv.attachShadow({ mode: 'open' });
-const appContainer = document.createElement('div');
-appContainer.id = 'annotation-app';
-shadowRoot.appendChild(appContainer);
+rootDiv.id = 'annotation-app';
 document.body.appendChild(rootDiv);
-console.log('Annotation app.js: Root div and shadow DOM created');
+console.log('Annotation app.js: Root div created');
 
-// Fallback CSS to ensure UI visibility
+// CSS to ensure UI visibility
 const style = document.createElement('style');
 style.textContent = `
   #annotation-app {
@@ -57,7 +53,7 @@ style.textContent = `
     overflow-y: auto !important;
     margin-bottom: 16px !important;
   }
-  #annotation-app p.error {
+  #annotation-app .error {
     color: red !important;
     font-size: 12px !important;
     margin-bottom: 8px !important;
@@ -71,9 +67,10 @@ style.textContent = `
     font-size: 0.875rem !important;
   }
 `;
-shadowRoot.appendChild(style);
+document.head.appendChild(style);
+console.log('Annotation app.js: Styles appended');
 
-// Load dependencies (excluding Babel)
+// Load dependencies
 const scripts = [
   'https://cdn.jsdelivr.net/npm/react@18.2.0/umd/react.development.js',
   'https://cdn.jsdelivr.net/npm/react-dom@18.2.0/umd/react-dom.development.js',
@@ -96,7 +93,7 @@ scripts.forEach(src => {
     }
   };
   script.onerror = () => console.error(`Annotation app.js: Failed to load ${src}`);
-  shadowRoot.appendChild(script);
+  document.head.appendChild(script);
 });
 
 // Main app code
@@ -150,3 +147,30 @@ function renderApp() {
       React.useEffect(() => {
         console.log('Annotation app.js: Initializing user');
         const initUser = async () => {
+          try {
+            if (window.ethereum) {
+              const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
+              setUserId(accounts[0]);
+              setIsMetaMask(true);
+              console.log('Annotation app.js: MetaMask connected:', accounts[0]);
+            } else {
+              throw new Error('No MetaMask');
+            }
+          } catch (err) {
+            console.log('Annotation app.js: Falling back to anonymous ID');
+            let anonId = localStorage.getItem('anonId');
+            if (!anonId) {
+              anonId = generateUUID();
+              localStorage.setItem('anonId', anonId);
+            }
+            setUserId(anonId);
+            console.log('Annotation app.js: Anonymous ID:', anonId);
+          }
+        };
+        initUser();
+      }, []);
+
+      // Load annotations
+      React.useEffect(() => {
+        if (userId) {
+          console.log('Annotation
