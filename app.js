@@ -26,8 +26,11 @@ style.textContent = `
     border-radius: 8px !important;
     box-shadow: 0 4px 6px rgba(0,0,0,0.1) !important;
     max-width: 384px !important;
+    min-width: 300px !important;
+    min-height: 200px !important;
     z-index: 999999 !important;
     font-family: Arial, sans-serif !important;
+    display: block !important;
   }
   #annotation-app textarea {
     width: 100% !important;
@@ -35,6 +38,8 @@ style.textContent = `
     border: 1px solid #ccc !important;
     border-radius: 4px !important;
     margin-bottom: 8px !important;
+    min-height: 60px !important;
+    box-sizing: border-box !important;
   }
   #annotation-app button {
     width: 100% !important;
@@ -44,6 +49,7 @@ style.textContent = `
     border: none !important;
     border-radius: 4px !important;
     cursor: pointer !important;
+    font-size: 14px !important;
   }
   #annotation-app button:hover {
     background: #2563eb !important;
@@ -52,6 +58,8 @@ style.textContent = `
     max-height: 160px !important;
     overflow-y: auto !important;
     margin-bottom: 16px !important;
+    padding: 0 !important;
+    list-style: none !important;
   }
   #annotation-app .error {
     color: red !important;
@@ -59,12 +67,16 @@ style.textContent = `
     margin-bottom: 8px !important;
   }
   #annotation-app h2 {
-    font-size: 1.125rem !important;
+    font-size: 18px !important;
     font-weight: bold !important;
     margin-bottom: 8px !important;
   }
   #annotation-app p {
-    font-size: 0.875rem !important;
+    font-size: 14px !important;
+    margin-bottom: 8px !important;
+  }
+  #annotation-app li {
+    margin-bottom: 8px !important;
   }
 `;
 document.head.appendChild(style);
@@ -143,34 +155,170 @@ function renderApp() {
       const [isMetaMask, setIsMetaMask] = React.useState(false);
       const [error, setError] = React.useState('');
 
-      // Initialize user ID
-      React.useEffect(() => {
-        console.log('Annotation app.js: Initializing user');
-        const initUser = async () => {
-          try {
-            if (window.ethereum) {
-              const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
+      // Initialize user ID immediately
+      console.log('Annotation app.js: Initializing user');
+      if (!userId) {
+        if (window.ethereum) {
+          window.ethereum.request({ method: 'eth_requestAccounts' })
+            .then(accounts => {
               setUserId(accounts[0]);
               setIsMetaMask(true);
               console.log('Annotation app.js: MetaMask connected:', accounts[0]);
-            } else {
-              throw new Error('No MetaMask');
-            }
-          } catch (err) {
-            console.log('Annotation app.js: Falling back to anonymous ID');
-            let anonId = localStorage.getItem('anonId');
-            if (!anonId) {
-              anonId = generateUUID();
-              localStorage.setItem('anonId', anonId);
-            }
-            setUserId(anonId);
-            console.log('Annotation app.js: Anonymous ID:', anonId);
+            })
+            .catch(err => {
+              console.log('Annotation app.js: MetaMask failed, using anonymous ID');
+              let anonId = localStorage.getItem('anonId');
+              if (!anonId) {
+                anonId = generateUUID();
+                localStorage.setItem('anonId', anonId);
+              }
+              setUserId(anonId);
+              console.log('Annotation app.js: Anonymous ID:', anonId);
+            });
+        } else {
+          let anonId = localStorage.getItem('anonId');
+          if (!anonId) {
+            anonId = generateUUID();
+            localStorage.setItem('anonId', anonId);
           }
-        };
-        initUser();
-      }, []);
+          setUserId(anonId);
+          console.log('Annotation app.js: Anonymous ID:', anonId);
+        }
+      }
 
       // Load annotations
       React.useEffect(() => {
         if (userId) {
-          console.log('Annotation
+          console.log('Annotation app.js: Loading annotations for URL:', window.location.href);
+          const currentUrl = window.location.href;
+          gun.get('annotations').get(currentUrl).map().on(async (data, id) => {
+            if (data && data.cid) {
+              try {
+                const annotationData = await fetchFromIPFS(data.cid);
+                setAnnotations(prev => {
+                  const exists = prev.find(a => a.id === id);
+                  if (!exists) return [...prev, { id, ...annotationData }];
+                  return prev.map(a => (a.id === id ? { id, ...annotationData } : a));
+                });
+                console.log('Annotation app.js: Loaded annotation:', id);
+              } catch (err) {
+                console.error('Annotation app.js: Failed to fetch from IPFS:', err);
+              }
+            }
+          });
+        }
+      }, [userId]);
+
+      // Handle annotation
+      const handleAnnotate = async () => {
+        console.log('Annotation app.js: Attempting to annotate');
+        const selection = window.getSelection();
+        if (!selection.toString()) {
+          setError('Please select some text to annotate.');
+          console.log('Annotation app.js: No text selected');
+          return;
+        }
+        if (!newAnnotation) {
+          setError('Please enter an annotation note.');
+          console.log('Annotation app.js: No note entered');
+          return;
+        }
+        if (userId) {
+          const currentUrl = window.location.href;
+          const annotation = {
+            text: selection.toString(),
+            note: newAnnotation,
+            user: userId,
+            isMetaMask,
+            timestamp: Date.now()
+          };
+          try {
+            const cid = await uploadToIPFS(annotation);
+            const id = `${userId}-${Date.now()}`;
+            gun.get('annotations').get(currentUrl).get(id).put({ cid });
+            setNewAnnotation('');
+            setError('');
+            selection.removeAllRanges();
+            console.log('Annotation app.js: Annotation saved:', id);
+          } catch (err) {
+            setError('Failed to save annotation. Please try again.');
+            console.error('Annotation app.js: Annotation save failed:', err);
+          }
+        }
+      };
+
+      console.log('Annotation app.js: Rendering component, userId:', userId);
+
+      // Render using createElement
+      return React.createElement(
+        'div',
+        { id: 'annotation-app' },
+        userId
+          ? [
+              React.createElement(
+                'p',
+                { className: 'text-sm mb-2', key: 'user' },
+                isMetaMask ? `Connected: ${userId.slice(0, 6)}...` : 'Anonymous User'
+              ),
+              error && React.createElement('p', { className: 'error', key: 'error' }, error),
+              React.createElement('h2', { className: 'text-lg font-bold mb-2', key: 'title' }, 'Annotations'),
+              React.createElement(
+                'ul',
+                { key: 'annotations' },
+                annotations.map(ann =>
+                  React.createElement(
+                    'li',
+                    { key: ann.id, className: 'mb-2' },
+                    React.createElement(
+                      'p',
+                      { className: 'text-sm' },
+                      React.createElement(
+                        'strong',
+                        null,
+                        ann.isMetaMask ? `${ann.user.slice(0, 6)}...` : 'Anonymous'
+                      ),
+                      `: "${ann.text}"`
+                    ),
+                    React.createElement('p', { className: 'text-xs' }, ann.note)
+                  )
+                )
+              ),
+              React.createElement('textarea', {
+                placeholder: 'Add annotation',
+                value: newAnnotation,
+                onChange: e => setNewAnnotation(e.target.value),
+                key: 'textarea'
+              }),
+              React.createElement(
+                'button',
+                { onClick: handleAnnotate, key: 'button' },
+                'Annotate Selection'
+              )
+            ]
+          : React.createElement('p', { className: 'error' }, 'Initializing user...')
+      );
+    }
+
+    // Render the app
+    console.log('Annotation app.js: Calling ReactDOM.render');
+    const container = document.querySelector('#annotation-app');
+    if (container) {
+      ReactDOM.render(React.createElement(AnnotationApp), container);
+      console.log('Annotation app.js: Render completed');
+    } else {
+      console.error('Annotation app.js: Render failed: #annotation-app not found');
+      rootDiv.innerHTML = `
+        <div style="position: fixed; bottom: 16px; right: 16px; background: white; padding: 16px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); max-width: 384px; min-width: 300px; min-height: 200px; z-index: 999999; font-family: Arial, sans-serif;">
+          <p style="color: red;">Failed to load annotation app: Container not found.</p>
+        </div>
+      `;
+    }
+  } catch (err) {
+    console.error('Annotation app.js: Render failed:', err);
+    rootDiv.innerHTML = `
+      <div style="position: fixed; bottom: 16px; right: 16px; background: white; padding: 16px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); max-width: 384px; min-width: 300px; min-height: 200px; z-index: 999999; font-family: Arial, sans-serif;">
+        <p style="color: red;">Failed to load annotation app. Please try again.</p>
+      </div>
+    `;
+  }
+}
