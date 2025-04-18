@@ -155,46 +155,42 @@ function renderApp() {
     });
     console.log('Annotation app.js: Gun.js initialized');
 
-    // IPFS Configuration (with Infura authentication)
-    const IPFS_API_URL = 'https://ipfs.infura.io:5001/api/v0';
-    const INFURA_PROJECT_ID = '18d300e4f175448ebda0d04f0e7c9605';
-    const INFURA_API_SECRET = 'BYLbfjJ6/F7/k+/I3yTknVod1iURGwa7wet8mmlnb7f9lmNScBc6+w';
+    // IPFS Configuration (using Pinata)
+    const PINATA_API_URL = 'https://api.pinata.cloud/pinning/pinFileToIPFS';
+    const PINATA_JWT = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySW5mb3JtYXRpb24iOnsiaWQiOiJjMDJhZjU4Yi1hMWU4LTRmOWUtOWYxYy03MDIxYzU5ZWQyY2YiLCJlbWFpbCI6IndhbHRlci53YXJ0ZW53ZWlsZXJAZ21haWwuY29tIiwiZW1haWxfdmVyaWZpZWQiOnRydWUsInBpbl9wb2xpY3kiOnsicmVnaW9ucyI6W3siZGVzaXJlZFJlcGxpY2F0aW9uQ291bnQiOjEsImlkIjoiRlJBMSJ9LHsiZGVzaXJlZFJlcGxpY2F0aW9uQ291bnQiOjEsImlkIjoiTllDMSJ9XSwidmVyc2lvbiI6MX0sIm1mYV9lbmFibGVkIjpmYWxzZSwic3RhdHVzIjoiQUNUSVZFIn0sImF1dGhlbnRpY2F0aW9uVHlwZSI6InNjb3BlZEtleSIsInNjb3BlZEtleUtleSI6ImEyNjMxMzAyYjU5ZDJmZjExOGZiIiwic2NvcGVkS2V5U2VjcmV0IjoiMDMxZDMwNTViODliNDA2ZjUyOTRjYzU1Nzk0NzIwNjRmZjNlMjk3MzVmNmVkYTVjYWIxNDhiZmY1YmQ4MzVhZCIsImV4cCI6MTc3NjUyOTQwN30.drqZMCA4Va5_-BFfsfPa83geywC5ftU9f7IOlZvRj7I'; // Replace with your Pinata JWT
     async function uploadToIPFS(data) {
       try {
         const formData = new FormData();
         formData.append('file', new Blob([JSON.stringify(data)], { type: 'application/json' }));
-        const auth = btoa(`${INFURA_PROJECT_ID}:${INFURA_API_SECRET}`);
-        console.log('Annotation app.js: IPFS auth header:', `Basic ${auth}`);
-        const response = await fetch(`${IPFS_API_URL}/add?pin=true`, {
+        const response = await fetch(PINATA_API_URL, {
           method: 'POST',
           body: formData,
           headers: {
-            'Authorization': `Basic ${auth}`,
-            'Accept': 'application/json'
+            'Authorization': `Bearer ${PINATA_JWT}`
           }
         });
         if (!response.ok) {
           const errorText = await response.text();
-          throw new Error(`IPFS upload failed: ${response.status} ${response.statusText} - ${errorText}`);
+          throw new Error(`Pinata upload failed: ${response.status} ${response.statusText} - ${errorText}`);
         }
         const result = await response.json();
-        console.log('Annotation app.js: IPFS upload CID:', result.Hash);
-        return result.Hash;
+        console.log('Annotation app.js: Pinata upload CID:', result.IpfsHash);
+        return result.IpfsHash;
       } catch (err) {
-        console.error('Annotation app.js: IPFS upload failed:', err);
+        console.error('Annotation app.js: Pinata upload failed:', err);
         throw err;
       }
     }
 
     async function fetchFromIPFS(cid) {
       try {
-        const response = await fetch(`https://ipfs.infura.io/ipfs/${cid}`);
+        const response = await fetch(`https://gateway.pinata.cloud/ipfs/${cid}`);
         if (!response.ok) {
-          throw new Error(`IPFS fetch failed: ${response.statusText}`);
+          throw new Error(`Pinata fetch failed: ${response.statusText}`);
         }
         return await response.json();
       } catch (err) {
-        console.error('Annotation app.js: IPFS fetch failed:', err);
+        console.error('Annotation app.js: Pinata fetch failed:', err);
         throw err;
       }
     }
