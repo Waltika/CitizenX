@@ -14,15 +14,24 @@ function saveSelection() {
   const selection = window.getSelection();
   if (selection.rangeCount > 0) {
     preservedSelection = selection.getRangeAt(0);
-    console.log('Annotation app.js: Selection saved');
+    console.log('Annotation app.js: Selection saved:', selection.toString());
+  } else {
+    console.log('Annotation app.js: No selection to save');
   }
 }
 function restoreSelection() {
   if (preservedSelection) {
-    const selection = window.getSelection();
-    selection.removeAllRanges();
-    selection.addRange(preservedSelection);
-    console.log('Annotation app.js: Selection restored');
+    try {
+      const selection = window.getSelection();
+      selection.removeAllRanges();
+      selection.addRange(preservedSelection);
+      console.log('Annotation app.js: Selection restored:', selection.toString());
+    } catch (err) {
+      console.error('Annotation app.js: Failed to restore selection:', err);
+      preservedSelection = null;
+    }
+  } else {
+    console.log('Annotation app.js: No selection to restore');
   }
 }
 saveSelection(); // Save selection before DOM changes
@@ -139,20 +148,23 @@ function renderApp() {
 
     // IPFS Configuration (with Infura authentication)
     const IPFS_API_URL = 'https://ipfs.infura.io:5001/api/v0';
-    const INFURA_PROJECT_ID = '18d300e4f175448ebda0d04f0e7c9605'; 
-    const INFURA_API_SECRET = 'YBYLbfjJ6/F7/k+/I3yTknVod1iURGwa7wet8mmlnb7f9lmNScBc6+w'; 
+    const INFURA_PROJECT_ID = '18d300e4f175448ebda0d04f0e7c9605';
+    const INFURA_API_SECRET = 'YBYLbfjJ6/F7/k+/I3yTknVod1iURGwa7wet8mmlnb7f9lmNScBc6+w';
     async function uploadToIPFS(data) {
       try {
         const formData = new FormData();
         formData.append('file', new Blob([JSON.stringify(data)], { type: 'application/json' }));
         const auth = btoa(`${INFURA_PROJECT_ID}:${INFURA_API_SECRET}`);
-        const response = await fetch(`${IPFS_API_URL}/add`, {
+        const response = await fetch(`${IPFS_API_URL}/add?pin=true`, {
           method: 'POST',
           body: formData,
           headers: {
             'Authorization': `Basic ${auth}`
           }
         });
+        if (!response.ok) {
+          throw new Error(`IPFS upload failed: ${response.statusText}`);
+        }
         const result = await response.json();
         console.log('Annotation app.js: IPFS upload CID:', result.Hash);
         return result.Hash;
@@ -165,6 +177,9 @@ function renderApp() {
     async function fetchFromIPFS(cid) {
       try {
         const response = await fetch(`https://ipfs.infura.io/ipfs/${cid}`);
+        if (!response.ok) {
+          throw new Error(`IPFS fetch failed: ${response.statusText}`);
+        }
         return await response.json();
       } catch (err) {
         console.error('Annotation app.js: IPFS fetch failed:', err);
@@ -215,15 +230,23 @@ function renderApp() {
         };
       }, []);
 
+      // Restore selection after component mounts
+      React.useEffect(() => {
+        restoreSelection();
+      }, []);
+
       // Load annotations
       React.useEffect(() => {
         if (userId) {
           console.log('Annotation app.js: Loading annotations for URL:', window.location.href);
           const currentUrl = window.location.href;
           gun.get('annotations').get(currentUrl).map().on(async (data, id) => {
-            if (data && data.cid) {
+            if (data) {
               try {
-                const annotationData = await fetchFromIPFS(data.cid);
+                let annotationData = data;
+                if (data.cid) {
+                  annotationData = await fetchFromIPFS(data.cid);
+                }
                 setAnnotations(prev => {
                   const exists = prev.find(a => a.id === id);
                   if (!exists) return [...prev, { id, ...annotationData }];
@@ -262,13 +285,26 @@ function renderApp() {
             timestamp: Date.now()
           };
           try {
-            const cid = await uploadToIPFS(annotation);
+            let cid;
+            try {
+              cid = await uploadToIPFS(annotation);
+            } catch (ipfsErr) {
+              console.warn('Annotation app.js: IPFS upload failed, falling back to Gun.js:', ipfsErr);
+              // Fallback to Gun.js storage
+              const id = `${userId}-${Date.now()}`;
+              gun.get('annotations').get(currentUrl).get(id).put(annotation);
+              setNewAnnotation('');
+              setError('');
+              selection.removeAllRanges();
+              console.log('Annotation app.js: Annotation saved to Gun.js:', id);
+              return;
+            }
             const id = `${userId}-${Date.now()}`;
             gun.get('annotations').get(currentUrl).get(id).put({ cid });
             setNewAnnotation('');
             setError('');
             selection.removeAllRanges();
-            console.log('Annotation app.js: Annotation saved:', id);
+            console.log('Annotation app.js: Annotation saved with IPFS:', id);
           } catch (err) {
             setError('Failed to save annotation. Please try again.');
             console.error('Annotation app.js: Annotation save failed:', err);
@@ -335,7 +371,6 @@ function renderApp() {
       const root = ReactDOM.createRoot(container);
       root.render(React.createElement(AnnotationApp));
       console.log('Annotation app.js: Render completed');
-      restoreSelection(); // Restore selection after rendering
     } else {
       console.error('Annotation app.js: Render failed: #annotation-app not found');
       rootDiv.innerHTML = `
