@@ -38,86 +38,93 @@ function restoreSelection() {
 }
 saveSelection(); // Save selection before DOM changes
 
-// Create container for React app
+// Create container for React app with Shadow DOM
 const rootDiv = document.createElement('div');
-rootDiv.id = 'annotation-app';
+rootDiv.id = 'annotation-root';
+const shadowRoot = rootDiv.attachShadow({ mode: 'open' });
+const appContainer = document.createElement('div');
+appContainer.id = 'annotation-app';
+shadowRoot.appendChild(appContainer);
 document.body.appendChild(rootDiv);
-console.log('Annotation app.js: Root div created');
+console.log('Annotation app.js: Root div and shadow DOM created');
 
-// CSS to ensure UI visibility
+// CSS to ensure UI visibility (inside Shadow DOM)
 const style = document.createElement('style');
 style.textContent = `
+  :host {
+    all: initial; /* Reset inherited styles */
+  }
   #annotation-app {
-    position: fixed !important;
-    bottom: 16px !important;
-    right: 16px !important;
-    background: white !important;
-    padding: 16px !important;
-    border-radius: 8px !important;
-    box-shadow: 0 4px 6px rgba(0,0,0,0.1) !important;
-    max-width: 384px !important;
-    min-width: 300px !important;
-    min-height: 200px !important;
-    z-index: 999999 !important;
-    font-family: Arial, sans-serif !important;
-    display: block !important;
+    position: fixed;
+    bottom: 16px;
+    right: 16px;
+    background: white;
+    padding: 16px;
+    border-radius: 8px;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    max-width: 384px;
+    min-width: 300px;
+    min-height: 200px;
+    z-index: 999999;
+    font-family: Arial, sans-serif;
+    display: block;
   }
   #annotation-app textarea {
-    width: 100% !important;
-    padding: 8px !important;
-    border: 1px solid #ccc !important;
-    border-radius: 4px !important;
-    margin-bottom: 8px !important;
-    min-height: 60px !important;
-    box-sizing: border-box !important;
+    width: 100%;
+    padding: 8px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    margin-bottom: 8px;
+    min-height: 60px;
+    box-sizing: border-box;
   }
   #annotation-app button {
-    width: 100% !important;
-    background: #3b82f6 !important;
-    color: white !important;
-    padding: 8px !important;
-    border: none !important;
-    border-radius: 4px !important;
-    cursor: pointer !important;
-    font-size: 14px !important;
+    width: 100%;
+    background: #3b82f6;
+    color: white;
+    padding: 8px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
   }
   #annotation-app button:hover {
-    background: #2563eb !important;
+    background: #2563eb;
   }
   #annotation-app ul {
-    max-height: 160px !important;
-    overflow-y: auto !important;
-    margin-bottom: 16px !important;
-    padding: 0 !important;
-    list-style: none !important;
+    max-height: 160px;
+    overflow-y: auto;
+    margin-bottom: 16px;
+    padding: 0;
+    list-style: none;
   }
   #annotation-app .error {
-    color: red !important;
-    font-size: 12px !important;
-    margin-bottom: 8px !important;
+    color: red;
+    font-size: 12px;
+    margin-bottom: 8px;
   }
   #annotation-app h2 {
-    font-size: 18px !important;
-    font-weight: bold !important;
-    margin-bottom: 8px !important;
+    font-size: 18px;
+    font-weight: bold;
+    margin-bottom: 8px;
   }
   #annotation-app p {
-    font-size: 14px !important;
-    margin-bottom: 8px !important;
+    font-size: 14px;
+    margin-bottom: 8px;
   }
   #annotation-app li {
-    margin-bottom: 8px !important;
+    margin-bottom: 8px;
   }
   #annotation-app .selected-text {
-    background: #e0f7fa !important;
-    padding: 4px !important;
-    border-radius: 4px !important;
-    margin-bottom: 8px !important;
-    font-size: 14px !important;
+    background: #e0f7fa;
+    padding: 4px;
+    border-radius: 4px;
+    margin-bottom: 8px;
+    font-size: 14px;
   }
 `;
-document.head.appendChild(style);
-console.log('Annotation app.js: Styles appended');
+shadowRoot.appendChild(style);
+console.log('Annotation app.js: Styles appended to shadow DOM');
 
 // Load dependencies
 const scripts = [
@@ -249,7 +256,7 @@ function renderApp() {
         if (selection.toString()) {
           setSelectedText(selection.toString());
         }
-        const textarea = document.querySelector('#annotation-app textarea');
+        const textarea = shadowRoot.querySelector('#annotation-app textarea');
         if (textarea) {
           textarea.addEventListener('focus', () => {
             saveSelection(); // Save before losing focus
@@ -407,7 +414,7 @@ function renderApp() {
 
     // Render the app with React 18 createRoot
     console.log('Annotation app.js: Creating root');
-    const container = document.querySelector('#annotation-app');
+    const container = shadowRoot.querySelector('#annotation-app');
     if (container) {
       const root = ReactDOM.createRoot(container);
       root.render(React.createElement(AnnotationApp));
@@ -415,7 +422,7 @@ function renderApp() {
       restoreSelection();
     } else {
       console.error('Annotation app.js: Render failed: #annotation-app not found');
-      rootDiv.innerHTML = `
+      appContainer.innerHTML = `
         <div style="position: fixed; bottom: 16px; right: 16px; background: white; padding: 16px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); max-width: 384px; min-width: 300px; min-height: 200px; z-index: 999999; font-family: Arial, sans-serif;">
           <p style="color: red;">Failed to load annotation app: Container not found.</p>
         </div>
@@ -423,7 +430,7 @@ function renderApp() {
     }
   } catch (err) {
     console.error('Annotation app.js: Render failed:', err);
-    rootDiv.innerHTML = `
+    appContainer.innerHTML = `
       <div style="position: fixed; bottom: 16px; right: 16px; background: white; padding: 16px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); max-width: 384px; min-width: 300px; min-height: 200px; z-index: 999999; font-family: Arial, sans-serif;">
         <p style="color: red;">Failed to load annotation app. Please try again.</p>
       </div>
