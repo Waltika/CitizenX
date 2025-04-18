@@ -1,6 +1,6 @@
 // CSS to ensure UI visibility
 
-export const style = document.createElement('style');
+const style = document.createElement('style');
 style.textContent = `
   #annotation-app {
     position: fixed !important;
