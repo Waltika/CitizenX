@@ -1,3 +1,6 @@
+// Debug: Log script start
+console.log('Annotation app.js: Script started');
+
 // Simple UUID generator for anonymous users
 function generateUUID() {
   return ([1e7]+-1e3+-4e3+-8e3+-1e11).replace(/[018]/g, c =>
@@ -5,12 +8,16 @@ function generateUUID() {
   );
 }
 
-// Create container for React app
+// Create container for React app with shadow DOM
 const rootDiv = document.createElement('div');
 rootDiv.id = 'annotation-root';
+const shadowRoot = rootDiv.attachShadow({ mode: 'open' });
+const appContainer = document.createElement('div');
+shadowRoot.appendChild(appContainer);
 document.body.appendChild(rootDiv);
+console.log('Annotation app.js: Root div and shadow DOM created');
 
-// Load dependencies (React, Gun.js, etc.) via script tags
+// Load dependencies
 const scripts = [
   'https://cdn.jsdelivr.net/npm/react@18.2.0/umd/react.development.js',
   'https://cdn.jsdelivr.net/npm/react-dom@18.2.0/umd/react-dom.development.js',
@@ -20,182 +27,101 @@ const scripts = [
   'https://cdn.tailwindcss.com'
 ];
 
+let loadedScripts = 0;
 scripts.forEach(src => {
   const script = document.createElement('script');
   script.src = src;
-  script.async = false; // Ensure scripts load in order
+  script.async = false;
+  script.onload = () => {
+    console.log(`Annotation app.js: Loaded ${src}`);
+    loadedScripts++;
+    if (loadedScripts === scripts.length) {
+      console.log('Annotation app.js: All dependencies loaded');
+      renderApp();
+    }
+  };
+  script.onerror = () => console.error(`Annotation app.js: Failed to load ${src}`);
   document.head.appendChild(script);
 });
 
-// Main app code
-const appCode = `
-  const { useState, useEffect } = React;
-
-  // Initialize Gun.js with public peers
-  const gun = GUN({
-    peers: ['https://gun-manhattan.herokuapp.com/gun']
-  });
-
-  // IPFS Configuration (using Infura HTTP API)
-  const IPFS_API_URL = 'https://ipfs.infura.io:5001/api/v0';
-  async function uploadToIPFS(data) {
-    try {
-      const formData = new FormData();
-      formData.append('file', new Blob([JSON.stringify(data)], { type: 'application/json' }));
-      const response = await fetch(\`\${IPFS_API_URL}/add\`, {
-        method: 'POST',
-        body: formData
-      });
-      const result = await response.json();
-      return result.Hash; // Return CID
-    } catch (err) {
-      console.error('IPFS upload failed:', err);
-      throw err;
-    }
+// Fallback CSS to ensure UI visibility
+const style = document.createElement('style');
+style.textContent = `
+  #annotation-app {
+    position: fixed !important;
+    bottom: 16px !important;
+    right: 16px !important;
+    background: white !important;
+    padding: 16px !important;
+    border-radius: 8px !important;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.1) !important;
+    max-width: 384px !important;
+    z-index: 999999 !important;
+    font-family: Arial, sans-serif !important;
   }
-
-  async function fetchFromIPFS(cid) {
-    try {
-      const response = await fetch(\`https://ipfs.infura.io/ipfs/\${cid}\`);
-      return await response.json();
-    } catch (err) {
-      console.error('IPFS fetch failed:', err);
-      throw err;
-    }
+  #annotation-app textarea {
+    width: 100% !important;
+    padding: 8px !important;
+    border: 1px solid #ccc !important;
+    border-radius: 4px !important;
+    margin-bottom: 8px !important;
   }
-
-  // Annotation Component
-  function AnnotationApp() {
-    const [annotations, setAnnotations] = useState([]);
-    const [newAnnotation, setNewAnnotation] = useState('');
-    const [userId, setUserId] = useState(null);
-    const [isMetaMask, setIsMetaMask] = useState(false);
-    const [error, setError] = useState('');
-
-    // Initialize user ID (MetaMask or anonymous)
-    useEffect(() => {
-      if (window.ethereum) {
-        window.ethereum.request({ method: 'eth_requestAccounts' })
-          .then(accounts => {
-            setUserId(accounts[0]);
-            setIsMetaMask(true);
-          })
-          .catch(err => {
-            console.error('MetaMask connection failed:', err);
-            let anonId = localStorage.getItem('anonId');
-            if (!anonId) {
-              anonId = generateUUID();
-              localStorage.setItem('anonId', anonId);
-            }
-            setUserId(anonId);
-          });
-      } else {
-        let anonId = localStorage.getItem('anonId');
-        if (!anonId) {
-          anonId = generateUUID();
-          localStorage.setItem('anonId', anonId);
-        }
-        setUserId(anonId);
-      }
-    }, []);
-
-    // Load annotations for current URL
-    useEffect(() => {
-      const currentUrl = window.location.href;
-      gun.get('annotations').get(currentUrl).map().on(async (data, id) => {
-        if (data && data.cid) {
-          try {
-            const annotationData = await fetchFromIPFS(data.cid);
-            setAnnotations(prev => {
-              const exists = prev.find(a => a.id === id);
-              if (!exists) return [...prev, { id, ...annotationData }];
-              return prev.map(a => (a.id === id ? { id, ...annotationData } : a));
-            });
-          } catch (err) {
-            console.error('Failed to fetch from IPFS:', err);
-          }
-        }
-      });
-    }, []);
-
-    // Handle text selection and annotation
-    const handleAnnotate = async () => {
-      const selection = window.getSelection();
-      if (!selection.toString()) {
-        setError('Please select some text to annotate.');
-        return;
-      }
-      if (!newAnnotation) {
-        setError('Please enter an annotation note.');
-        return;
-      }
-      if (userId) {
-        const currentUrl = window.location.href;
-        const annotation = {
-          text: selection.toString(),
-          note: newAnnotation,
-          user: userId,
-          isMetaMask,
-          timestamp: Date.now()
-        };
-        try {
-          const cid = await uploadToIPFS(annotation);
-          const id = \`\${userId}-\${Date.now()}\`;
-          gun.get('annotations').get(currentUrl).get(id).put({ cid });
-          setNewAnnotation('');
-          setError('');
-          selection.removeAllRanges();
-        } catch (err) {
-          setError('Failed to save annotation. Please try again.');
-        }
-      }
-    };
-
-    return (
-      <div className="fixed bottom-4 right-4 bg-white p-4 rounded-lg shadow-lg max-w-sm z-50">
-        {userId ? (
-          <div>
-            <p className="text-sm mb-2">
-              {isMetaMask ? \`Connected: \${userId.slice(0, 6)}...\` : 'Anonymous User'}
-            </p>
-            {error && <p className="text-red-500 text-sm mb-2">{error}</p>}
-            <h2 className="text-lg font-bold mb-2">Annotations</h2>
-            <ul className="mb-4 max-h-40 overflow-y-auto">
-              {annotations.map(ann => (
-                <li key={ann.id} className="mb-2">
-                  <p className="text-sm">
-                    <strong>{ann.isMetaMask ? ann.user.slice(0, 6) + '...' : 'Anonymous'}:</strong> "{ann.text}"
-                  </p>
-                  <p className="text-xs">{ann.note}</p>
-                </li>
-              ))}
-            </ul>
-            <textarea
-              className="w-full p-2 border rounded mb-2"
-              placeholder="Add annotation"
-              value={newAnnotation}
-              onChange={e => setNewAnnotation(e.target.value)}
-            />
-            <button
-              className="w-full bg-blue-500 text-white p-2 rounded hover:bg-blue-600"
-              onClick={handleAnnotate}
-            >
-              Annotate Selection
-            </button>
-          </div>
-        ) : (
-          <p className="text-red-500">Initializing user...</p>
-        )}
-      </div>
-    );
+  #annotation-app button {
+    width: 100% !important;
+    background: #3b82f6 !important;
+    color: white !important;
+    padding: 8px !important;
+    border: none !important;
+    border-radius: 4px !important;
+    cursor: pointer !important;
   }
-
-  // Render the app
-  ReactDOM.render(<AnnotationApp />, document.getElementById('annotation-root'));
+  #annotation-app button:hover {
+    background: #2563eb !important;
+  }
+  #annotation-app ul {
+    max-height: 160px !important;
+    overflow-y: auto !important;
+    margin-bottom: 16px !important;
+  }
+  #annotation-app p.error {
+    color: red !important;
+    font-size: 12px !important;
+    margin-bottom: 8px !important;
+  }
 `;
+shadowRoot.appendChild(style);
 
-// Inject and execute the app code after dependencies load
-const script = document.createElement('script');
-script.setAttribute('type', 'text/babel');
-script.textContent = appCode;
-document.head.appendChild(script);
+// Main app code
+function renderApp() {
+  console.log('Annotation app.js: Rendering app');
+  try {
+    const appCode = `
+      const { useState, useEffect } = React;
+
+      // Initialize Gun.js with public peers
+      const gun = GUN({
+        peers: ['https://gun-manhattan.herokuapp.com/gun']
+      });
+
+      // IPFS Configuration
+      const IPFS_API_URL = 'https://ipfs.infura.io:5001/api/v0';
+      async function uploadToIPFS(data) {
+        try {
+          const formData = new FormData();
+          formData.append('file', new Blob([JSON.stringify(data)], { type: 'application/json' }));
+          const response = await fetch(\`\${IPFS_API_URL}/add\`, {
+            method: 'POST',
+            body: formData
+          });
+          const result = await response.json();
+          console.log('Annotation app.js: IPFS upload CID:', result.Hash);
+          return result.Hash;
+        } catch (err) {
+          console.error('Annotation app.js: IPFS upload failed:', err);
+          throw err;
+        }
+      }
+
+      async function fetchFromIPFS(cid) {
+        try {
+          const response
