@@ -111,4 +111,91 @@ const appCode = `
               if (!exists) return [...prev, { id, ...annotationData }];
               return prev.map(a => (a.id === id ? { id, ...annotationData } : a));
             });
-          } catch (err)
+          } catch (err) {
+            console.error('Failed to fetch from IPFS:', err);
+          }
+        }
+      });
+    }, []);
+
+    // Handle text selection and annotation
+    const handleAnnotate = async () => {
+      const selection = window.getSelection();
+      if (!selection.toString()) {
+        setError('Please select some text to annotate.');
+        return;
+      }
+      if (!newAnnotation) {
+        setError('Please enter an annotation note.');
+        return;
+      }
+      if (userId) {
+        const currentUrl = window.location.href;
+        const annotation = {
+          text: selection.toString(),
+          note: newAnnotation,
+          user: userId,
+          isMetaMask,
+          timestamp: Date.now()
+        };
+        try {
+          const cid = await uploadToIPFS(annotation);
+          const id = \`\${userId}-\${Date.now()}\`;
+          gun.get('annotations').get(currentUrl).get(id).put({ cid });
+          setNewAnnotation('');
+          setError('');
+          selection.removeAllRanges();
+        } catch (err) {
+          setError('Failed to save annotation. Please try again.');
+        }
+      }
+    };
+
+    return (
+      <div className="fixed bottom-4 right-4 bg-white p-4 rounded-lg shadow-lg max-w-sm z-50">
+        {userId ? (
+          <div>
+            <p className="text-sm mb-2">
+              {isMetaMask ? \`Connected: \${userId.slice(0, 6)}...\` : 'Anonymous User'}
+            </p>
+            {error && <p className="text-red-500 text-sm mb-2">{error}</p>}
+            <h2 className="text-lg font-bold mb-2">Annotations</h2>
+            <ul className="mb-4 max-h-40 overflow-y-auto">
+              {annotations.map(ann => (
+                <li key={ann.id} className="mb-2">
+                  <p className="text-sm">
+                    <strong>{ann.isMetaMask ? ann.user.slice(0, 6) + '...' : 'Anonymous'}:</strong> "{ann.text}"
+                  </p>
+                  <p className="text-xs">{ann.note}</p>
+                </li>
+              ))}
+            </ul>
+            <textarea
+              className="w-full p-2 border rounded mb-2"
+              placeholder="Add annotation"
+              value={newAnnotation}
+              onChange={e => setNewAnnotation(e.target.value)}
+            />
+            <button
+              className="w-full bg-blue-500 text-white p-2 rounded hover:bg-blue-600"
+              onClick={handleAnnotate}
+            >
+              Annotate Selection
+            </button>
+          </div>
+        ) : (
+          <p className="text-red-500">Initializing user...</p>
+        )}
+      </div>
+    );
+  }
+
+  // Render the app
+  ReactDOM.render(<AnnotationApp />, document.getElementById('annotation-root'));
+`;
+
+// Inject and execute the app code after dependencies load
+const script = document.createElement('script');
+script.setAttribute('type', 'text/babel');
+script.textContent = appCode;
+document.head.appendChild(script);
