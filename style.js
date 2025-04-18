@@ -1,4 +1,5 @@
 // CSS to ensure UI visibility
+
 export const style = document.createElement('style');
 style.textContent = `
   #annotation-app {
