@@ -13,36 +13,10 @@ const rootDiv = document.createElement('div');
 rootDiv.id = 'annotation-root';
 const shadowRoot = rootDiv.attachShadow({ mode: 'open' });
 const appContainer = document.createElement('div');
+appContainer.id = 'annotation-app';
 shadowRoot.appendChild(appContainer);
 document.body.appendChild(rootDiv);
 console.log('Annotation app.js: Root div and shadow DOM created');
-
-// Load dependencies
-const scripts = [
-  'https://cdn.jsdelivr.net/npm/react@18.2.0/umd/react.development.js',
-  'https://cdn.jsdelivr.net/npm/react-dom@18.2.0/umd/react-dom.development.js',
-  'https://cdn.jsdelivr.net/npm/@babel/standalone@7.20.15/babel.min.js',
-  'https://cdn.jsdelivr.net/npm/gun@0.2020.1236/gun.min.js',
-  'https://cdn.jsdelivr.net/npm/gun/sea.js',
-  'https://cdn.tailwindcss.com'
-];
-
-let loadedScripts = 0;
-scripts.forEach(src => {
-  const script = document.createElement('script');
-  script.src = src;
-  script.async = false;
-  script.onload = () => {
-    console.log(`Annotation app.js: Loaded ${src}`);
-    loadedScripts++;
-    if (loadedScripts === scripts.length) {
-      console.log('Annotation app.js: All dependencies loaded');
-      renderApp();
-    }
-  };
-  script.onerror = () => console.error(`Annotation app.js: Failed to load ${src}`);
-  document.head.appendChild(script);
-});
 
 // Fallback CSS to ensure UI visibility
 const style = document.createElement('style');
@@ -88,8 +62,43 @@ style.textContent = `
     font-size: 12px !important;
     margin-bottom: 8px !important;
   }
+  #annotation-app h2 {
+    font-size: 1.125rem !important;
+    font-weight: bold !important;
+    margin-bottom: 8px !important;
+  }
+  #annotation-app p {
+    font-size: 0.875rem !important;
+  }
 `;
 shadowRoot.appendChild(style);
+
+// Load dependencies
+const scripts = [
+  'https://cdn.jsdelivr.net/npm/react@18.2.0/umd/react.development.js',
+  'https://cdn.jsdelivr.net/npm/react-dom@18.2.0/umd/react-dom.development.js',
+  'https://cdn.jsdelivr.net/npm/@babel/standalone@7.20.15/babel.min.js',
+  'https://cdn.jsdelivr.net/npm/gun@0.2020.1236/gun.min.js',
+  'https://cdn.jsdelivr.net/npm/gun/sea.js',
+  'https://cdn.tailwindcss.com'
+];
+
+let loadedScripts = 0;
+scripts.forEach(src => {
+  const script = document.createElement('script');
+  script.src = src;
+  script.async = false;
+  script.onload = () => {
+    console.log(`Annotation app.js: Loaded ${src}`);
+    loadedScripts++;
+    if (loadedScripts === scripts.length) {
+      console.log('Annotation app.js: All dependencies loaded');
+      renderApp();
+    }
+  };
+  script.onerror = () => console.error(`Annotation app.js: Failed to load ${src}`);
+  shadowRoot.appendChild(script); // Append to shadow DOM
+});
 
 // Main app code
 function renderApp() {
@@ -98,7 +107,7 @@ function renderApp() {
     const appCode = `
       const { useState, useEffect } = React;
 
-      // Initialize Gun.js with public peers
+      // Initialize Gun.js
       const gun = GUN({
         peers: ['https://gun-manhattan.herokuapp.com/gun']
       });
@@ -143,54 +152,52 @@ function renderApp() {
         // Initialize user ID
         useEffect(() => {
           console.log('Annotation app.js: Initializing user');
-          if (window.ethereum) {
-            window.ethereum.request({ method: 'eth_requestAccounts' })
-              .then(accounts => {
+          const initUser = async () => {
+            try {
+              if (window.ethereum) {
+                const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
                 setUserId(accounts[0]);
                 setIsMetaMask(true);
                 console.log('Annotation app.js: MetaMask connected:', accounts[0]);
-              })
-              .catch(err => {
-                console.error('Annotation app.js: MetaMask connection failed:', err);
-                let anonId = localStorage.getItem('anonId');
-                if (!anonId) {
-                  anonId = generateUUID();
-                  localStorage.setItem('anonId', anonId);
-                }
-                setUserId(anonId);
-                console.log('Annotation app.js: Anonymous ID:', anonId);
-              });
-          } else {
-            let anonId = localStorage.getItem('anonId');
-            if (!anonId) {
-              anonId = generateUUID();
-              localStorage.setItem('anonId', anonId);
+              } else {
+                throw new Error('No MetaMask');
+              }
+            } catch (err) {
+              console.log('Annotation app.js: Falling back to anonymous ID');
+              let anonId = localStorage.getItem('anonId');
+              if (!anonId) {
+                anonId = generateUUID();
+                localStorage.setItem('anonId', anonId);
+              }
+              setUserId(anonId);
+              console.log('Annotation app.js: Anonymous ID:', anonId);
             }
-            setUserId(anonId);
-            console.log('Annotation app.js: Anonymous ID:', anonId);
-          }
+          };
+          initUser();
         }, []);
 
         // Load annotations
         useEffect(() => {
-          console.log('Annotation app.js: Loading annotations for URL:', window.location.href);
-          const currentUrl = window.location.href;
-          gun.get('annotations').get(currentUrl).map().on(async (data, id) => {
-            if (data && data.cid) {
-              try {
-                const annotationData = await fetchFromIPFS(data.cid);
-                setAnnotations(prev => {
-                  const exists = prev.find(a => a.id === id);
-                  if (!exists) return [...prev, { id, ...annotationData }];
-                  return prev.map(a => (a.id === id ? { id, ...annotationData } : a));
-                });
-                console.log('Annotation app.js: Loaded annotation:', id);
-              } catch (err) {
-                console.error('Annotation app.js: Failed to fetch from IPFS:', err);
+          if (userId) {
+            console.log('Annotation app.js: Loading annotations for URL:', window.location.href);
+            const currentUrl = window.location.href;
+            gun.get('annotations').get(currentUrl).map().on(async (data, id) => {
+              if (data && data.cid) {
+                try {
+                  const annotationData = await fetchFromIPFS(data.cid);
+                  setAnnotations(prev => {
+                    const exists = prev.find(a => a.id === id);
+                    if (!exists) return [...prev, { id, ...annotationData }];
+                    return prev.map(a => (a.id === id ? { id, ...annotationData } : a));
+                  });
+                  console.log('Annotation app.js: Loaded annotation:', id);
+                } catch (err) {
+                  console.error('Annotation app.js: Failed to fetch from IPFS:', err);
+                }
               }
-            }
-          });
-        }, []);
+            });
+          }
+        }, [userId]);
 
         // Handle annotation
         const handleAnnotate = async () => {
@@ -268,13 +275,21 @@ function renderApp() {
 
       // Render the app
       console.log('Annotation app.js: Calling ReactDOM.render');
-      ReactDOM.render(<AnnotationApp />, document.querySelector('#annotation-root > div'));
+      ReactDOM.render(<AnnotationApp />, document.querySelector('#annotation-app'));
     `;
     const script = document.createElement('script');
     script.setAttribute('type', 'text/babel');
     script.textContent = appCode;
+    script.onload = () => console.log('Annotation app.js: App script executed');
+    script.onerror = (err) => console.error('Annotation app.js: App script error:', err);
     shadowRoot.appendChild(script);
   } catch (err) {
     console.error('Annotation app.js: Render failed:', err);
+    // Fallback UI
+    appContainer.innerHTML = `
+      <div style="position: fixed; bottom: 16px; right: 16px; background: white; padding: 16px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); max-width: 384px; z-index: 999999; font-family: Arial, sans-serif;">
+        <p style="color: red;">Failed to load annotation app. Please try again.</p>
+      </div>
+    `;
   }
 }
