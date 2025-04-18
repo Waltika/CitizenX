@@ -41,8 +41,8 @@ const rootDiv = document.createElement('div');
 rootDiv.id = 'annotation-app';
 document.body.appendChild(rootDiv);
 console.log('Annotation app.js: Root div created');
-// CSS to ensure UI visibility
 
+// CSS to ensure UI visibility
 const style = document.createElement('style');
 style.textContent = `
   #annotation-app {
@@ -107,7 +107,6 @@ style.textContent = `
     margin-bottom: 8px !important;
   }
 `;
-
 document.head.appendChild(style);
 console.log('Annotation app.js: Styles appended');
 
