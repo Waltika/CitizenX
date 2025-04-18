@@ -8,6 +8,25 @@ function generateUUID() {
   );
 }
 
+// Preserve text selection
+let preservedSelection = null;
+function saveSelection() {
+  const selection = window.getSelection();
+  if (selection.rangeCount > 0) {
+    preservedSelection = selection.getRangeAt(0);
+    console.log('Annotation app.js: Selection saved');
+  }
+}
+function restoreSelection() {
+  if (preservedSelection) {
+    const selection = window.getSelection();
+    selection.removeAllRanges();
+    selection.addRange(preservedSelection);
+    console.log('Annotation app.js: Selection restored');
+  }
+}
+saveSelection(); // Save selection before DOM changes
+
 // Create container for React app
 const rootDiv = document.createElement('div');
 rootDiv.id = 'annotation-app';
@@ -118,15 +137,21 @@ function renderApp() {
     });
     console.log('Annotation app.js: Gun.js initialized');
 
-    // IPFS Configuration
+    // IPFS Configuration (with Infura authentication)
     const IPFS_API_URL = 'https://ipfs.infura.io:5001/api/v0';
+    const INFURA_PROJECT_ID = '18d300e4f175448ebda0d04f0e7c9605'; 
+    const INFURA_API_SECRET = 'YBYLbfjJ6/F7/k+/I3yTknVod1iURGwa7wet8mmlnb7f9lmNScBc6+w'; 
     async function uploadToIPFS(data) {
       try {
         const formData = new FormData();
         formData.append('file', new Blob([JSON.stringify(data)], { type: 'application/json' }));
+        const auth = btoa(`${INFURA_PROJECT_ID}:${INFURA_API_SECRET}`);
         const response = await fetch(`${IPFS_API_URL}/add`, {
           method: 'POST',
-          body: formData
+          body: formData,
+          headers: {
+            'Authorization': `Basic ${auth}`
+          }
         });
         const result = await response.json();
         console.log('Annotation app.js: IPFS upload CID:', result.Hash);
@@ -155,18 +180,25 @@ function renderApp() {
       const [isMetaMask, setIsMetaMask] = React.useState(false);
       const [error, setError] = React.useState('');
 
-      // Initialize user ID immediately
-      console.log('Annotation app.js: Initializing user');
-      if (!userId) {
-        if (window.ethereum) {
-          window.ethereum.request({ method: 'eth_requestAccounts' })
-            .then(accounts => {
-              setUserId(accounts[0]);
-              setIsMetaMask(true);
-              console.log('Annotation app.js: MetaMask connected:', accounts[0]);
-            })
-            .catch(err => {
-              console.log('Annotation app.js: MetaMask failed, using anonymous ID');
+      // Initialize user ID
+      React.useEffect(() => {
+        console.log('Annotation app.js: Initializing user');
+        let isMounted = true;
+        const initUser = async () => {
+          try {
+            if (window.ethereum) {
+              const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
+              if (isMounted) {
+                setUserId(accounts[0]);
+                setIsMetaMask(true);
+                console.log('Annotation app.js: MetaMask connected:', accounts[0]);
+              }
+            } else {
+              throw new Error('No MetaMask');
+            }
+          } catch (err) {
+            if (isMounted) {
+              console.log('Annotation app.js: Falling back to anonymous ID');
               let anonId = localStorage.getItem('anonId');
               if (!anonId) {
                 anonId = generateUUID();
@@ -174,17 +206,14 @@ function renderApp() {
               }
               setUserId(anonId);
               console.log('Annotation app.js: Anonymous ID:', anonId);
-            });
-        } else {
-          let anonId = localStorage.getItem('anonId');
-          if (!anonId) {
-            anonId = generateUUID();
-            localStorage.setItem('anonId', anonId);
+            }
           }
-          setUserId(anonId);
-          console.log('Annotation app.js: Anonymous ID:', anonId);
-        }
-      }
+        };
+        initUser();
+        return () => {
+          isMounted = false;
+        };
+      }, []);
 
       // Load annotations
       React.useEffect(() => {
@@ -299,12 +328,14 @@ function renderApp() {
       );
     }
 
-    // Render the app
-    console.log('Annotation app.js: Calling ReactDOM.render');
+    // Render the app with React 18 createRoot
+    console.log('Annotation app.js: Creating root');
     const container = document.querySelector('#annotation-app');
     if (container) {
-      ReactDOM.render(React.createElement(AnnotationApp), container);
+      const root = ReactDOM.createRoot(container);
+      root.render(React.createElement(AnnotationApp));
       console.log('Annotation app.js: Render completed');
+      restoreSelection(); // Restore selection after rendering
     } else {
       console.error('Annotation app.js: Render failed: #annotation-app not found');
       rootDiv.innerHTML = `
