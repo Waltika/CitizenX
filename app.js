@@ -10,11 +10,13 @@ function generateUUID() {
 
 // Preserve text selection
 let preservedSelection = null;
+let preservedText = '';
 function saveSelection() {
   const selection = window.getSelection();
   if (selection.rangeCount > 0) {
     preservedSelection = selection.getRangeAt(0);
-    console.log('Annotation app.js: Selection saved:', selection.toString());
+    preservedText = selection.toString();
+    console.log('Annotation app.js: Selection saved:', preservedText);
   } else {
     console.log('Annotation app.js: No selection to save');
   }
@@ -41,6 +43,7 @@ const rootDiv = document.createElement('div');
 rootDiv.id = 'annotation-app';
 document.body.appendChild(rootDiv);
 console.log('Annotation app.js: Root div created');
+
 // CSS to ensure UI visibility
 const style = document.createElement('style');
 style.textContent = `
@@ -105,6 +108,13 @@ style.textContent = `
   #annotation-app li {
     margin-bottom: 8px !important;
   }
+  #annotation-app .selected-text {
+    background: #e0f7fa !important;
+    padding: 4px !important;
+    border-radius: 4px !important;
+    margin-bottom: 8px !important;
+    font-size: 14px !important;
+  }
 `;
 document.head.appendChild(style);
 console.log('Annotation app.js: Styles appended');
@@ -148,21 +158,24 @@ function renderApp() {
     // IPFS Configuration (with Infura authentication)
     const IPFS_API_URL = 'https://ipfs.infura.io:5001/api/v0';
     const INFURA_PROJECT_ID = '18d300e4f175448ebda0d04f0e7c9605';
-    const INFURA_API_SECRET = 'BYLbfjJ6/F7/k+/I3yTknVod1iURGwa7wet8mmlnb7f9lmNScBc6+w';
+    const INFURA_API_SECRET = 'YBYLbfjJ6/F7/k+/I3yTknVod1iURGwa7wet8mmlnb7f9lmNScBc6+w';
     async function uploadToIPFS(data) {
       try {
         const formData = new FormData();
         formData.append('file', new Blob([JSON.stringify(data)], { type: 'application/json' }));
         const auth = btoa(`${INFURA_PROJECT_ID}:${INFURA_API_SECRET}`);
+        console.log('Annotation app.js: IPFS auth header:', `Basic ${auth}`);
         const response = await fetch(`${IPFS_API_URL}/add?pin=true`, {
           method: 'POST',
           body: formData,
           headers: {
-            'Authorization': `Basic ${auth}`
+            'Authorization': `Basic ${auth}`,
+            'Accept': 'application/json'
           }
         });
         if (!response.ok) {
-          throw new Error(`IPFS upload failed: ${response.statusText}`);
+          const errorText = await response.text();
+          throw new Error(`IPFS upload failed: ${response.status} ${response.statusText} - ${errorText}`);
         }
         const result = await response.json();
         console.log('Annotation app.js: IPFS upload CID:', result.Hash);
@@ -193,6 +206,7 @@ function renderApp() {
       const [userId, setUserId] = React.useState(null);
       const [isMetaMask, setIsMetaMask] = React.useState(false);
       const [error, setError] = React.useState('');
+      const [selectedText, setSelectedText] = React.useState(preservedText);
 
       // Initialize user ID
       React.useEffect(() => {
@@ -226,12 +240,30 @@ function renderApp() {
         initUser();
         return () => {
           isMounted = false;
+          console.log('Annotation app.js: User initialization cleanup');
         };
       }, []);
 
-      // Restore selection after component mounts
+      // Restore selection and update selected text
       React.useEffect(() => {
         restoreSelection();
+        const selection = window.getSelection();
+        if (selection.toString()) {
+          setSelectedText(selection.toString());
+        }
+        const textarea = document.querySelector('#annotation-app textarea');
+        if (textarea) {
+          textarea.addEventListener('focus', () => {
+            saveSelection(); // Save before losing focus
+          });
+          textarea.addEventListener('blur', restoreSelection); // Restore after typing
+        }
+        return () => {
+          if (textarea) {
+            textarea.removeEventListener('focus', saveSelection);
+            textarea.removeEventListener('blur', restoreSelection);
+          }
+        };
       }, []);
 
       // Load annotations
@@ -264,7 +296,8 @@ function renderApp() {
       const handleAnnotate = async () => {
         console.log('Annotation app.js: Attempting to annotate');
         const selection = window.getSelection();
-        if (!selection.toString()) {
+        let textToAnnotate = selection.toString() || selectedText;
+        if (!textToAnnotate) {
           setError('Please select some text to annotate.');
           console.log('Annotation app.js: No text selected');
           return;
@@ -277,7 +310,7 @@ function renderApp() {
         if (userId) {
           const currentUrl = window.location.href;
           const annotation = {
-            text: selection.toString(),
+            text: textToAnnotate,
             note: newAnnotation,
             user: userId,
             isMetaMask,
@@ -289,11 +322,11 @@ function renderApp() {
               cid = await uploadToIPFS(annotation);
             } catch (ipfsErr) {
               console.warn('Annotation app.js: IPFS upload failed, falling back to Gun.js:', ipfsErr);
-              // Fallback to Gun.js storage
               const id = `${userId}-${Date.now()}`;
               gun.get('annotations').get(currentUrl).get(id).put(annotation);
               setNewAnnotation('');
               setError('');
+              setSelectedText('');
               selection.removeAllRanges();
               console.log('Annotation app.js: Annotation saved to Gun.js:', id);
               return;
@@ -302,6 +335,7 @@ function renderApp() {
             gun.get('annotations').get(currentUrl).get(id).put({ cid });
             setNewAnnotation('');
             setError('');
+            setSelectedText('');
             selection.removeAllRanges();
             console.log('Annotation app.js: Annotation saved with IPFS:', id);
           } catch (err) {
@@ -323,6 +357,11 @@ function renderApp() {
                 'p',
                 { className: 'text-sm mb-2', key: 'user' },
                 isMetaMask ? `Connected: ${userId.slice(0, 6)}...` : 'Anonymous User'
+              ),
+              selectedText && React.createElement(
+                'p',
+                { className: 'selected-text', key: 'selected' },
+                `Selected: "${selectedText.substring(0, 50)}${selectedText.length > 50 ? '...' : ''}"`
               ),
               error && React.createElement('p', { className: 'error', key: 'error' }, error),
               React.createElement('h2', { className: 'text-lg font-bold mb-2', key: 'title' }, 'Annotations'),
