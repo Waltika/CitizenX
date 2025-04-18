@@ -1,8 +1,6 @@
 // Debug: Log script start
 console.log('Annotation app.js: Script started');
 
-
-
 // Simple UUID generator for anonymous users
 function generateUUID() {
   return ([1e7]+-1e3+-4e3+-8e3+-1e11).replace(/[018]/g, c =>
@@ -164,11 +162,13 @@ function renderApp() {
       try {
         const formData = new FormData();
         formData.append('file', new Blob([JSON.stringify(data)], { type: 'application/json' }));
-        const response = await fetch(PINATA_API_URL, {
+        console.log('Annotation app.js: Sending Pinata upload request');
+        const response = await fetch(`${PINATA_API_URL}`, {
           method: 'POST',
           body: formData,
           headers: {
-            'Authorization': `Bearer ${PINATA_JWT}`
+            'Authorization': `Bearer ${PINATA_JWT}`,
+            'Accept': 'application/json'
           }
         });
         if (!response.ok) {
@@ -254,7 +254,12 @@ function renderApp() {
           textarea.addEventListener('focus', () => {
             saveSelection(); // Save before losing focus
           });
-          textarea.addEventListener('blur', restoreSelection); // Restore after typing
+          textarea.addEventListener('blur', () => {
+            restoreSelection(); // Restore after typing
+            if (!window.getSelection().toString() && selectedText) {
+              console.log('Annotation app.js: Selection lost, using stored text:', selectedText);
+            }
+          });
         }
         return () => {
           if (textarea) {
@@ -407,6 +412,7 @@ function renderApp() {
       const root = ReactDOM.createRoot(container);
       root.render(React.createElement(AnnotationApp));
       console.log('Annotation app.js: Render completed');
+      restoreSelection();
     } else {
       console.error('Annotation app.js: Render failed: #annotation-app not found');
       rootDiv.innerHTML = `
