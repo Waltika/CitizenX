@@ -158,7 +158,7 @@ function renderApp() {
     // IPFS Configuration (with Infura authentication)
     const IPFS_API_URL = 'https://ipfs.infura.io:5001/api/v0';
     const INFURA_PROJECT_ID = '18d300e4f175448ebda0d04f0e7c9605';
-    const INFURA_API_SECRET = 'YBYLbfjJ6/F7/k+/I3yTknVod1iURGwa7wet8mmlnb7f9lmNScBc6+w';
+    const INFURA_API_SECRET = 'BYLbfjJ6/F7/k+/I3yTknVod1iURGwa7wet8mmlnb7f9lmNScBc6+w';
     async function uploadToIPFS(data) {
       try {
         const formData = new FormData();
