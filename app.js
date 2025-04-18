@@ -163,7 +163,7 @@ function renderApp() {
       try {
         const formData = new FormData();
         formData.append('file', new Blob([JSON.stringify(data)], { type: 'application/json' }));
-        const auth = btoa(`${INFURA_PROJECT_ID}:${INFURA_API_SECRET}`);
+        const auth = `${INFURA_PROJECT_ID}:${INFURA_API_SECRET}`;
         console.log('Annotation app.js: IPFS auth header:', `Basic ${auth}`);
         const response = await fetch(`${IPFS_API_URL}/add?pin=true`, {
           method: 'POST',
