@@ -1,0 +1,5 @@
+{
+  "gunPeers": ["https://gun-manhattan.herokuapp.com/gun"],
+  "pinataApi": "mock",
+  "logLevel": "debug"
+}

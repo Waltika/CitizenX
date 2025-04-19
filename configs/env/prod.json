@@ -1,0 +1,5 @@
+{
+  "gunPeers": ["https://gun-manhattan.herokuapp.com/gun", "https://gun-us.herokuapp.com/gun"],
+  "pinataApi": "https://api.pinata.cloud",
+  "logLevel": "info"
+}
