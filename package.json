@@ -1,0 +1,39 @@
+{
+  "name": "citizenx",
+  "version": "1.0.0",
+  "description": "Decentralized web annotation Chrome extension",
+  "scripts": {
+    "build": "vite build",
+    "test": "jest",
+    "test:watch": "jest --watch"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Waltika/CitizenX.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/Waltika/CitizenX/issues"
+  },
+  "homepage": "https://github.com/Waltika/CitizenX#readme",
+  "devDependencies": {
+    "@types/chrome": "^0.0.246",
+    "@types/jest": "^29.5.12",
+    "@types/node": "^20.11.30",
+    "@types/react": "^18.2.67",
+    "@types/react-dom": "^18.2.22",
+    "@vitejs/plugin-react": "^4.2.1",
+    "jest": "^29.7.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.4.3",
+    "vite": "^5.1.6"
+  },
+  "dependencies": {
+    "gun": "^0.2020.1236",
+    "@pinata/sdk": "^2.1.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0"
+  }
+}
