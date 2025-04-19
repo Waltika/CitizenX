@@ -1,11 +1,11 @@
-name: Build CitizenX Extension
+name: Run Unit Tests
 on:
   push:
     branches: [ main ]
   pull_request:
     branches: [ main ]
 jobs:
-  build:
+  test:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
@@ -14,8 +14,7 @@ jobs:
           node-version: '18'
           cache: 'npm'
       - run: npm ci
-      - run: npm run build
-      - uses: actions/upload-artifact@v3
+      - run: npm test
+      - uses: codecov/codecov-action@v3
         with:
-          name: citizenx-build
-          path: dist/
+          token: ${{ secrets.CODECOV_TOKEN }}
