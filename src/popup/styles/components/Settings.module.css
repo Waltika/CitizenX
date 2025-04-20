@@ -1,0 +1,30 @@
+/* src/popup/styles/components/Settings.module.css */
+.profile-settings {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+.profile-settings div {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+.profile-settings input {
+    padding: 8px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+}
+.profile-settings button {
+    background: #3b82f6;
+    color: white;
+    padding: 8px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+}
+.profile-settings button:hover {
+    background: #2563eb;
+}
+.profile-settings img {
+    border-radius: 50%;
+}
