@@ -10,8 +10,7 @@
     "jsx": "react-jsx",
     "outDir": "./dist",
     "sourceMap": true,
-    "baseUrl": "src",
-    "types": ["node", "@types/react", "@types/react-dom"]
+    "types": ["chrome", "node", "jest"]
   },
   "include": ["src/**/*",
     "src/__tests__/**/*"
