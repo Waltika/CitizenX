@@ -2,6 +2,7 @@
   "name": "citizenx",
   "version": "1.0.0",
   "description": "Decentralized web annotation Chrome extension",
+  "type": "module",
   "scripts": {
     "build": "vite build",
     "test": "jest",
@@ -21,7 +22,7 @@
   "devDependencies": {
     "@testing-library/jest-dom": "^6.6.3",
     "@testing-library/react": "^16.3.0",
-    "@types/chrome": "^0.0.246",
+    "@types/chrome": "^0.0.269",
     "@types/jest": "^29.5.12",
     "@types/node": "^20.17.30",
     "@types/react": "^18.2.67",

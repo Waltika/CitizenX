@@ -1,6 +1,6 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
-import { HistoryList } from '../../sidepanel/components/History/List';
+import { HistoryList } from '../List';
 
 describe('HistoryList', () => {
     test('renders visit history', async () => {

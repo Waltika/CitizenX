@@ -1,0 +1,41 @@
+/* src/styles/popup.css */
+.popup-container {
+    font-family: Arial, sans-serif;
+    padding: 20px;
+    width: 400px; /* Increased width for better visibility */
+    min-height: 600px; /* Ensure sufficient height */
+    background-color: #fff;
+    border-radius: 8px;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+h1 {
+    font-size: 24px;
+    margin: 0 0 15px;
+    text-align: center;
+    color: #333;
+}
+
+/* Ensure components are styled */
+button, input {
+    padding: 10px;
+    font-size: 16px;
+    border-radius: 4px;
+    border: 1px solid #ccc;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+button {
+    background-color: #007bff;
+    color: #fff;
+    cursor: pointer;
+    border: none;
+}
+
+button:hover {
+    background-color: #0056b3;
+}

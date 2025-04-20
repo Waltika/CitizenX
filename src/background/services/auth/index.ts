@@ -26,7 +26,7 @@ export class AuthService {
     }
 
     // Add getUserId if needed
-    async getUserId(): Promise<string | null> {
+    async getCurrentUser(): Promise<string | null> {
         return new Promise((resolve) => {
             chrome.storage.local.get([this.storageKey], (result) => {
                 const authData = result[this.storageKey];
