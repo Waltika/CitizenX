@@ -1,0 +1,36 @@
+/* src/popup/styles/components/Auth.module.css */
+.login-form {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+.login-form div {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+.login-form label {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+.login-form input {
+    padding: 8px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+}
+.login-form button {
+    background: #3b82f6;
+    color: white;
+    padding: 8px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+}
+.login-form button:hover {
+    background: #2563eb;
+}
+.login-form .error {
+    color: red;
+    font-size: 0.9em;
+}
