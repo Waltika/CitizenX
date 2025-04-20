@@ -5,6 +5,7 @@ type Callback<T = any> = (result: T) => void;
 export interface ChromeStorageArea {
     get: (keys: string | string[] | Record<string, any>, callback: Callback<object>) => void;
     set: (items: object, callback?: Callback<void>) => void;
+    remove: (keys: string | string[], callback?: Callback<void>) => void;
     clear: (callback?: Callback<void>) => void;
 }
 export interface ChromeRuntime {
@@ -49,6 +50,13 @@ export const chrome: ChromeMock = {
                 Object.assign(store, items);
                 callback && callback();
             }),
+            remove: jest.fn((keys: string | string[], callback?: Callback<void>) => {
+                const keyArray = Array.isArray(keys) ? keys : [keys];
+                keyArray.forEach(key => {
+                    delete store[key];
+                });
+                callback && callback();
+            }),
             clear: jest.fn((callback?: Callback<void>) => {
                 store = {};
                 callback && callback();
@@ -57,6 +65,7 @@ export const chrome: ChromeMock = {
         sync: {
             get: jest.fn((keys, callback: Callback<object>) => callback({})),
             set: jest.fn((items, callback?: Callback<void>) => callback && callback()),
+            remove: jest.fn((keys, callback?: Callback<void>) => callback && callback()),
             clear: jest.fn((callback?: Callback<void>) => callback && callback())
         }
     },
