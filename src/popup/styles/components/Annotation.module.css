@@ -1,0 +1,41 @@
+/* src/popup/styles/components/Annotation.module.css */
+.annotation-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+.annotation-list div {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+.annotation-list textarea {
+    padding: 8px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    resize: vertical;
+}
+.annotation-list button {
+    background: #3b82f6;
+    color: white;
+    padding: 8px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+}
+.annotation-list button:hover {
+    background: #2563eb;
+}
+.annotation-list ul {
+    list-style: none;
+    padding: 0;
+    max-height: 200px;
+    overflow-y: auto;
+}
+.annotation-list li {
+    margin-bottom: 8px;
+}
+.annotation-list span {
+    color: #666;
+    font-size: 0.9em;
+}

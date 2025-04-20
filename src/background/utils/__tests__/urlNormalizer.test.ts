@@ -23,7 +23,9 @@ describe('URL Normalizer', () => {
     });
 
     test('should handle invalid URLs gracefully', () => {
+        jest.spyOn(console, 'error').mockImplementation(() => {});
         const url = 'invalid-url';
         expect(normalizeUrl(url)).toBe('invalid-url');
+        jest.restoreAllMocks();
     });
 });
