@@ -1,0 +1,26 @@
+/* src/popup/styles/components/History.module.css */
+.history-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+.history-list ul {
+    list-style: none;
+    padding: 0;
+    max-height: 200px;
+    overflow-y: auto;
+}
+.history-list li {
+    margin-bottom: 8px;
+}
+.history-list a {
+    color: #3b82f6;
+    text-decoration: none;
+}
+.history-list a:hover {
+    text-decoration: underline;
+}
+.history-list span {
+    color: #666;
+    font-size: 0.9em;
+}

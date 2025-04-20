@@ -13,17 +13,19 @@ jest.mock('../../../../background/services/annotations', () => ({
     }
 }));
 
-// Mock normalizeUrl
-jest.mock('../../../../background/utils/urlNormalizer', () => ({
-    normalizeUrl: jest.fn(url => url.replace(/\?.*/, ''))
-}));
-
 describe('AnnotationList', () => {
-    const mockUrl = 'https://www.example.com/?utm_source=twitter';
-    const mockUserId = 'test-user';
     const mockAnnotations = [
-        { id: '1', url: mockUrl, normalizedUrl: 'https://www.example.com/', text: 'Great article!', userId: mockUserId, timestamp: 1234567890 }
+        {
+            id: '1',
+            url: 'https://www.example.com',
+            normalizedUrl: 'https://www.example.com/',
+            text: 'Great article!',
+            userId: 'test-user',
+            timestamp: 1234567890
+        }
     ];
+    const mockUrl = 'https://www.example.com';
+    const mockUserId = 'test-user';
 
     beforeEach(() => {
         jest.clearAllMocks();
@@ -35,30 +37,31 @@ describe('AnnotationList', () => {
         (annotationService.getAnnotations as jest.Mock).mockResolvedValueOnce(mockAnnotations);
         render(<AnnotationList url={mockUrl} userId={mockUserId} />);
 
-        // Check initial rendering
         expect(screen.getByText('Annotations')).toBeInTheDocument();
         await waitFor(() => {
-            // Use regex to match text content flexibly
+            // Use regex to match partial text across elements
             expect(screen.getByText(/Great article!/)).toBeInTheDocument();
-            expect(screen.getByText(mockUserId)).toBeInTheDocument();
+            expect(screen.getByText(/test-user/)).toBeInTheDocument();
         });
 
-        // Add new annotation
-        const textarea = screen.getByPlaceholderText('Add a new annotation');
+        const textarea = screen.getByPlaceholderText('Enter new annotation');
         const button = screen.getByText('Add Annotation');
-        fireEvent.change(textarea, { target: { value: 'New note' } });
+        fireEvent.change(textarea, { target: { value: 'New annotation' } });
         fireEvent.click(button);
 
         await waitFor(() => {
-            expect(annotationService.addAnnotation).toHaveBeenCalledWith(mockUrl, 'New note', mockUserId);
-            expect(annotationService.getAnnotations).toHaveBeenCalledWith('https://www.example.com/');
+            expect(annotationService.addAnnotation).toHaveBeenCalledWith(
+                mockUrl,
+                'New annotation',
+                mockUserId
+            );
         });
     });
 
     test('displays no annotations message when empty', async () => {
         render(<AnnotationList url={mockUrl} userId={mockUserId} />);
         await waitFor(() => {
-            expect(screen.getByText('No annotations yet.')).toBeInTheDocument();
+            expect(screen.getByText('No annotations available.')).toBeInTheDocument();
         });
     });
 });

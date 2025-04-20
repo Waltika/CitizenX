@@ -1,4 +1,4 @@
-// src/background/services/history/index.ts
+// src/background/services/history/index.tsx
 import { normalizeUrl } from '../../utils/urlNormalizer';
 
 export interface Visit {
@@ -17,13 +17,19 @@ export class HistoryService {
             normalizedUrl,
             lastVisited: Date.now()
         };
+
         return new Promise((resolve) => {
             chrome.storage.local.get([this.storageKey], (result) => {
-                const visits: Visit[] = result[this.storageKey] || [];
-                const updatedVisits = visits.filter(v => v.normalizedUrl !== normalizedUrl).concat(visit);
-                chrome.storage.local.set({ [this.storageKey]: updatedVisits }, () => {
-                    resolve();
-                });
+                const visits = (result[this.storageKey] || []) as Visit[];
+                const existingVisitIndex = visits.findIndex(v => v.normalizedUrl === normalizedUrl);
+
+                if (existingVisitIndex >= 0) {
+                    visits[existingVisitIndex] = visit;
+                } else {
+                    visits.push(visit);
+                }
+
+                chrome.storage.local.set({ [this.storageKey]: visits }, () => resolve());
             });
         });
     }
@@ -31,8 +37,7 @@ export class HistoryService {
     async getVisits(): Promise<Visit[]> {
         return new Promise((resolve) => {
             chrome.storage.local.get([this.storageKey], (result) => {
-                const visits: Visit[] = result[this.storageKey] || [];
-                resolve(visits);
+                resolve((result[this.storageKey] || []) as Visit[]);
             });
         });
     }

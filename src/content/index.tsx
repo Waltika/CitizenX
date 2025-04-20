@@ -4,10 +4,11 @@ import { createRoot } from 'react-dom/client';
 import { historyService } from '../background/services/history';
 import { AnnotationCreate }  from './components/AnnotationCreate'
 import { AnnotationDisplay } from './components/AnnotationDisplay';
+import {AuthWrapper} from "./components/AuthWrapper";
 
 console.log('CitizenX content script initialized');
 
-async function initialize() {
+export async function initialize() {
     const url = window.location.href;
     await historyService.addVisit(url);
 

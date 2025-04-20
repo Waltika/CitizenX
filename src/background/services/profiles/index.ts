@@ -1,4 +1,4 @@
-// src/background/services/profiles/index.ts
+// src/background/services/profiles/index.tsx
 import { Profile } from './types';
 
 export class ProfileService {

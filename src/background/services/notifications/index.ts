@@ -1,17 +1,39 @@
 // src/background/services/notifications/index.ts
-import { generateUUID } from '../../../shared/utils/uuid';
+export interface Notification {
+    id: string;
+    message: string;
+    timestamp: number;
+}
 
 export class NotificationService {
-    async notify(message: string): Promise<void> {
-        const notificationId = generateUUID();
+    private storageKey = 'citizenx_notifications';
+
+    async createNotification(message: string): Promise<void> {
+        const notification: Notification = {
+            id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+            message,
+            timestamp: Date.now()
+        };
         return new Promise((resolve) => {
-            chrome.notifications.create(notificationId, {
-                type: 'basic',
-                iconUrl: '/icons/icon48.png',
-                title: 'CitizenX Notification',
-                message
-            }, () => {
-                resolve();
+            chrome.storage.local.get([this.storageKey], (result) => {
+                const notifications = (result[this.storageKey] || []) as Notification[];
+                notifications.push(notification);
+                chrome.storage.local.set({ [this.storageKey]: notifications }, () => {
+                    chrome.notifications.create(notification.id, {
+                        type: 'basic',
+                        iconUrl: 'icon.png',
+                        title: 'CitizenX Notification',
+                        message: notification.message
+                    }, () => resolve());
+                });
+            });
+        });
+    }
+
+    async getNotifications(): Promise<Notification[]> {
+        return new Promise((resolve) => {
+            chrome.storage.local.get([this.storageKey], (result) => {
+                resolve((result[this.storageKey] || []) as Notification[]);
             });
         });
     }

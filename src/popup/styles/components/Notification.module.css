@@ -1,0 +1,11 @@
+.profile-display {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+.profile-display p {
+    margin: 0;
+}
+.profile-display strong {
+    color: #333;
+}

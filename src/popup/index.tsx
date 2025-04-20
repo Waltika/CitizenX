@@ -1,19 +1,29 @@
 // src/popup/index.tsx
-import React, { useState } from 'react';
+import React from 'react';
 import { createRoot } from 'react-dom/client';
-import { ProfileSettings } from './components/Settings/Profile';
-import './styles/global.css';
+import { NotificationList } from './components/Notification/List';
+import { AnnotationList } from './components/Annotation/List';
+import { HistoryList } from './components/History/List';
+import { Profile } from './components/Settings/Profile';
+import { Login } from './components/Auth/Login';
+import { Logout } from './components/Auth/Logout';
+import '../styles/popup.css'; // Assuming a CSS file for popup styling
 
-const App: React.FC = () => {
-    const [uid] = useState('test-user'); // Placeholder UID, to be replaced with MetaMask/anonymous ID
-
+const Popup: React.FC = () => {
     return (
-        <div>
-            <h1>CitizenX Annotations</h1>
-            <ProfileSettings uid={uid} />
+        <div className="popup-container">
+            <h1>CitizenX</h1>
+            <Login />
+            <Logout />
+            <Profile />
+            <NotificationList />
+            <AnnotationList />
+            <HistoryList />
         </div>
     );
 };
 
-const root = createRoot(document.getElementById('citizenx-app')!);
-root.render(<App />);
+// Render the popup
+const container = document.getElementById('root')!;
+const root = createRoot(container);
+root.render(<Popup />);

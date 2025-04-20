@@ -7,6 +7,7 @@
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
     "moduleResolution": "node",
+    "isolatedModules": true,
     "jsx": "react-jsx",
     "outDir": "./dist",
     "sourceMap": true,
