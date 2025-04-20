@@ -22,6 +22,12 @@ async function initialize() {
     document.body.appendChild(displayContainer);
     const displayRoot = createRoot(displayContainer);
     displayRoot.render(<AnnotationDisplay url={url} />);
+
+    // Create container for AuthWrapper
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    root.render(<AuthWrapper url={url} />);
 }
 
 initialize().catch(console.error);
