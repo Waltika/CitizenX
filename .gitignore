@@ -3,3 +3,4 @@ dist/
 *.log
 .idea/
 coverage/
+src/background/services/config.ts
