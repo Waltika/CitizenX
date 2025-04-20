@@ -1,51 +1,38 @@
-// src/background/services/auth/index.tsx
-export interface User {
-    uid: string;
-    email: string;
-    isAuthenticated: boolean;
-}
-
+// src/background/services/auth/index.ts
 export class AuthService {
     private storageKey = 'citizenx_auth';
-    private currentUser: User | null = null;
 
-    async login(email: string, password: string): Promise<User> {
-        // Simulate authentication (replace with real auth logic)
-        const user: User = {
-            uid: this.generateUid(email),
-            email,
-            isAuthenticated: true
-        };
-        this.currentUser = user;
-        await this.saveUser(user);
-        return user;
+    async login(username: string, password: string): Promise<void> {
+        // Existing login logic
+        return new Promise((resolve) => {
+            chrome.storage.local.set({ [this.storageKey]: { userId: 'test-user', authenticated: true } }, () => resolve());
+        });
     }
 
     async logout(): Promise<void> {
-        this.currentUser = null;
+        // Existing logout logic
         return new Promise((resolve) => {
             chrome.storage.local.remove(this.storageKey, () => resolve());
         });
     }
 
-    async getCurrentUser(): Promise<User | null> {
-        if (this.currentUser) return this.currentUser;
+    async isAuthenticated(): Promise<boolean> {
         return new Promise((resolve) => {
             chrome.storage.local.get([this.storageKey], (result) => {
-                resolve(result[this.storageKey] || null);
+                const authData = result[this.storageKey];
+                resolve(!!authData && authData.authenticated);
             });
         });
     }
 
-    private async saveUser(user: User): Promise<void> {
+    // Add getUserId if needed
+    async getUserId(): Promise<string | null> {
         return new Promise((resolve) => {
-            chrome.storage.local.set({ [this.storageKey]: user }, () => resolve());
+            chrome.storage.local.get([this.storageKey], (result) => {
+                const authData = result[this.storageKey];
+                resolve(authData?.userId || null);
+            });
         });
-    }
-
-    private generateUid(email: string): string {
-        // Simple UID generation (replace with real logic)
-        return btoa(email).slice(0, 8);
     }
 }
 

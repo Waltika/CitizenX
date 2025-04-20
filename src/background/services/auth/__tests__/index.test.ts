@@ -1,37 +1,61 @@
 // src/background/services/auth/__tests__/index.test.ts
-import { authService } from '../index';
-import { User } from '../index';
+import { AuthService, authService } from '../index';
 
 describe('AuthService', () => {
+    const storageKey = 'citizenx_auth';
+    const mockUsername = 'test-user';
+    const mockPassword = 'password123';
+
     beforeEach(() => {
-        chrome.storage.local.clear();
+        jest.clearAllMocks();
+        // Mock chrome.storage.local
+        global.chrome = {
+            storage: {
+                local: {
+                    get: jest.fn().mockImplementation((keys, callback) => {
+                        console.log(`chrome.storage.local.get called with keys: ${keys}`);
+                        callback({ [keys[0]]: null });
+                    }),
+                    set: jest.fn().mockImplementation((data, callback) => {
+                        console.log(`chrome.storage.local.set called with data: ${JSON.stringify(data)}`);
+                        callback();
+                    }),
+                    remove: jest.fn().mockImplementation((keys, callback) => {
+                        console.log(`chrome.storage.local.remove called with keys: ${keys}`);
+                        callback();
+                    })
+                }
+            }
+        } as any;
     });
 
-    test('should login and save user', async () => {
-        const email = 'test@example.com';
-        const password = 'password123';
-        const user = await authService.login(email, password);
+    test('should login and store user data', async () => {
+        await authService.login(mockUsername, mockPassword);
+        expect(chrome.storage.local.set).toHaveBeenCalledWith(
+            {
+                [storageKey]: expect.objectContaining({
+                    userId: mockUsername,
+                    authenticated: true
+                })
+            },
+            expect.any(Function)
+        );
+    });
 
-        expect(user).toMatchObject({
-            uid: expect.any(String),
-            email,
-            isAuthenticated: true
+    test('should logout and remove user data', async () => {
+        await authService.logout();
+        expect(chrome.storage.local.remove).toHaveBeenCalledWith(storageKey, expect.any(Function));
+    });
+
+    test('should check authentication status', async () => {
+        // Mock authenticated state
+        global.chrome.storage.local.get = jest.fn().mockImplementation((keys, callback) => {
+            console.log(`chrome.storage.local.get called with keys: ${keys}`);
+            callback({ [keys[0]]: { userId: mockUsername, authenticated: true } });
         });
 
-        const storedUser = await authService.getCurrentUser();
-        expect(storedUser).toMatchObject(user);
-    });
-
-    test('should logout and clear user', async () => {
-        await authService.login('test@example.com', 'password123');
-        await authService.logout();
-
-        const user = await authService.getCurrentUser();
-        expect(user).toBeNull();
-    });
-
-    test('should return null for unauthenticated user', async () => {
-        const user = await authService.getCurrentUser();
-        expect(user).toBeNull();
+        const isAuthenticated = await authService.isAuthenticated();
+        expect(chrome.storage.local.get).toHaveBeenCalledWith([storageKey], expect.any(Function));
+        expect(isAuthenticated).toBe(true);
     });
 });
