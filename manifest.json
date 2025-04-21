@@ -4,9 +4,6 @@
   "version": "1.0",
   "description": "Decentralized web annotation extension",
   "permissions": ["sidePanel", "storage", "tabs", "activeTab"],
-  "background": {
-    "service_worker": "background/index.js"
-  },
   "icons": {
     "16": "icons/icon16.png",
     "32": "icons/icon32.png",

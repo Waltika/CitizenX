@@ -1,0 +1,71 @@
+import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
+import { useState, useEffect } from 'react';
+import { createOrbitDB } from '@orbitdb/core';
+import { createHelia } from 'helia';
+const App = () => {
+    const [annotation, setAnnotation] = useState('');
+    const [annotations, setAnnotations] = useState([]);
+    const [db, setDb] = useState(null);
+    const [error, setError] = useState(null);
+    useEffect(() => {
+        async function initOrbitDB() {
+            try {
+                console.log('Initializing OrbitDB for GitHub Pages');
+                const ipfs = await createHelia();
+                const orbitdb = await createOrbitDB(ipfs);
+                const db = await orbitdb.open('citizenx-annotations', { type: 'documents' });
+                await db.load();
+                setDb(db);
+                const docs = await db.all();
+                setAnnotations(docs.map((doc) => doc.value));
+                db.events.on('update', async () => {
+                    const updatedDocs = await db.all();
+                    setAnnotations(updatedDocs.map((doc) => doc.value));
+                    console.log('GitHub Pages database updated:', updatedDocs);
+                });
+            }
+            catch (error) {
+                console.error('OrbitDB initialization failed:', error);
+                setError('Failed to initialize decentralized storage');
+            }
+        }
+        initOrbitDB();
+    }, []);
+    const handleSaveAnnotation = async () => {
+        if (annotation.trim() && db) {
+            try {
+                const doc = {
+                    _id: Date.now().toString(),
+                    url: 'sidepanel',
+                    text: annotation.trim(),
+                    timestamp: Date.now(),
+                };
+                await db.put(doc);
+                setAnnotation('');
+                console.log('Saved annotation to OrbitDB:', doc);
+            }
+            catch (error) {
+                console.error('Failed to save annotation:', error);
+                setError('Failed to save annotation');
+            }
+        }
+    };
+    return (_jsxs("div", { style: { padding: '16px', maxWidth: '300px' }, children: [_jsx("h1", { style: { fontSize: '1.5rem', fontWeight: 'bold', margin: '0 0 8px 0' }, children: "CitizenX Annotations" }), error && (_jsx("p", { style: { color: 'red', margin: '0 0 8px 0' }, children: error })), _jsxs("div", { style: { display: 'flex', gap: '8px', marginBottom: '8px' }, children: [_jsx("input", { type: "text", value: annotation, onChange: (e) => setAnnotation(e.target.value), placeholder: "Enter annotation...", style: {
+                            flex: 1,
+                            padding: '5px',
+                            border: '1px solid #ccc',
+                            borderRadius: '3px',
+                        } }), _jsx("button", { onClick: handleSaveAnnotation, disabled: !db, style: {
+                            padding: '5px 10px',
+                            background: db ? '#007bff' : '#ccc',
+                            color: '#fff',
+                            border: 'none',
+                            borderRadius: '3px',
+                            cursor: db ? 'pointer' : 'not-allowed',
+                        }, children: "Save" })] }), _jsx("div", { style: { maxHeight: '300px', overflowY: 'auto' }, children: annotations.length === 0 ? (_jsx("p", { style: { margin: 0, color: '#666' }, children: "No annotations yet." })) : (_jsx("ul", { style: { margin: 0, padding: 0, listStyle: 'none' }, children: annotations.map((note) => (_jsxs("li", { style: {
+                            padding: '5px 0',
+                            borderBottom: '1px solid #eee',
+                            wordBreak: 'break-word',
+                        }, children: [note.text, " ", _jsxs("small", { children: ["(", new Date(note.timestamp).toLocaleString(), ")"] })] }, note._id))) })) })] }));
+};
+export default App;
