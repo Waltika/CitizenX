@@ -3,16 +3,44 @@ import { createRoot } from 'react-dom/client';
 
 const SidePanel: React.FC = () => {
     useEffect(() => {
-        window.addEventListener('message', (event) => {
-            if (event.origin !== 'https://waltika.github.io') return;
+        const handleMessage = (event: MessageEvent) => {
+            // Validate event origin
+            if (event.origin !== 'https://waltika.github.io') {
+                return;
+            }
+
+            // Ensure event.source is a Window object
+            if (!event.source || !(event.source instanceof Window)) {
+                console.warn('Invalid event source:', event.source);
+                return;
+            }
+
             if (event.data.action === 'requestUrl') {
                 chrome.runtime.sendMessage({ action: 'getCurrentUrl' }, (response) => {
-                    event.source?.postMessage({ action: 'receiveUrl', url: response.url }, event.origin);
+                    if (chrome.runtime.lastError) {
+                        console.warn('Failed to get current URL:', chrome.runtime.lastError.message);
+                        return;
+                    }
+                    if (response && response.url && event.source) {
+                        event.source.postMessage(
+                            { action: 'receiveUrl', url: response.url },
+                            { targetOrigin: event.origin } // Use WindowPostMessageOptions
+                        );
+                    } else {
+                        console.warn('No URL received from background script');
+                    }
                 });
             } else if (event.data.action === 'receiveAnnotations') {
-                chrome.runtime.sendMessage(event.data);
+                chrome.runtime.sendMessage(event.data, (response) => {
+                    if (chrome.runtime.lastError) {
+                        console.warn('Failed to forward annotations:', chrome.runtime.lastError.message);
+                    }
+                });
             }
-        });
+        };
+
+        window.addEventListener('message', handleMessage);
+        return () => window.removeEventListener('message', handleMessage);
     }, []);
 
     return (
