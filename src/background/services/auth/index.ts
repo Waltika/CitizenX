@@ -1,4 +1,4 @@
-// src/background/services/auth/index.ts
+// src/background/services/auth/index.tsx
 export class AuthService {
     private storageKey = 'citizenx_auth';
 

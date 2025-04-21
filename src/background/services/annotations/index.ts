@@ -1,61 +1,77 @@
-// src/background/services/annotations/index.ts
-import PinataSDK from '@pinata/sdk';
 import { normalizeUrl } from '../../utils/urlNormalizer';
-// src/background/services/annotations/index.ts
-import { PINATA_API_KEY, PINATA_SECRET } from '../config';
 
-// Use require for CommonJS compatibility, or adjust based on SDK version
-const pinataSDK = require('@pinata/sdk');
-const pinata = pinataSDK(PINATA_API_KEY, PINATA_SECRET);
-
-export class AnnotationService {
-    private storageKey = 'citizenx_annotations_index';
-
-    async addAnnotation(annotation: {
-        id: string;
-        url: string;
-        text: string;
-        userId: string;
-        timestamp: number;
-    }): Promise<void> {
-        const normalizedUrl = normalizeUrl(annotation.url);
-        const annotationWithNormalized = { ...annotation, normalizedUrl };
-
-        // Upload to Pinata/IPFS
-        const result = await pinata.pinJSONToIPFS(annotationWithNormalized);
-        const ipfsHash = result.IpfsHash;
-
-        // Store hash in chrome.storage.local as an index
-        return new Promise((resolve) => {
-            chrome.storage.local.get([this.storageKey], (result) => {
-                const index = result[this.storageKey] || [];
-                index.push({ normalizedUrl, ipfsHash, userId: annotation.userId });
-                chrome.storage.local.set({ [this.storageKey]: index }, () => resolve());
-            });
-        });
-    }
-
-    async getAnnotations(normalizedUrl: string): Promise<any[]> {
-        return new Promise((resolve) => {
-            chrome.storage.local.get([this.storageKey], async (result) => {
-                const index = result[this.storageKey] || [];
-                const matchingEntries = index.filter((entry: any) => entry.normalizedUrl === normalizedUrl);
-
-                // Fetch annotations from IPFS via Pinata
-                const annotations = [];
-                for (const entry of matchingEntries) {
-                    try {
-                        const response = await fetch(`https://gateway.pinata.cloud/ipfs/${entry.ipfsHash}`);
-                        const data = await response.json();
-                        annotations.push({ ...data, ipfsHash: entry.ipfsHash });
-                    } catch (error) {
-                        console.error(`Failed to fetch IPFS hash ${entry.ipfsHash}:`, error);
-                    }
-                }
-                resolve(annotations);
-            });
-        });
-    }
+interface Annotation {
+    id: string;
+    content: string;
+    author: string;
+    timestamp: string;
+    comments: Comment[];
+    pageCid: string;
 }
 
-export const annotationService = new AnnotationService();
+interface Comment {
+    id: string;
+    content: string;
+    author: string;
+    timestamp: string;
+}
+
+const annotationCache: { [url: string]: Annotation[] } = {};
+
+export const annotationService = {
+    async getAnnotations(url: string): Promise<Annotation[]> {
+        return new Promise((resolve) => {
+            const normalizedUrl = normalizeUrl(url);
+            chrome.runtime.sendMessage({ action: 'getAnnotations', url: normalizedUrl }, (response) => {
+                resolve(response.annotations || []);
+            });
+            chrome.runtime.sendMessage({
+                action: 'requestAnnotations',
+                url: normalizedUrl,
+            });
+        });
+    },
+
+    async addAnnotation(annotation: Annotation): Promise<void> {
+        return new Promise((resolve, reject) => {
+            const normalizedUrl = normalizeUrl(annotation.pageCid);
+            if (!annotationCache[normalizedUrl]) {
+                annotationCache[normalizedUrl] = [];
+            }
+            annotationCache[normalizedUrl].push(annotation);
+            chrome.runtime.sendMessage(
+                { action: 'addAnnotation', annotation },
+                (response) => {
+                    if (response.success) {
+                        resolve();
+                    } else {
+                        reject(new Error('Failed to add annotation'));
+                    }
+                }
+            );
+        });
+    },
+};
+
+chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+    if (msg.action === 'getAnnotations') {
+        const normalizedUrl = normalizeUrl(msg.url);
+        sendResponse({ annotations: annotationCache[normalizedUrl] || [] });
+        return true;
+    } else if (msg.action === 'addAnnotation') {
+        sendResponse({ success: true });
+        return true;
+    }
+});
+
+chrome.runtime.onMessage.addListener((msg) => {
+    if (msg.action === 'receiveAnnotations') {
+        const normalizedUrl = normalizeUrl(msg.url);
+        annotationCache[normalizedUrl] = msg.annotations;
+        chrome.runtime.sendMessage({
+            action: 'updateAnnotations',
+            url: normalizedUrl,
+            annotations: msg.annotations,
+        });
+    }
+});

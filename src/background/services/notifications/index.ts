@@ -1,4 +1,4 @@
-// src/background/services/notifications/index.ts
+// src/background/services/notifications/index.tsx
 export interface Notification {
     id: string;
     message: string;

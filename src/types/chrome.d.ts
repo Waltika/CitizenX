@@ -1,5 +1,10 @@
-declare namespace chrome {
-    namespace sidePanel {
-        function open(options: { tabId?: number; windowId?: number }, callback?: () => void): void;
+export {};
+
+declare global {
+    interface Chrome {
+        sidePanel: {
+            open: (options: { tabId: number }) => Promise<void>;
+            setPanelBehavior: (behavior: { openPanelOnActionClick: boolean }) => Promise<void>;
+        };
     }
 }

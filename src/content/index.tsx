@@ -1,34 +1,21 @@
-// src/content/index.ts
-import React from 'react';
 import { createRoot } from 'react-dom/client';
-import { historyService } from '../background/services/history';
-import { AnnotationCreate }  from './components/AnnotationCreate'
-import { AnnotationDisplay } from './components/AnnotationDisplay';
-import {AuthWrapper} from "./components/AuthWrapper";
+import { AnnotationCreate } from './components/AnnotationCreate';
 
-console.log('CitizenX content script initialized');
-
-export async function initialize() {
-    const url = window.location.href;
-    await historyService.addVisit(url);
-
-    // Create container for AnnotationCreate
-    const createContainer = document.createElement('div');
-    document.body.appendChild(createContainer);
-    const createRootInstance = createRoot(createContainer);
-    createRootInstance.render(<AnnotationCreate url={url} userId="test-user" />);
-
-    // Create container for AnnotationDisplay
-    const displayContainer = document.createElement('div');
-    document.body.appendChild(displayContainer);
-    const displayRoot = createRoot(displayContainer);
-    displayRoot.render(<AnnotationDisplay url={url} />);
-
-    // Create container for AuthWrapper
+function initializeContentScript() {
     const container = document.createElement('div');
+    container.id = 'citizenx-content-root';
     document.body.appendChild(container);
-    const root = createRoot(container);
-    root.render(<AuthWrapper url={url} />);
+
+    const userId = localStorage.getItem('userAddress') || 'anonymous';
+
+    chrome.runtime.sendMessage({ action: 'getCurrentUrl' }, (response) => {
+        if (response && response.url) {
+            const root = createRoot(container);
+            root.render(<AnnotationCreate url={response.url} userId={userId} />);
+        } else {
+            console.error('Failed to get current URL');
+        }
+    });
 }
 
-initialize().catch(console.error);
+initializeContentScript();
