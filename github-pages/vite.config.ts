@@ -18,5 +18,5 @@ export default defineConfig({
       },
     },
   },
-  base: '/CitizenX', // Adjust for GitHub Pages subpath
+  base: '/CitizenX/github-pages/dist/',
 });
