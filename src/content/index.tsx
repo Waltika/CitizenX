@@ -1,144 +1,138 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { createRoot } from 'react-dom/client';
+import { createOrbitDB } from '@orbitdb/core';
+import { createHelia } from 'helia';
 
-interface Annotation {
-    id: string;
-    url: string;
-    text: string;
-    userId: string;
-    timestamp: number;
-}
+const ContentUI: React.FC = () => {
+    const [annotation, setAnnotation] = useState('');
+    const [annotations, setAnnotations] = useState<{ _id: string; url: string; text: string; timestamp: number }[]>([]);
+    const [db, setDb] = useState<any>(null);
+    const [error, setError] = useState<string | null>(null);
 
-// Normalize URL (matches compiled output)
-function normalizeUrl(url: string): string {
-    try {
-        const urlObj = new URL(url);
-        const params = new URLSearchParams(urlObj.search);
-        ['utm_source', 'utm_medium', 'utm_campaign', 'session', 'ref', 'fbclid', 'gclid'].forEach(param => params.delete(param));
-        urlObj.search = params.toString();
-        urlObj.pathname = urlObj.pathname.replace(/^\/(en|fr|de|es|it)\//i, '/');
-        return urlObj.toString();
-    } catch (error) {
-        console.error('URL normalization failed:', error);
-        return url;
-    }
-}
+    // Initialize OrbitDB and load annotations
+    useEffect(() => {
+        async function initOrbitDB() {
+            try {
+                console.log('Initializing OrbitDB for content script');
+                const ipfs = await createHelia();
+                const orbitdb = await createOrbitDB(ipfs);
+                const db = await orbitdb.open('citizenx-annotations', { type: 'documents' });
+                await db.load();
+                setDb(db);
+                const docs = await db.all();
+                setAnnotations(docs.map((doc: any) => doc.value));
+                db.events.on('update', async () => {
+                    const updatedDocs = await db.all();
+                    setAnnotations(updatedDocs.map((doc: any) => doc.value));
+                    console.log('Content script database updated:', updatedDocs);
+                });
+            } catch (error) {
+                console.error('OrbitDB initialization failed:', error);
+                setError('Failed to initialize decentralized storage');
+            }
+        }
+        initOrbitDB();
+    }, []);
 
-// Annotation component (matches compiled output)
-const AnnotationCreate: React.FC<{ url: string; userId: string }> = ({ url, userId }) => {
-    const [text, setText] = useState('');
-
-    const addAnnotation = async () => {
-        try {
-            await annotationService.addAnnotation({
-                id: `test-${Date.now()}`,
-                url,
-                text,
-                userId,
-                timestamp: Date.now(),
-            });
-            setText('');
-        } catch (error) {
-            console.error('Failed to add annotation:', error);
+    // Save annotation to OrbitDB
+    const handleSaveAnnotation = async () => {
+        if (annotation.trim() && db) {
+            try {
+                const doc = {
+                    _id: Date.now().toString(),
+                    url: window.location.href,
+                    text: annotation.trim(),
+                    timestamp: Date.now(),
+                };
+                await db.put(doc);
+                setAnnotation('');
+                console.log('Saved annotation to OrbitDB:', doc);
+            } catch (error) {
+                console.error('Failed to save annotation:', error);
+                setError('Failed to save annotation');
+            }
         }
     };
 
     return (
-        <div className="annotation-create">
-      <textarea
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          placeholder="Enter your annotation"
-      />
-            <button onClick={addAnnotation}>Add Annotation</button>
+        <div
+            style={{
+                position: 'fixed',
+                bottom: '20px',
+                right: '20px',
+                background: '#fff',
+                border: '1px solid #ccc',
+                padding: '10px',
+                borderRadius: '5px',
+                boxShadow: '0 2px 5px rgba(0,0,0,0.2)',
+                zIndex: 1000,
+                maxWidth: '300px',
+            }}
+        >
+            <h2 style={{ fontSize: '1.2rem', margin: '0 0 8px 0' }}>CitizenX Annotations</h2>
+            {error && (
+                <p style={{ color: 'red', margin: '0 0 8px 0' }}>{error}</p>
+            )}
+            <div style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>
+                <input
+                    type="text"
+                    value={annotation}
+                    onChange={(e) => setAnnotation(e.target.value)}
+                    placeholder="Enter annotation..."
+                    style={{
+                        flex: 1,
+                        padding: '5px',
+                        border: '1px solid #ccc',
+                        borderRadius: '3px',
+                    }}
+                />
+                <button
+                    onClick={handleSaveAnnotation}
+                    disabled={!db}
+                    style={{
+                        padding: '5px 10px',
+                        background: db ? '#007bff' : '#ccc',
+                        color: '#fff',
+                        border: 'none',
+                        borderRadius: '3px',
+                        cursor: db ? 'pointer' : 'not-allowed',
+                    }}
+                >
+                    Save
+                </button>
+            </div>
+            <div style={{ maxHeight: '150px', overflowY: 'auto' }}>
+                {annotations.length === 0 ? (
+                    <p style={{ margin: 0, color: '#666' }}>No annotations yet.</p>
+                ) : (
+                    <ul style={{ margin: 0, padding: 0, listStyle: 'none' }}>
+                        {annotations.map((note) => (
+                            <li
+                                key={note._id}
+                                style={{
+                                    padding: '5px 0',
+                                    borderBottom: '1px solid #eee',
+                                    wordBreak: 'break-word',
+                                }}
+                            >
+                                {note.text} <small>({new Date(note.timestamp).toLocaleString()})</small>
+                            </li>
+                        ))}
+                    </ul>
+                )}
+            </div>
         </div>
     );
 };
 
-// Annotation service (integrated to match compiled output)
-const annotationCache: { [url: string]: Annotation[] } = {};
-
-const annotationService = {
-    async getAnnotations(url: string): Promise<Annotation[]> {
-        return new Promise((resolve) => {
-            const normalizedUrl = normalizeUrl(url);
-            chrome.runtime.sendMessage({ action: 'getAnnotations', url: normalizedUrl }, (response) => {
-                resolve(response.annotations || []);
-            });
-            chrome.runtime.sendMessage({ action: 'requestAnnotations', url: normalizedUrl });
-        });
-    },
-
-    async addAnnotation(annotation: Annotation): Promise<void> {
-        return new Promise((resolve, reject) => {
-            const normalizedUrl = normalizeUrl(annotation.url);
-            if (!annotationCache[normalizedUrl]) {
-                annotationCache[normalizedUrl] = [];
-            }
-            annotationCache[normalizedUrl].push(annotation);
-            chrome.runtime.sendMessage(
-                { action: 'addAnnotation', annotation },
-                (response) => {
-                    if (response.success) {
-                        resolve();
-                    } else {
-                        reject(new Error('Failed to add annotation'));
-                    }
-                }
-            );
-        });
-    },
-};
-
-// Message listeners (integrated to match compiled output)
-chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
-    if (msg.action === 'getAnnotations') {
-        const normalizedUrl = normalizeUrl(msg.url);
-        sendResponse({ annotations: annotationCache[normalizedUrl] || [] });
-        return true;
-    } else if (msg.action === 'addAnnotation') {
-        sendResponse({ success: true });
-        return true;
-    }
-});
-
-chrome.runtime.onMessage.addListener((msg) => {
-    if (msg.action === 'receiveAnnotations') {
-        const normalizedUrl = normalizeUrl(msg.url);
-        annotationCache[normalizedUrl] = msg.annotations;
-        chrome.runtime.sendMessage({ action: 'updateAnnotations', url: normalizedUrl, annotations: msg.annotations });
-    }
-});
-
-// Initialize content script
 function initializeContentScript() {
     try {
         const container = document.createElement('div');
         container.id = 'citizenx-content-root';
         document.body.appendChild(container);
-
-        const userId = localStorage.getItem('userAddress') || 'anonymous';
-
-        chrome.runtime.sendMessage({ action: 'getCurrentUrl' }, (response) => {
-            if (chrome.runtime.lastError) {
-                console.warn('Failed to get current URL:', chrome.runtime.lastError.message);
-                return;
-            }
-            if (response && response.url) {
-                const root = createRoot(container);
-                root.render(<AnnotationCreate url={response.url} userId={userId} />);
-            } else {
-                console.error('No URL received from background script');
-            }
-        });
-
-        // Listen for URL changes
-        chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
-            if (msg.action === 'urlChanged' && msg.url) {
-                const root = createRoot(container);
-                root.render(<AnnotationCreate url={msg.url} userId={userId} />);
-            }
-        });
+        const root = createRoot(container);
+        root.render(<ContentUI />);
+        console.log('Content script initialized');
     } catch (error) {
         console.error('Content script initialization failed:', error);
     }

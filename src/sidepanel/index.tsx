@@ -1,59 +1,86 @@
-import React, { useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { createRoot } from 'react-dom/client';
 
 const SidePanel: React.FC = () => {
+    const [annotation, setAnnotation] = useState('');
+    const [annotations, setAnnotations] = useState<string[]>([]);
+
+    // Load annotations from localStorage on mount
     useEffect(() => {
-        const handleMessage = (event: MessageEvent) => {
-            // Validate event origin
-            if (event.origin !== 'https://waltika.github.io') {
-                return;
-            }
-
-            // Ensure event.source is a Window object
-            if (!event.source || !(event.source instanceof Window)) {
-                console.warn('Invalid event source:', event.source);
-                return;
-            }
-
-            if (event.data.action === 'requestUrl') {
-                chrome.runtime.sendMessage({ action: 'getCurrentUrl' }, (response) => {
-                    if (chrome.runtime.lastError) {
-                        console.warn('Failed to get current URL:', chrome.runtime.lastError.message);
-                        return;
-                    }
-                    if (response && response.url && event.source) {
-                        event.source.postMessage(
-                            { action: 'receiveUrl', url: response.url },
-                            { targetOrigin: event.origin } // Use WindowPostMessageOptions
-                        );
-                    } else {
-                        console.warn('No URL received from background script');
-                    }
-                });
-            } else if (event.data.action === 'receiveAnnotations') {
-                chrome.runtime.sendMessage(event.data, (response) => {
-                    if (chrome.runtime.lastError) {
-                        console.warn('Failed to forward annotations:', chrome.runtime.lastError.message);
-                    }
-                });
-            }
-        };
-
-        window.addEventListener('message', handleMessage);
-        return () => window.removeEventListener('message', handleMessage);
+        console.log('SidePanel mounted');
+        const savedAnnotations = localStorage.getItem('citizenx-annotations');
+        if (savedAnnotations) {
+            setAnnotations(JSON.parse(savedAnnotations));
+        }
     }, []);
 
+    // Save annotation to localStorage and update list
+    const handleSaveAnnotation = () => {
+        if (annotation.trim()) {
+            const newAnnotations = [...annotations, annotation.trim()];
+            setAnnotations(newAnnotations);
+            localStorage.setItem('citizenx-annotations', JSON.stringify(newAnnotations));
+            setAnnotation('');
+            console.log('Saved annotation from side panel:', annotation);
+        }
+    };
+
     return (
-        <div className="w-full h-full">
-            <iframe
-                id="citizenx-iframe"
-                src="https://waltika.github.io/CitizenX/"
-                className="w-full h-full border-none"
-                sandbox="allow-scripts allow-same-origin"
-            />
+        <div style={{ padding: '16px', maxWidth: '300px' }}>
+            <h1 style={{ fontSize: '1.5rem', fontWeight: 'bold', margin: '0 0 8px 0' }}>
+                CitizenX Annotations
+            </h1>
+            <div style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>
+                <input
+                    type="text"
+                    value={annotation}
+                    onChange={(e) => setAnnotation(e.target.value)}
+                    placeholder="Enter annotation..."
+                    style={{
+                        flex: 1,
+                        padding: '5px',
+                        border: '1px solid #ccc',
+                        borderRadius: '3px',
+                    }}
+                />
+                <button
+                    onClick={handleSaveAnnotation}
+                    style={{
+                        padding: '5px 10px',
+                        background: '#007bff',
+                        color: '#fff',
+                        border: 'none',
+                        borderRadius: '3px',
+                        cursor: 'pointer',
+                    }}
+                >
+                    Save
+                </button>
+            </div>
+            <div style={{ maxHeight: '300px', overflowY: 'auto' }}>
+                {annotations.length === 0 ? (
+                    <p style={{ margin: 0, color: '#666' }}>No annotations yet.</p>
+                ) : (
+                    <ul style={{ margin: 0, padding: 0, listStyle: 'none' }}>
+                        {annotations.map((note, index) => (
+                            <li
+                                key={index}
+                                style={{
+                                    padding: '5px 0',
+                                    borderBottom: '1px solid #eee',
+                                    wordBreak: 'break-word',
+                                }}
+                            >
+                                {note}
+                            </li>
+                        ))}
+                    </ul>
+                )}
+            </div>
         </div>
     );
 };
 
 const root = createRoot(document.getElementById('root')!);
 root.render(<SidePanel />);
+console.log('Side panel initialized');
