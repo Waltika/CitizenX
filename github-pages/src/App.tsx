@@ -51,11 +51,19 @@ const App: React.FC = () => {
     const [currentUrl, setCurrentUrl] = useState<string>('');
 
     const connectWallet = async () => {
-        if (window.ethereum) {
-            const provider = new ethers.BrowserProvider(window.ethereum);
-            const accounts = await provider.send('eth_requestAccounts', []);
-            setUserAddress(accounts[0]);
-            await loadProfile(accounts[0]);
+        // Use type assertion to access window.ethereum
+        const ethereum = (window as any).ethereum;
+        if (ethereum) {
+            try {
+                const provider = new ethers.BrowserProvider(ethereum);
+                const accounts = await provider.send('eth_requestAccounts', []);
+                setUserAddress(accounts[0]);
+                await loadProfile(accounts[0]);
+            } catch (error) {
+                console.error('Failed to connect wallet:', error);
+            }
+        } else {
+            console.error('MetaMask not detected');
         }
     };
 
@@ -72,14 +80,18 @@ const App: React.FC = () => {
             }
         } else {
             const newProfile: UserProfile = { handle: `User_${address.slice(0, 6)}`, pictureCid: '' };
-            const response = await fetch(`${PINATA_API_URL}/pinning/pinJSONToIPFS`, {
-                method: 'POST',
-                headers: { Authorization: `Bearer ${PINATA_JWT}`, 'Content-Type': 'application/json' },
-                body: JSON.stringify(newProfile),
-            });
-            const { IpfsHash } = await response.json();
-            localStorage.setItem(profileKey, IpfsHash);
-            setProfile(newProfile);
+            try {
+                const response = await fetch(`${PINATA_API_URL}/pinning/pinJSONToIPFS`, {
+                    method: 'POST',
+                    headers: { Authorization: `Bearer ${PINATA_JWT}`, 'Content-Type': 'application/json' },
+                    body: JSON.stringify(newProfile),
+                });
+                const { IpfsHash } = await response.json();
+                localStorage.setItem(profileKey, IpfsHash);
+                setProfile(newProfile);
+            } catch {
+                console.error('Failed to pin profile');
+            }
         }
     };
 
@@ -159,7 +171,8 @@ const App: React.FC = () => {
             const newAnnotations = [...annotations, { ...annotation, pageCid }];
             setAnnotations(newAnnotations);
             setNotifications((prev) => [...prev, `New annotation on ${normalizedUrl}`]);
-            const pageUpdate = await fetch(`${PINATA_API_URL}/pinning/pinJSONToIPFS`, {
+            // Update page annotations (no unused variable)
+            await fetch(`${PINATA_API_URL}/pinning/pinJSONToIPFS`, {
                 method: 'POST',
                 headers: { Authorization: `Bearer ${PINATA_JWT}`, 'Content-Type': 'application/json' },
                 body: JSON.stringify({ url: normalizedUrl, annotations: [...(annotations.map(a => a.id)), IpfsHash] }),
@@ -172,7 +185,7 @@ const App: React.FC = () => {
 
     useEffect(() => {
         window.postMessage({ action: 'requestUrl' }, '*');
-        window.addEventListener('message', (event) => {
+        const handleMessage = (event: MessageEvent) => {
             if (event.data.action === 'receiveUrl') {
                 setCurrentUrl(event.data.url);
                 loadAnnotations(event.data.url);
@@ -186,9 +199,10 @@ const App: React.FC = () => {
             } else if (event.data.action === 'addAnnotation') {
                 addAnnotation(event.data.annotation);
             }
-        });
+        };
+        window.addEventListener('message', handleMessage);
         connectWallet();
-        return () => window.removeEventListener('message', () => {});
+        return () => window.removeEventListener('message', handleMessage);
     }, []);
 
     return (
