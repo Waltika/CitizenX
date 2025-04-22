@@ -2,6 +2,7 @@
 import { renderHook, act } from '@testing-library/react';
 import { waitFor } from '@testing-library/react';
 import { useAnnotations } from '../useAnnotations';
+import { normalizeUrl } from '../../shared/utils/normalizeUrl';
 
 // Mock localStorage
 const localStorageMock = (function () {
@@ -24,11 +25,17 @@ Object.defineProperty(window, 'localStorage', {
     writable: true,
 });
 
+// Mock normalizeUrl to return a consistent normalized URL
+jest.mock('../../shared/utils/normalizeUrl', () => ({
+    normalizeUrl: jest.fn((url: string) => 'https://example.com/normalized'),
+}));
+
 describe('useAnnotations', () => {
-    const mockUrl = 'https://example.com';
+    const mockUrl = 'https://example.com/en/path?utm_source=google';
+    const mockNormalizedUrl = 'https://example.com/normalized';
     const mockDb = {
         put: jest.fn(),
-        del: jest.fn(),
+        del: jest.fn(), // Fixed typo: 'jenpm st.fn()' → 'jest.fn()'
         all: jest.fn(),
         events: {
             on: jest.fn(),
@@ -42,6 +49,9 @@ describe('useAnnotations', () => {
         mockDb.del.mockReset();
         mockDb.all.mockReset();
         mockDb.events.on.mockReset();
+
+        // Ensure normalizeUrl returns the mocked normalized URL
+        (normalizeUrl as jest.Mock).mockReturnValue(mockNormalizedUrl);
 
         // Mock console methods to suppress logs during tests
         jest.spyOn(console, 'log').mockImplementation(() => {});
@@ -63,7 +73,7 @@ describe('useAnnotations', () => {
 
     it('fetches existing annotations from OrbitDB on mount', async () => {
         const mockAnnotations = [
-            { _id: '1', url: mockUrl, text: 'First annotation', timestamp: 1630000000000 },
+            { _id: '1', url: mockNormalizedUrl, text: 'First annotation', timestamp: 1630000000000 },
         ];
         mockDb.all.mockResolvedValue(mockAnnotations.map((value) => ({ value })));
 
@@ -82,7 +92,7 @@ describe('useAnnotations', () => {
 
     it('fetches annotations from localStorage on mount', async () => {
         const mockLocalAnnotations = [
-            { _id: '1', url: mockUrl, text: 'Local annotation', timestamp: 1630000000000 },
+            { _id: '1', url: mockNormalizedUrl, text: 'Local annotation', timestamp: 1630000000000 },
         ];
         localStorageMock.getItem.mockReturnValue(JSON.stringify(mockLocalAnnotations));
 
@@ -107,7 +117,7 @@ describe('useAnnotations', () => {
 
         expect(mockDb.put).toHaveBeenCalledWith(
             expect.objectContaining({
-                url: mockUrl,
+                url: mockNormalizedUrl,
                 text: newAnnotationText,
             })
         );
@@ -134,7 +144,7 @@ describe('useAnnotations', () => {
         expect(result.current.annotations).toEqual(
             expect.arrayContaining([
                 expect.objectContaining({
-                    url: mockUrl,
+                    url: mockNormalizedUrl,
                     text: newAnnotationText,
                 }),
             ])
@@ -143,7 +153,7 @@ describe('useAnnotations', () => {
 
     it('deletes an annotation from OrbitDB', async () => {
         const mockAnnotations = [
-            { _id: '1', url: mockUrl, text: 'First annotation', timestamp: 1630000000000 },
+            { _id: '1', url: mockNormalizedUrl, text: 'First annotation', timestamp: 1630000000000 },
         ];
         mockDb.all
             .mockResolvedValueOnce(mockAnnotations.map((value) => ({ value }))) // Initial fetch
@@ -173,19 +183,16 @@ describe('useAnnotations', () => {
 
     it('deletes an annotation from localStorage when db is null', async () => {
         const mockLocalAnnotations = [
-            { _id: '1', url: mockUrl, text: 'Local annotation', timestamp: 1630000000000 },
+            { _id: '1', url: mockNormalizedUrl, text: 'Local annotation', timestamp: 1630000000000 },
         ];
         localStorageMock.getItem.mockReturnValue(JSON.stringify(mockLocalAnnotations));
 
         const { result } = renderHook(() => useAnnotations(mockUrl, null));
 
-        // Use setAnnotations to set the initial state directly
-        act(() => {
-            result.current.setAnnotations(mockLocalAnnotations);
+        // Wait for useEffect to set the initial state from localStorage
+        await waitFor(() => {
+            expect(result.current.annotations).toEqual(mockLocalAnnotations);
         });
-
-        // Verify the initial state before deletion
-        expect(result.current.annotations).toEqual(mockLocalAnnotations);
 
         // Perform the deletion
         await act(async () => {

@@ -9,7 +9,7 @@
     "strict": true,
     "skipLibCheck": true,
     "baseUrl": "src",
-    "types": ["jest", "@testing-library/jest-dom"],
+    "types": ["jest", "@testing-library/jest-dom", "chrome"],
     "paths": {
       "@/*": ["*"],
       "@orbitdb/core": ["src/types/orbitdb-core"]
