@@ -7,7 +7,7 @@ async function runBuild() {
     const tempSidepanelDir = resolve(process.cwd(), 'temp-sidepanel');
     const tempContentDir = resolve(process.cwd(), 'temp-content');
 
-    // Clean up previous build artifacts
+    // Clean up ALL build artifacts, including dist, to prevent duplicates
     if (existsSync(distDir)) rmSync(distDir, { recursive: true, force: true });
     if (existsSync(tempSidepanelDir)) rmSync(tempSidepanelDir, { recursive: true, force: true });
     if (existsSync(tempContentDir)) rmSync(tempContentDir, { recursive: true, force: true });
@@ -18,7 +18,7 @@ async function runBuild() {
         plugins: [(await import('@vitejs/plugin-react')).default()],
         resolve: {
             alias: {
-                'events': 'eventemitter3',
+                'events': 'events',
             },
         },
         build: {
@@ -28,7 +28,7 @@ async function runBuild() {
                     sidepanel: resolve(process.cwd(), 'src/sidepanel/index.html'),
                 },
                 output: {
-                    entryFileNames: 'sidepanel/index.js',
+                    entryFileNames: 'index.js',
                     assetFileNames: 'assets/[name]-[hash].[ext]',
                     format: 'iife',
                     inlineDynamicImports: false,
@@ -47,7 +47,7 @@ async function runBuild() {
         plugins: [(await import('@vitejs/plugin-react')).default()],
         resolve: {
             alias: {
-                'events': 'eventemitter3',
+                'events': 'events',
             },
         },
         build: {
@@ -57,7 +57,7 @@ async function runBuild() {
                     content: resolve(process.cwd(), 'src/content/index.tsx'),
                 },
                 output: {
-                    entryFileNames: 'content/index.js',
+                    entryFileNames: 'index.js',
                     assetFileNames: 'assets/[name]-[hash].[ext]',
                     format: 'iife',
                     inlineDynamicImports: false,
@@ -70,14 +70,14 @@ async function runBuild() {
         },
     });
 
-    // Merge outputs into dist
+    // Create dist structure without duplicates
     mkdirSync(distDir, { recursive: true });
     mkdirSync(join(distDir, 'sidepanel'), { recursive: true });
     mkdirSync(join(distDir, 'content'), { recursive: true });
     mkdirSync(join(distDir, 'assets'), { recursive: true });
 
     // Copy sidepanel outputs
-    const sidepanelJsPath = join(tempSidepanelDir, 'sidepanel/index.js');
+    const sidepanelJsPath = join(tempSidepanelDir, 'index.js');
     const sidepanelHtmlPath = join(tempSidepanelDir, 'src/sidepanel/index.html');
     if (existsSync(sidepanelJsPath)) {
         copyFileSync(sidepanelJsPath, join(distDir, 'sidepanel/index.js'));
@@ -91,16 +91,16 @@ async function runBuild() {
     }
 
     // Copy content output
-    const contentJsPath = join(tempContentDir, 'content/index.js');
+    const contentJsPath = join(tempContentDir, 'index.js');
     if (existsSync(contentJsPath)) {
         copyFileSync(contentJsPath, join(distDir, 'content/index.js'));
     } else {
         throw new Error(`Content JS not found: ${contentJsPath}`);
     }
 
-    // Copy assets
-    const assets = readdirSync(tempSidepanelDir).filter(f => f.startsWith('assets'));
-    for (const asset of assets) {
+    // Copy assets (merge from both builds, avoid duplicates)
+    const sidepanelAssets = readdirSync(tempSidepanelDir).filter(f => f.startsWith('assets'));
+    for (const asset of sidepanelAssets) {
         copyFileSync(
             join(tempSidepanelDir, asset),
             join(distDir, asset)

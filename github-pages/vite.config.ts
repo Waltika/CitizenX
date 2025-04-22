@@ -5,9 +5,7 @@ export default defineConfig({
   plugins: [react()],
   resolve: {
     alias: {
-      'events': 'eventemitter3',
-      'crypto': 'crypto-browserify',
-      'stream': 'stream-browserify',
+      'events': 'events',
     },
   },
   build: {

@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { createOrbitDB } from '@orbitdb/core';
-import { createHelia } from 'helia';
-import { bootstrap } from '@libp2p/bootstrap';
+import { create } from 'kubo-rpc-client';
 
 const App: React.FC = () => {
     const [annotation, setAnnotation] = useState('');
@@ -15,26 +14,14 @@ const App: React.FC = () => {
                 console.log('Starting OrbitDB initialization for GitHub Pages');
                 let ipfs;
                 try {
-                    ipfs = await createHelia({
-                        libp2p: {
-                            addresses: {
-                                listen: ['/webrtc'],
-                            },
-                            peerDiscovery: [
-                                bootstrap({
-                                    list: [
-                                        '/dns4/bootstrap.libp2p.io/tcp/443/wss/p2p/12D3KooWQL1aS4qD3yCjmV7gNmx4F5gP7pNXG1qimV5DXe7tXUn',
-                                        '/dns4/bootstrap.libp2p.io/tcp/443/wss/p2p/12D3KooWAtfLqN4QmgjrZ9eZ9r4L1B7bH7d9eW8fA4n4bBAyKSm',
-                                    ],
-                                }),
-                            ],
-                        },
+                    ipfs = create({
+                        url: 'https://ipfs.io/api/v0',
                     });
-                } catch (heliaError) {
-                    console.error('Failed to initialize Helia:', heliaError);
+                } catch (ipfsError) {
+                    console.error('Failed to initialize IPFS:', ipfsError);
                     throw new Error('IPFS initialization failed');
                 }
-                console.log('Helia initialized:', ipfs);
+                console.log('IPFS initialized:', ipfs);
                 if (!ipfs) {
                     throw new Error('IPFS instance is undefined');
                 }
@@ -82,7 +69,7 @@ const App: React.FC = () => {
     return (
         <div style={{ padding: '16px', maxWidth: '300px' }}>
             <h1 style={{ fontSize: '1.5rem', fontWeight: 'bold', margin: '0 0 8px 0' }}>
-                CitizenX Annotations 1
+                CitizenX Annotations
             </h1>
             {error && (
                 <p style={{ color: 'red', margin: '0 0 8px 0' }}>{error}</p>

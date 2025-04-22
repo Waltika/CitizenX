@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { createRoot } from 'react-dom/client';
 import { createOrbitDB } from '@orbitdb/core';
-import { createHelia } from 'helia';
-import { bootstrap } from '@libp2p/bootstrap';
+import { create } from 'kubo-rpc-client';
 
 const ContentUI: React.FC = () => {
     const [annotation, setAnnotation] = useState('');
@@ -16,26 +15,14 @@ const ContentUI: React.FC = () => {
                 console.log('Starting OrbitDB initialization for content script');
                 let ipfs;
                 try {
-                    ipfs = await createHelia({
-                        libp2p: {
-                            addresses: {
-                                listen: ['/webrtc'],
-                            },
-                            peerDiscovery: [
-                                bootstrap({
-                                    list: [
-                                        '/dns4/bootstrap.libp2p.io/tcp/443/wss/p2p/12D3KooWQL1aS4qD3yCjmV7gNmx4F5gP7pNXG1qimV5DXe7tXUn',
-                                        '/dns4/bootstrap.libp2p.io/tcp/443/wss/p2p/12D3KooWAtfLqN4QmgjrZ9eZ9r4L1B7bH7d9eW8fA4n4bBAyKSm',
-                                    ],
-                                }),
-                            ],
-                        },
+                    ipfs = create({
+                        url: 'https://ipfs.io/api/v0',
                     });
-                } catch (heliaError) {
-                    console.error('Failed to initialize Helia:', heliaError);
+                } catch (ipfsError) {
+                    console.error('Failed to initialize IPFS:', ipfsError);
                     throw new Error('IPFS initialization failed');
                 }
-                console.log('Helia initialized:', ipfs);
+                console.log('IPFS initialized:', ipfs);
                 if (!ipfs) {
                     throw new Error('IPFS instance is undefined');
                 }
@@ -95,7 +82,7 @@ const ContentUI: React.FC = () => {
                 maxWidth: '300px',
             }}
         >
-            <h2 style={{ fontSize: '1.2rem', margin: '0 0 8px 0' }}>Citizen X Annotations 1</h2>
+            <h2 style={{ fontSize: '1.2rem', margin: '0 0 8px 0' }}>CitizenX Annotations</h2>
             {error && (
                 <p style={{ color: 'red', margin: '0 0 8px 0' }}>{error}</p>
             )}
