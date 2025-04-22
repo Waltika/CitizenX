@@ -79,7 +79,7 @@ const App = () => {
             }
         }
     };
-    return (_jsxs("div", { style: { padding: '16px', maxWidth: '300px' }, children: [_jsx("h1", { style: { fontSize: '1.5rem', fontWeight: 'bold', margin: '0 0 8px 0' }, children: "CitizenX Annotations" }), error && (_jsx("p", { style: { color: 'red', margin: '0 0 8px 0' }, children: error })), _jsxs("div", { style: { display: 'flex', gap: '8px', marginBottom: '8px' }, children: [_jsx("input", { type: "text", value: annotation, onChange: (e) => setAnnotation(e.target.value), placeholder: "Enter annotation...", style: {
+    return (_jsxs("div", { style: { padding: '16px', maxWidth: '300px' }, children: [_jsx("h1", { style: { fontSize: '1.5rem', fontWeight: 'bold', margin: '0 0 8px 0' }, children: "CitizenX Annotations 1" }), error && (_jsx("p", { style: { color: 'red', margin: '0 0 8px 0' }, children: error })), _jsxs("div", { style: { display: 'flex', gap: '8px', marginBottom: '8px' }, children: [_jsx("input", { type: "text", value: annotation, onChange: (e) => setAnnotation(e.target.value), placeholder: "Enter annotation...", style: {
                             flex: 1,
                             padding: '5px',
                             border: '1px solid #ccc',

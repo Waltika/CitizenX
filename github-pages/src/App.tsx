@@ -82,7 +82,7 @@ const App: React.FC = () => {
     return (
         <div style={{ padding: '16px', maxWidth: '300px' }}>
             <h1 style={{ fontSize: '1.5rem', fontWeight: 'bold', margin: '0 0 8px 0' }}>
-                CitizenX Annotations
+                CitizenX Annotations 1
             </h1>
             {error && (
                 <p style={{ color: 'red', margin: '0 0 8px 0' }}>{error}</p>
