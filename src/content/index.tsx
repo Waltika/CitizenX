@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { createRoot } from 'react-dom/client';
 import { createOrbitDB } from '@orbitdb/core';
 import { createHelia } from 'helia';
+import { bootstrap } from '@libp2p/bootstrap';
 
 const ContentUI: React.FC = () => {
     const [annotation, setAnnotation] = useState('');
@@ -9,15 +10,41 @@ const ContentUI: React.FC = () => {
     const [db, setDb] = useState<any>(null);
     const [error, setError] = useState<string | null>(null);
 
-    // Initialize OrbitDB and load annotations
     useEffect(() => {
         async function initOrbitDB() {
             try {
-                console.log('Initializing OrbitDB for content script');
-                const ipfs = await createHelia();
+                console.log('Starting OrbitDB initialization for content script');
+                let ipfs;
+                try {
+                    ipfs = await createHelia({
+                        libp2p: {
+                            addresses: {
+                                listen: ['/webrtc'],
+                            },
+                            peerDiscovery: [
+                                bootstrap({
+                                    list: [
+                                        '/dns4/bootstrap.libp2p.io/tcp/443/wss/p2p/12D3KooWQL1aS4qD3yCjmV7gNmx4F5gP7pNXG1qimV5DXe7tXUn',
+                                        '/dns4/bootstrap.libp2p.io/tcp/443/wss/p2p/12D3KooWAtfLqN4QmgjrZ9eZ9r4L1B7bH7d9eW8fA4n4bBAyKSm',
+                                    ],
+                                }),
+                            ],
+                        },
+                    });
+                } catch (heliaError) {
+                    console.error('Failed to initialize Helia:', heliaError);
+                    throw new Error('IPFS initialization failed');
+                }
+                console.log('Helia initialized:', ipfs);
+                if (!ipfs) {
+                    throw new Error('IPFS instance is undefined');
+                }
                 const orbitdb = await createOrbitDB(ipfs);
+                console.log('OrbitDB instance created:', orbitdb);
                 const db = await orbitdb.open('citizenx-annotations', { type: 'documents' });
+                console.log('Database opened:', db);
                 await db.load();
+                console.log('Database loaded');
                 setDb(db);
                 const docs = await db.all();
                 setAnnotations(docs.map((doc: any) => doc.value));
@@ -34,7 +61,6 @@ const ContentUI: React.FC = () => {
         initOrbitDB();
     }, []);
 
-    // Save annotation to OrbitDB
     const handleSaveAnnotation = async () => {
         if (annotation.trim() && db) {
             try {

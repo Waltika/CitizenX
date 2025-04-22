@@ -6,13 +6,15 @@ export default defineConfig({
   resolve: {
     alias: {
       'events': 'eventemitter3',
+      'crypto': 'crypto-browserify',
+      'stream': 'stream-browserify',
     },
   },
   build: {
     outDir: 'dist',
     rollupOptions: {
       output: {
-        entryFileNames: 'assets/[name].js',
+        entryFileNames: 'assets/index.js',
         chunkFileNames: 'assets/[name].js',
         assetFileNames: 'assets/[name].[ext]',
       },

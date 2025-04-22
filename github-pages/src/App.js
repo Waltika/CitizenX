@@ -2,6 +2,7 @@ import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
 import { useState, useEffect } from 'react';
 import { createOrbitDB } from '@orbitdb/core';
 import { createHelia } from 'helia';
+import { bootstrap } from '@libp2p/bootstrap';
 const App = () => {
     const [annotation, setAnnotation] = useState('');
     const [annotations, setAnnotations] = useState([]);
@@ -10,11 +11,39 @@ const App = () => {
     useEffect(() => {
         async function initOrbitDB() {
             try {
-                console.log('Initializing OrbitDB for GitHub Pages');
-                const ipfs = await createHelia();
+                console.log('Starting OrbitDB initialization for GitHub Pages');
+                let ipfs;
+                try {
+                    ipfs = await createHelia({
+                        libp2p: {
+                            addresses: {
+                                listen: ['/webrtc'],
+                            },
+                            peerDiscovery: [
+                                bootstrap({
+                                    list: [
+                                        '/dns4/bootstrap.libp2p.io/tcp/443/wss/p2p/12D3KooWQL1aS4qD3yCjmV7gNmx4F5gP7pNXG1qimV5DXe7tXUn',
+                                        '/dns4/bootstrap.libp2p.io/tcp/443/wss/p2p/12D3KooWAtfLqN4QmgjrZ9eZ9r4L1B7bH7d9eW8fA4n4bBAyKSm',
+                                    ],
+                                }),
+                            ],
+                        },
+                    });
+                }
+                catch (heliaError) {
+                    console.error('Failed to initialize Helia:', heliaError);
+                    throw new Error('IPFS initialization failed');
+                }
+                console.log('Helia initialized:', ipfs);
+                if (!ipfs) {
+                    throw new Error('IPFS instance is undefined');
+                }
                 const orbitdb = await createOrbitDB(ipfs);
+                console.log('OrbitDB instance created:', orbitdb);
                 const db = await orbitdb.open('citizenx-annotations', { type: 'documents' });
+                console.log('Database opened:', db);
                 await db.load();
+                console.log('Database loaded');
                 setDb(db);
                 const docs = await db.all();
                 setAnnotations(docs.map((doc) => doc.value));
