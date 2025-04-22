@@ -2,6 +2,7 @@ import { build } from 'vite';
 import { resolve } from 'path';
 import { copyFile, mkdir, rm } from 'fs/promises';
 import { existsSync } from 'fs';
+import {rename} from "node:fs/promises";
 
 const chromeExtensionDir = resolve(process.cwd(), 'dist/chrome-extension');
 const activeContentDir = resolve(process.cwd(), 'dist/active-content');
@@ -42,7 +43,7 @@ async function buildChromeExtension() {
         build: {
             outDir: tempSidepanelDir,
             rollupOptions: {
-                input: resolve(process.cwd(), 'src/sidepanel/index.html'), // Simplified input
+                input: resolve(process.cwd(), 'src/sidepanel/index.html'),
                 output: {
                     entryFileNames: 'index.js',
                     assetFileNames: 'assets/[name]-[hash].[ext]',
@@ -77,7 +78,7 @@ async function buildChromeExtension() {
         build: {
             outDir: tempContentDir,
             rollupOptions: {
-                input: resolve(process.cwd(), 'src/content/index.tsx'), // Simplified input
+                input: resolve(process.cwd(), 'src/content/index.tsx'),
                 output: {
                     entryFileNames: 'index.js',
                     format: 'iife',
@@ -96,6 +97,10 @@ async function buildChromeExtension() {
 }
 
 async function buildActiveContent() {
+    const tempActiveContentDir = resolve(process.cwd(), 'temp-active-content');
+    if (existsSync(tempActiveContentDir)) {
+        await rm(tempActiveContentDir, { recursive: true });
+    }
     await build({
         configFile: false,
         plugins: [(await import('@vitejs/plugin-react')).default()],
@@ -105,19 +110,34 @@ async function buildActiveContent() {
             },
         },
         build: {
-            outDir: activeContentDir,
+            outDir: tempActiveContentDir,
             rollupOptions: {
-                input: resolve(process.cwd(), 'src/sidepanel/index.html'), // Simplified input
+                input: resolve(process.cwd(), 'src/sidepanel/index.html'),
                 output: {
-                    entryFileNames: 'assets/index.js',
+                    entryFileNames: 'assets/index.js', // No hash
                     chunkFileNames: 'assets/[name].js',
                     assetFileNames: 'assets/[name].[ext]',
                 },
             },
             base: '/CitizenX/active-content/',
             assetsDir: 'assets',
+            chunkSizeWarningLimit: 2000,
+            // Disable filename hashing
+            minify: true, // Still minify for production
         },
     });
+    // Move index.html and the bundled index.js to the final location
+    await mkdir(activeContentDir, { recursive: true });
+    await rename(
+        resolve(tempActiveContentDir, 'src/sidepanel/index.html'),
+        resolve(activeContentDir, 'index.html')
+    );
+    await mkdir(resolve(activeContentDir, 'assets'), { recursive: true });
+    await copyFile(
+        resolve(tempActiveContentDir, 'assets/index.js'),
+        resolve(activeContentDir, 'assets/index.js')
+    );
+    await rm(tempActiveContentDir, { recursive: true });
 }
 
 async function main() {
