@@ -1,14 +1,14 @@
-import React, {useEffect, useState} from 'react';
-import {createRoot} from 'react-dom/client';
-import {createOrbitDB} from '@orbitdb/core';
-import {createHelia} from 'helia';
-import {webSockets} from '@libp2p/websockets';
-import {webRTC} from '@libp2p/webrtc';
-import {circuitRelayTransport} from '@libp2p/circuit-relay-v2';
-import {gossipsub} from '@chainsafe/libp2p-gossipsub';
-import {bootstrap} from '@libp2p/bootstrap';
-import {identify} from '@libp2p/identify';
-import {FaultTolerance} from "@libp2p/interface";
+import React, { useState, useEffect } from 'react';
+import { createRoot } from 'react-dom/client';
+import { createOrbitDB } from '@orbitdb/core';
+import { createHelia } from 'helia';
+import { webSockets } from '@libp2p/websockets';
+import { webRTC } from '@libp2p/webrtc';
+import { circuitRelayTransport } from '@libp2p/circuit-relay-v2';
+import { gossipsub } from '@chainsafe/libp2p-gossipsub';
+import { bootstrap } from '@libp2p/bootstrap';
+import { identify } from '@libp2p/identify';
+import { FaultTolerance } from '@libp2p/interface';
 
 const ContentUI: React.FC = () => {
     const [annotation, setAnnotation] = useState('');
@@ -58,8 +58,7 @@ const ContentUI: React.FC = () => {
                 console.log('OrbitDB instance created:', orbitdb);
                 const db = await orbitdb.open('citizenx-annotations', { type: 'documents' });
                 console.log('Database opened:', db);
-                await db.load();
-                console.log('Database loaded');
+                // Removed db.load() as it's not needed in newer @orbitdb/core versions
                 setDb(db);
                 const docs = await db.all();
                 setAnnotations(docs.map((doc: any) => doc.value));

@@ -7,8 +7,7 @@ import { circuitRelayTransport } from '@libp2p/circuit-relay-v2';
 import { gossipsub } from '@chainsafe/libp2p-gossipsub';
 import { bootstrap } from '@libp2p/bootstrap';
 import { identify } from '@libp2p/identify';
-import {FaultTolerance} from "@libp2p/interface";
-
+import { FaultTolerance } from '@libp2p/interface';
 
 const App: React.FC = () => {
     const [annotation, setAnnotation] = useState('');
@@ -58,8 +57,7 @@ const App: React.FC = () => {
                 console.log('OrbitDB instance created:', orbitdb);
                 const db = await orbitdb.open('citizenx-annotations', { type: 'documents' });
                 console.log('Database opened:', db);
-                await db.load();
-                console.log('Database loaded');
+                // Removed db.load() as it's not needed in newer @orbitdb/core versions
                 setDb(db);
                 const docs = await db.all();
                 setAnnotations(docs.map((doc: any) => doc.value));
