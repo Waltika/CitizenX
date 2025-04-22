@@ -10,7 +10,8 @@
     "skipLibCheck": true,
     "baseUrl": "src",
     "paths": {
-      "@/*": ["*"]
+      "@/*": ["*"],
+      "@orbitdb/core": ["src/types/orbitdb-core"]
     }
   },
   "include": ["src/**/*"],
