@@ -8,6 +8,7 @@ import { circuitRelayTransport } from '@libp2p/circuit-relay-v2';
 import { gossipsub } from '@chainsafe/libp2p-gossipsub';
 import { bootstrap } from '@libp2p/bootstrap';
 import { identify } from '@libp2p/identify';
+import { mdns } from '@libp2p/mdns';
 import { FaultTolerance } from '@libp2p/interface';
 const App = () => {
     const [annotation, setAnnotation] = useState('');
@@ -35,14 +36,23 @@ const App = () => {
                                     list: [
                                         '/dns4/bootstrap.libp2p.io/tcp/443/wss/p2p/12D3KooWQL1aS4qD3yCjmV7gNmx4F5gP7pNXG1qimV5DXe7tXUn',
                                         '/dns4/bootstrap.libp2p.io/tcp/443/wss/p2p/12D3KooWAtfLqN4QmgjrZ9eZ9r4L1B7bH7d9eW8fA4n4bBAyKSm',
+                                        '/dns4/relay.libp2p.io/tcp/443/wss/p2p/12D3KooWAdNWhqW6zSMv1tW2aLKNvEfR7f2DubkXq56Y2uLmsdN', // Added relay node
                                     ],
                                 }),
+                                mdns(), // Added MDNS for local peer discovery
                             ],
                             services: {
                                 identify: identify(),
                                 pubsub: gossipsub(),
                             },
                         },
+                    });
+                    // Log connected peers for debugging
+                    ipfs.libp2p.addEventListener('peer:connect', (event) => {
+                        console.log('Connected to peer:', event.detail.toString());
+                    });
+                    ipfs.libp2p.addEventListener('peer:disconnect', (event) => {
+                        console.log('Disconnected from peer:', event.detail.toString());
                     });
                 }
                 catch (heliaError) {
@@ -57,7 +67,6 @@ const App = () => {
                 console.log('OrbitDB instance created:', orbitdb);
                 const db = await orbitdb.open('citizenx-annotations', { type: 'documents' });
                 console.log('Database opened:', db);
-                // Removed db.load() as it's not needed in newer @orbitdb/core versions
                 setDb(db);
                 const docs = await db.all();
                 setAnnotations(docs.map((doc) => doc.value));
