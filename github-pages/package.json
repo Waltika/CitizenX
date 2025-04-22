@@ -8,6 +8,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@chainsafe/libp2p-gossipsub": "^14.1.1",
     "@orbitdb/core": "latest",
     "events": "^3.3.0",
     "helia": "^5.3.0",

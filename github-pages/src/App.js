@@ -2,6 +2,9 @@ import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
 import { useState, useEffect } from 'react';
 import { createOrbitDB } from '@orbitdb/core';
 import { createHelia } from 'helia';
+import { webSockets } from '@libp2p/websockets';
+import { gossipsub } from '@chainsafe/libp2p-gossipsub';
+import { bootstrap } from '@libp2p/bootstrap';
 const App = () => {
     const [annotation, setAnnotation] = useState('');
     const [annotations, setAnnotations] = useState([]);
@@ -13,7 +16,24 @@ const App = () => {
                 console.log('Starting OrbitDB initialization for GitHub Pages');
                 let ipfs;
                 try {
-                    ipfs = await createHelia();
+                    ipfs = await createHelia({
+                        libp2p: {
+                            transports: [
+                                webSockets(),
+                            ],
+                            peerDiscovery: [
+                                bootstrap({
+                                    list: [
+                                        '/dns4/bootstrap.libp2p.io/tcp/443/wss/p2p/12D3KooWQL1aS4qD3yCjmV7gNmx4F5gP7pNXG1qimV5DXe7tXUn',
+                                        '/dns4/bootstrap.libp2p.io/tcp/443/wss/p2p/12D3KooWAtfLqN4QmgjrZ9eZ9r4L1B7bH7d9eW8fA4n4bBAyKSm',
+                                    ],
+                                }),
+                            ],
+                            services: {
+                                pubsub: gossipsub(),
+                            },
+                        },
+                    });
                 }
                 catch (heliaError) {
                     console.error('Failed to initialize Helia:', heliaError);
