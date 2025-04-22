@@ -45,7 +45,6 @@ const App = () => {
                             },
                         },
                     });
-                    // Log connected peers for debugging
                     ipfs.libp2p.addEventListener('peer:connect', (event) => {
                         console.log('Connected to peer:', event.detail.toString());
                     });
@@ -67,9 +66,37 @@ const App = () => {
                 console.log('Database opened:', db);
                 setDb(db);
                 const docs = await db.all();
-                setAnnotations(docs.map((doc) => doc.value));
+                console.log('Annotations loaded on init:', docs);
+                // Load from localStorage if OrbitDB is empty
+                const localAnnotations = JSON.parse(localStorage.getItem('citizenx-annotations') || '[]');
+                if (docs.length === 0 && localAnnotations.length > 0) {
+                    console.log('OrbitDB empty, loading from localStorage:', localAnnotations);
+                    setAnnotations(localAnnotations);
+                }
+                else {
+                    setAnnotations(docs.map((doc) => doc.value));
+                }
+                // Try to sync localStorage annotations to OrbitDB if peers are available
+                if (localAnnotations.length > 0) {
+                    db.events.on('peer', async () => {
+                        console.log('Peer connected, syncing localStorage annotations to OrbitDB');
+                        for (const localDoc of localAnnotations) {
+                            try {
+                                await db.put(localDoc);
+                                console.log('Synced local annotation to OrbitDB:', localDoc);
+                            }
+                            catch (syncError) {
+                                console.error('Failed to sync local annotation:', syncError);
+                            }
+                        }
+                        localStorage.removeItem('citizenx-annotations');
+                        const updatedDocs = await db.all();
+                        setAnnotations(updatedDocs.map((doc) => doc.value));
+                    });
+                }
                 db.events.on('update', async () => {
                     const updatedDocs = await db.all();
+                    console.log('Database updated, new docs:', updatedDocs);
                     setAnnotations(updatedDocs.map((doc) => doc.value));
                     console.log('GitHub Pages database updated:', updatedDocs);
                 });
@@ -91,8 +118,12 @@ const App = () => {
             };
             try {
                 await db.put(doc);
+                console.log('Successfully saved to OrbitDB:', doc);
                 setAnnotation('');
-                console.log('Saved annotation to OrbitDB:', doc);
+                // Verify the annotation is in the database
+                const docs = await db.all();
+                console.log('Annotations after save:', docs);
+                setAnnotations(docs.map((d) => d.value));
             }
             catch (error) {
                 const err = error;
@@ -109,6 +140,8 @@ const App = () => {
                             await db.put(doc);
                             console.log('Successfully saved to OrbitDB after peer connection:', doc);
                             localStorage.removeItem('citizenx-annotations');
+                            const updatedDocs = await db.all();
+                            setAnnotations(updatedDocs.map((d) => d.value));
                         }
                         catch (retryError) {
                             console.error('Retry failed:', retryError);
