@@ -3,9 +3,12 @@ import { useState, useEffect } from 'react';
 import { createOrbitDB } from '@orbitdb/core';
 import { createHelia } from 'helia';
 import { webSockets } from '@libp2p/websockets';
+import { webRTC } from '@libp2p/webrtc';
+import { circuitRelayTransport } from '@libp2p/circuit-relay-v2';
 import { gossipsub } from '@chainsafe/libp2p-gossipsub';
 import { bootstrap } from '@libp2p/bootstrap';
 import { identify } from '@libp2p/identify';
+import { FaultTolerance } from "@libp2p/interface";
 const App = () => {
     const [annotation, setAnnotation] = useState('');
     const [annotations, setAnnotations] = useState([]);
@@ -21,7 +24,12 @@ const App = () => {
                         libp2p: {
                             transports: [
                                 webSockets(),
+                                webRTC(),
+                                circuitRelayTransport(),
                             ],
+                            transportManager: {
+                                faultTolerance: FaultTolerance.NO_FATAL,
+                            },
                             peerDiscovery: [
                                 bootstrap({
                                     list: [
