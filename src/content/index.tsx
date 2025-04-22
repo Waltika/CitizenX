@@ -95,7 +95,7 @@ const ContentUI: React.FC = () => {
                 maxWidth: '300px',
             }}
         >
-            <h2 style={{ fontSize: '1.2rem', margin: '0 0 8px 0' }}>CitizenX Annotations</h2>
+            <h2 style={{ fontSize: '1.2rem', margin: '0 0 8px 0' }}>Citizen X Annotations 1</h2>
             {error && (
                 <p style={{ color: 'red', margin: '0 0 8px 0' }}>{error}</p>
             )}
