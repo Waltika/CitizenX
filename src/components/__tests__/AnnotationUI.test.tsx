@@ -1,5 +1,5 @@
 // src/components/__tests__/AnnotationUI.test.tsx
-import React, { act } from 'react'; // Updated import for act
+import React, { act } from 'react';
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import AnnotationUI from '../AnnotationUI';
@@ -150,5 +150,23 @@ describe('AnnotationUI', () => {
             expect(screen.queryByText('First annotation')).not.toBeInTheDocument();
             expect(screen.getByText('No annotations yet.')).toBeInTheDocument();
         });
+    });
+
+    it('handles errors during initialization', async () => {
+        // Mock useOrbitDB to return an error
+        (useOrbitDB.useOrbitDB as jest.Mock).mockReturnValue({
+            db: null,
+            error: 'Failed to initialize decentralized storage',
+        });
+
+        render(<AnnotationUI url={mockUrl} />);
+
+        expect(screen.getByText('CitizenX Annotations')).toBeInTheDocument();
+        expect(screen.getByText('Failed to initialize decentralized storage')).toBeInTheDocument();
+        expect(screen.getByText('No annotations yet.')).toBeInTheDocument();
+
+        // Verify the Save button is disabled due to db being null
+        const saveButton = screen.getByText('Save');
+        expect(saveButton).toBeDisabled();
     });
 });
