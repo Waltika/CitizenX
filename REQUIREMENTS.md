@@ -19,7 +19,7 @@ A decentralized Chrome extension for annotating websites in order to bring a kno
 3. We want the authentication also to be decentralized
 4. We want to ensure as much as possible 0 loss of data in case of network issues or other failures
 5. We want the chrome extension to be minimal in terms of content and the real UI and other content pieces to be served from a gitbub.io page
-6. We want to secure the JWT tokens and other access technologies against hacking
+6. We want to secure the JWT tokens and other access technologies against hacking 
 
 ## Requirements - Future Versions
 
