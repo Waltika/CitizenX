@@ -18,7 +18,7 @@ async function clean() {
 async function copyStaticFiles() {
     await mkdir(resolve(chromeExtensionDir, 'icons'), { recursive: true });
     await copyFile(resolve(process.cwd(), 'icons/icon16.png'), resolve(chromeExtensionDir, 'icons/icon16.png'));
-    await copyFile(resolve(process.cwd(), 'icons/icon32.png'), resolve(chromeExtensionDir, 'icons/icon48.png'));
+    await copyFile(resolve(process.cwd(), 'icons/icon32.png'), resolve(chromeExtensionDir, 'icons/icon32.png'));
     await copyFile(resolve(process.cwd(), 'icons/icon128.png'), resolve(chromeExtensionDir, 'icons/icon128.png'));
     await copyFile(resolve(process.cwd(), 'manifest.json'), resolve(chromeExtensionDir, 'manifest.json'));
 }
