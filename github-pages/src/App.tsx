@@ -4,6 +4,7 @@ import { createHelia } from 'helia';
 import { webSockets } from '@libp2p/websockets';
 import { gossipsub } from '@chainsafe/libp2p-gossipsub';
 import { bootstrap } from '@libp2p/bootstrap';
+import { identify } from '@libp2p/identify';
 
 const App: React.FC = () => {
     const [annotation, setAnnotation] = useState('');
@@ -31,6 +32,7 @@ const App: React.FC = () => {
                                 }),
                             ],
                             services: {
+                                identify: identify(),
                                 pubsub: gossipsub(),
                             },
                         },
