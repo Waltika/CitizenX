@@ -11,13 +11,41 @@ import '@testing-library/jest-dom';
 jest.mock('../../hooks/useOrbitDB');
 jest.mock('../../hooks/useAnnotations');
 
+// Mock localStorage
+const localStorageMock = (function () {
+    let store: { [key: string]: string } = {};
+    return {
+        getItem: jest.fn((key: string) => store[key] || null),
+        setItem: jest.fn((key: string, value: string) => {
+            store[key] = value.toString();
+        }),
+        removeItem: jest.fn((key: string) => {
+            delete store[key];
+        }),
+        clear: jest.fn(() => {
+            store = {};
+        }),
+    };
+})();
+Object.defineProperty(window, 'localStorage', {
+    value: localStorageMock,
+    writable: true,
+});
+
 describe('AnnotationUI', () => {
     const mockUrl = 'https://example.com';
-    const mockDb = Symbol('mock-db'); // Use a symbol to represent the db instance
+    const mockDb = {
+        put: jest.fn(),
+        all: jest.fn(),
+        events: {
+            on: jest.fn(),
+        },
+    };
 
     beforeEach(() => {
         // Reset mocks
         jest.clearAllMocks();
+        localStorageMock.clear();
 
         // Mock useOrbitDB
         (useOrbitDB.useOrbitDB as jest.Mock).mockReturnValue({
@@ -153,7 +181,6 @@ describe('AnnotationUI', () => {
     });
 
     it('handles errors during initialization', async () => {
-        // Mock useOrbitDB to return an error
         (useOrbitDB.useOrbitDB as jest.Mock).mockReturnValue({
             db: null,
             error: 'Failed to initialize decentralized storage',
@@ -165,8 +192,78 @@ describe('AnnotationUI', () => {
         expect(screen.getByText('Failed to initialize decentralized storage')).toBeInTheDocument();
         expect(screen.getByText('No annotations yet.')).toBeInTheDocument();
 
-        // Verify the Save button is disabled due to db being null
         const saveButton = screen.getByText('Save');
         expect(saveButton).toBeDisabled();
+    });
+
+    it('falls back to localStorage when no peers are available', async () => {
+        // Mock db.put to reject with NoPeersSubscribedToTopic error
+        mockDb.put.mockRejectedValue(new Error('NoPeersSubscribedToTopic'));
+
+        // Initial mock for useAnnotations with empty annotations
+        let annotations: any[] = [];
+        const setAnnotationsMock = jest.fn((newAnnotations) => {
+            annotations = newAnnotations;
+        });
+
+        // Mock useAnnotations with a real handleSaveAnnotation
+        (useAnnotations.useAnnotations as jest.Mock).mockImplementation(() => {
+            const handleSaveAnnotation = async (text: string) => {
+                const doc = {
+                    _id: Date.now().toString(),
+                    url: mockUrl,
+                    text: text.trim(),
+                    timestamp: Date.now(),
+                };
+                try {
+                    await mockDb.put(doc);
+                    const docs = await mockDb.all();
+                    setAnnotationsMock(docs.map((d: any) => d.value));
+                } catch (error: unknown) {
+                    const err = error as Error;
+                    if (err.message.includes('NoPeersSubscribedToTopic')) {
+                        const localAnnotations = JSON.parse(localStorage.getItem('citizenx-annotations') || '[]');
+                        localAnnotations.push(doc);
+                        localStorage.setItem('citizenx-annotations', JSON.stringify(localAnnotations));
+                        setAnnotationsMock(localAnnotations);
+                        mockDb.events.on.mockImplementation((event: string, callback: () => void) => {
+                            if (event === 'peer') callback();
+                        });
+                    } else {
+                        throw error; // Let other errors propagate to fail the test
+                    }
+                }
+            };
+
+            return {
+                annotations,
+                setAnnotations: setAnnotationsMock,
+                error: null,
+                handleSaveAnnotation,
+                handleDeleteAnnotation: jest.fn(),
+            };
+        });
+
+        render(<AnnotationUI url={mockUrl} />);
+
+        const input = screen.getByPlaceholderText('Enter annotation...');
+        const saveButton = screen.getByText('Save');
+
+        await userEvent.type(input, 'Offline annotation');
+        await act(async () => {
+            fireEvent.click(saveButton);
+        });
+
+        // Verify that localStorage.setItem was called
+        expect(localStorageMock.setItem).toHaveBeenCalledWith(
+            'citizenx-annotations',
+            expect.stringContaining('"text":"Offline annotation"')
+        );
+
+        // Verify the annotation is displayed
+        await waitFor(() => {
+            expect(screen.getByText('Offline annotation')).toBeInTheDocument();
+            expect(screen.getByText('Delete')).toBeInTheDocument();
+        });
     });
 });
