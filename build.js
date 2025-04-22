@@ -28,10 +28,42 @@ async function copyStaticFiles() {
 async function buildChromeExtension() {
     await mkdir(chromeExtensionDir, { recursive: true });
 
-    // Copy sidepanel/index.html (no bundling needed since it uses an iframe)
-    console.log('Copying sidepanel static files...');
+    // Build sidepanel
+    console.log('Building sidepanel...');
+    const tempSidepanelDir = resolve(process.cwd(), 'temp-sidepanel');
+    if (existsSync(tempSidepanelDir)) {
+        await rm(tempSidepanelDir, { recursive: true });
+    }
+    await build({
+        configFile: false,
+        plugins: [(await import('@vitejs/plugin-react')).default()],
+        resolve: {
+            alias: {
+                'events': 'events',
+            },
+        },
+        build: {
+            outDir: tempSidepanelDir,
+            rollupOptions: {
+                input: resolve(process.cwd(), 'src/sidepanel/index.html'),
+                output: {
+                    entryFileNames: 'index.js',
+                    assetFileNames: 'assets/[name]-[hash].[ext]',
+                    format: 'iife',
+                    inlineDynamicImports: false,
+                    preserveModules: false,
+                    manualChunks: () => undefined,
+                    compact: true,
+                    interop: 'compat',
+                },
+            },
+        },
+    });
     await mkdir(resolve(chromeExtensionDir, 'sidepanel'), { recursive: true });
-    await copyFile(resolve(process.cwd(), 'src/sidepanel/index.html'), resolve(chromeExtensionDir, 'sidepanel/index.html'));
+    await copyFile(resolve(tempSidepanelDir, 'index.js'), resolve(chromeExtensionDir, 'sidepanel/index.js'));
+    // Copy the transpiled index.html from the correct path
+    await copyFile(resolve(tempSidepanelDir, 'src/sidepanel/index.html'), resolve(chromeExtensionDir, 'sidepanel/index.html'));
+    await rm(tempSidepanelDir, { recursive: true });
 
     // Build content script
     console.log('Building content script...');
@@ -101,7 +133,7 @@ async function buildActiveContent() {
         },
     });
     await mkdir(activeContentDir, { recursive: true });
-    // Read index.html, fix the script path, and write it back
+    // Read index.html from the correct path, fix the script path, and write it back
     const indexHtmlPath = resolve(tempActiveContentDir, 'src/sidepanel/index.html');
     let indexHtmlContent = await readFile(indexHtmlPath, 'utf-8');
     indexHtmlContent = indexHtmlContent.replace(
