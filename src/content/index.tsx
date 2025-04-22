@@ -38,6 +38,8 @@ const ContentUI: React.FC = () => {
                                         '/dns4/bootstrap.libp2p.io/tcp/443/wss/p2p/12D3KooWQL1aS4qD3yCjmV7gNmx4F5gP7pNXG1qimV5DXe7tXUn',
                                         '/dns4/bootstrap.libp2p.io/tcp/443/wss/p2p/12D3KooWAtfLqN4QmgjrZ9eZ9r4L1B7bH7d9eW8fA4n4bBAyKSm',
                                         '/dns4/relay.libp2p.io/tcp/443/wss/p2p/12D3KooWAdNWhqW6zSMv1tW2aLKNvEfR7f2DubkXq56Y2uLmsdN',
+                                        '/dns4/relay.ipfs.io/tcp/443/wss/p2p/12D3KooWAdNWhqW6zSMv1tW2aLKNvEfR7f2DubkXq56Y2uLmsdN',
+                                        '/dns4/relay.ipfs.io/tcp/443/wss/p2p/12D3KooWAdNWhqW6zSMv1tW2aLKNvEfR7f2DubkXq56Y2uLmsdN',
                                     ],
                                 }),
                             ],
@@ -66,16 +68,19 @@ const ContentUI: React.FC = () => {
                 const db = await orbitdb.open('citizenx-annotations', { type: 'documents' });
                 console.log('Database opened:', db);
                 setDb(db);
-                const docs = await db.all();
-                console.log('Annotations loaded on init:', docs);
-                // Load from localStorage if OrbitDB is empty
+                // Load annotations from localStorage first
                 const localAnnotations = JSON.parse(localStorage.getItem('citizenx-annotations') || '[]');
-                if (docs.length === 0 && localAnnotations.length > 0) {
-                    console.log('OrbitDB empty, loading from localStorage:', localAnnotations);
-                    setAnnotations(localAnnotations);
-                } else {
-                    setAnnotations(docs.map((doc: any) => doc.value));
-                }
+                console.log('Local annotations on init:', localAnnotations);
+                setAnnotations(localAnnotations);
+                // Wait for the initial update event to ensure the database is fully loaded
+                await new Promise<void>((resolve) => {
+                    db.events.on('update', async () => {
+                        const docs = await db.all();
+                        console.log('Initial update, annotations loaded:', docs);
+                        setAnnotations(docs.map((doc: any) => doc.value));
+                        resolve();
+                    });
+                });
                 // Try to sync localStorage annotations to OrbitDB if peers are available
                 if (localAnnotations.length > 0) {
                     db.events.on('peer', async () => {
@@ -119,7 +124,6 @@ const ContentUI: React.FC = () => {
                 await db.put(doc);
                 console.log('Successfully saved to OrbitDB:', doc);
                 setAnnotation('');
-                // Verify the annotation is in the database
                 const docs = await db.all();
                 console.log('Annotations after save:', docs);
                 setAnnotations(docs.map((d: any) => d.value));
@@ -155,72 +159,72 @@ const ContentUI: React.FC = () => {
     return (
         <div
             style={{
-                position: 'fixed',
-                bottom: '20px',
-                right: '20px',
-                background: '#fff',
-                border: '1px solid #ccc',
-                padding: '10px',
-                borderRadius: '5px',
-                boxShadow: '0 2px 5px rgba(0,0,0,0.2)',
-                zIndex: 1000,
-                maxWidth: '300px',
-            }}
+        position: 'fixed',
+            bottom: '20px',
+            right: '20px',
+            background: '#fff',
+            border: '1px solid #ccc',
+            padding: '10px',
+            borderRadius: '5px',
+            boxShadow: '0 2px 5px rgba(0,0,0,0.2)',
+            zIndex: 1000,
+            maxWidth: '300px',
+    }}
+>
+    <h2 style={{ fontSize: '1.2rem', margin: '0 0 8px 0' }}>CitizenX Annotations</h2>
+    {error && (
+        <p style={{ color: 'red', margin: '0 0 8px 0' }}>{error}</p>
+    )}
+    <div style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>
+    <input
+        type="text"
+    value={annotation}
+    onChange={(e) => setAnnotation(e.target.value)}
+    placeholder="Enter annotation..."
+    style={{
+        flex: 1,
+            padding: '5px',
+            border: '1px solid #ccc',
+            borderRadius: '3px',
+    }}
+    />
+    <button
+    onClick={handleSaveAnnotation}
+    disabled={!db}
+    style={{
+        padding: '5px 10px',
+            background: db ? '#007bff' : '#ccc',
+            color: '#fff',
+            border: 'none',
+            borderRadius: '3px',
+            cursor: db ? 'pointer' : 'not-allowed',
+    }}
+>
+    Save
+    </button>
+    </div>
+    <div style={{ maxHeight: '150px', overflowY: 'auto' }}>
+    {annotations.length === 0 ? (
+        <p style={{ margin: 0, color: '#666' }}>No annotations yet.</p>
+    ) : (
+        <ul style={{ margin: 0, padding: 0, listStyle: 'none' }}>
+        {annotations.map((note) => (
+            <li
+                key={note._id}
+            style={{
+            padding: '5px 0',
+                borderBottom: '1px solid #eee',
+                wordBreak: 'break-word',
+        }}
         >
-            <h2 style={{ fontSize: '1.2rem', margin: '0 0 8px 0' }}>CitizenX Annotations</h2>
-            {error && (
-                <p style={{ color: 'red', margin: '0 0 8px 0' }}>{error}</p>
-            )}
-            <div style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>
-                <input
-                    type="text"
-                    value={annotation}
-                    onChange={(e) => setAnnotation(e.target.value)}
-                    placeholder="Enter annotation..."
-                    style={{
-                        flex: 1,
-                        padding: '5px',
-                        border: '1px solid #ccc',
-                        borderRadius: '3px',
-                    }}
-                />
-                <button
-                    onClick={handleSaveAnnotation}
-                    disabled={!db}
-                    style={{
-                        padding: '5px 10px',
-                        background: db ? '#007bff' : '#ccc',
-                        color: '#fff',
-                        border: 'none',
-                        borderRadius: '3px',
-                        cursor: db ? 'pointer' : 'not-allowed',
-                    }}
-                >
-                    Save
-                </button>
-            </div>
-            <div style={{ maxHeight: '150px', overflowY: 'auto' }}>
-                {annotations.length === 0 ? (
-                    <p style={{ margin: 0, color: '#666' }}>No annotations yet.</p>
-                ) : (
-                    <ul style={{ margin: 0, padding: 0, listStyle: 'none' }}>
-                        {annotations.map((note) => (
-                            <li
-                                key={note._id}
-                                style={{
-                                    padding: '5px 0',
-                                    borderBottom: '1px solid #eee',
-                                    wordBreak: 'break-word',
-                                }}
-                            >
-                                {note.text} <small>({new Date(note.timestamp).toLocaleString()})</small>
-                            </li>
-                        ))}
-                    </ul>
-                )}
-            </div>
-        </div>
-    );
+            {note.text} <small>({new Date(note.timestamp).toLocaleString()})</small>
+        </li>
+        ))}
+        </ul>
+    )}
+    </div>
+    </div>
+);
 };
 
 function initializeContentScript() {
