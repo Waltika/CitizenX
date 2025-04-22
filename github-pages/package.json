@@ -8,10 +8,10 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@orbitdb/core": "^2.5.1-58fa496.0",
+    "@orbitdb/core": "latest",
     "events": "^3.3.0",
+    "helia": "^5.3.0",
     "it-drain": "^3.0.8",
-    "kubo-rpc-client": "^5.1.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0"
   },

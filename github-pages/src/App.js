@@ -1,7 +1,7 @@
 import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
 import { useState, useEffect } from 'react';
 import { createOrbitDB } from '@orbitdb/core';
-import { create } from 'kubo-rpc-client';
+import { createHelia } from 'helia';
 const App = () => {
     const [annotation, setAnnotation] = useState('');
     const [annotations, setAnnotations] = useState([]);
@@ -13,19 +13,17 @@ const App = () => {
                 console.log('Starting OrbitDB initialization for GitHub Pages');
                 let ipfs;
                 try {
-                    ipfs = create({
-                        url: 'https://ipfs.io/api/v0',
-                    });
+                    ipfs = await createHelia();
                 }
-                catch (ipfsError) {
-                    console.error('Failed to initialize IPFS:', ipfsError);
+                catch (heliaError) {
+                    console.error('Failed to initialize Helia:', heliaError);
                     throw new Error('IPFS initialization failed');
                 }
                 console.log('IPFS initialized:', ipfs);
                 if (!ipfs) {
                     throw new Error('IPFS instance is undefined');
                 }
-                const orbitdb = await createOrbitDB(ipfs);
+                const orbitdb = await createOrbitDB({ ipfs });
                 console.log('OrbitDB instance created:', orbitdb);
                 const db = await orbitdb.open('citizenx-annotations', { type: 'documents' });
                 console.log('Database opened:', db);
