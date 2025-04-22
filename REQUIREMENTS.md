@@ -27,6 +27,7 @@ A decentralized Chrome extension for annotating websites in order to bring a kno
 2. Ww want a crypto based system for paying for the project (paying the contributors, the users if there is profit and any other system we connect with as needed)
 3. We want a system allowing to share our annotations on social platforms, messages and emails for growth hacking
 4. We want to enrich annotations with structured data allowing complex reasoning on them
+5. Use a WYSIWYG editor for Annotations (but not comments)
 
 ## Non Functional Requirements - Future Versions
 
