@@ -8,7 +8,6 @@ import { circuitRelayTransport } from '@libp2p/circuit-relay-v2';
 import { gossipsub } from '@chainsafe/libp2p-gossipsub';
 import { bootstrap } from '@libp2p/bootstrap';
 import { identify } from '@libp2p/identify';
-import { mdns } from '@libp2p/mdns';
 import { FaultTolerance } from '@libp2p/interface';
 
 const ContentUI: React.FC = () => {
@@ -38,10 +37,9 @@ const ContentUI: React.FC = () => {
                                     list: [
                                         '/dns4/bootstrap.libp2p.io/tcp/443/wss/p2p/12D3KooWQL1aS4qD3yCjmV7gNmx4F5gP7pNXG1qimV5DXe7tXUn',
                                         '/dns4/bootstrap.libp2p.io/tcp/443/wss/p2p/12D3KooWAtfLqN4QmgjrZ9eZ9r4L1B7bH7d9eW8fA4n4bBAyKSm',
-                                        '/dns4/relay.libp2p.io/tcp/443/wss/p2p/12D3KooWAdNWhqW6zSMv1tW2aLKNvEfR7f2DubkXq56Y2uLmsdN', // Added relay node
+                                        '/dns4/relay.libp2p.io/tcp/443/wss/p2p/12D3KooWAdNWhqW6zSMv1tW2aLKNvEfR7f2DubkXq56Y2uLmsdN',
                                     ],
                                 }),
-                                mdns(), // Added MDNS for local peer discovery
                             ],
                             services: {
                                 identify: identify(),
@@ -86,19 +84,39 @@ const ContentUI: React.FC = () => {
 
     const handleSaveAnnotation = async () => {
         if (annotation.trim() && db) {
+            const doc = {
+                _id: Date.now().toString(),
+                url: window.location.href,
+                text: annotation.trim(),
+                timestamp: Date.now(),
+            };
             try {
-                const doc = {
-                    _id: Date.now().toString(),
-                    url: window.location.href,
-                    text: annotation.trim(),
-                    timestamp: Date.now(),
-                };
                 await db.put(doc);
                 setAnnotation('');
                 console.log('Saved annotation to OrbitDB:', doc);
-            } catch (error) {
-                console.error('Failed to save annotation:', error);
-                setError('Failed to save annotation');
+            } catch (error: unknown) {
+                const err = error as Error;
+                if (err.message.includes('NoPeersSubscribedToTopic')) {
+                    console.warn('No peers subscribed, saving to localStorage:', doc);
+                    const localAnnotations = JSON.parse(localStorage.getItem('citizenx-annotations') || '[]');
+                    localAnnotations.push(doc);
+                    localStorage.setItem('citizenx-annotations', JSON.stringify(localAnnotations));
+                    setAnnotation('');
+                    setAnnotations(localAnnotations);
+                    db.events.on('peer', async () => {
+                        console.log('Peer connected, retrying save to OrbitDB');
+                        try {
+                            await db.put(doc);
+                            console.log('Successfully saved to OrbitDB after peer connection:', doc);
+                            localStorage.removeItem('citizenx-annotations');
+                        } catch (retryError) {
+                            console.error('Retry failed:', retryError);
+                        }
+                    });
+                } else {
+                    console.error('Failed to save annotation:', err);
+                    setError('Failed to save annotation');
+                }
             }
         }
     };
