@@ -137,7 +137,7 @@ async function buildActiveContent() {
     let indexHtmlContent = await readFile(indexHtmlPath, 'utf-8');
     indexHtmlContent = indexHtmlContent.replace(
         '/assets/index.js',
-        '/CitizenX/active-content/assets/index.js'
+        '/CitizenX/dist/active-content/assets/index.js'
     );
     await writeFile(indexHtmlPath, indexHtmlContent);
     // Move index.html and the bundled index.js to the final location
