@@ -28,41 +28,10 @@ async function copyStaticFiles() {
 async function buildChromeExtension() {
     await mkdir(chromeExtensionDir, { recursive: true });
 
-    // Build sidepanel
-    console.log('Building sidepanel...');
-    const tempSidepanelDir = resolve(process.cwd(), 'temp-sidepanel');
-    if (existsSync(tempSidepanelDir)) {
-        await rm(tempSidepanelDir, { recursive: true });
-    }
-    await build({
-        configFile: false,
-        plugins: [(await import('@vitejs/plugin-react')).default()],
-        resolve: {
-            alias: {
-                'events': 'events',
-            },
-        },
-        build: {
-            outDir: tempSidepanelDir,
-            rollupOptions: {
-                input: resolve(process.cwd(), 'src/sidepanel/index.html'),
-                output: {
-                    entryFileNames: 'index.js',
-                    assetFileNames: 'assets/[name]-[hash].[ext]',
-                    format: 'iife',
-                    inlineDynamicImports: false,
-                    preserveModules: false,
-                    manualChunks: () => undefined,
-                    compact: true,
-                    interop: 'compat',
-                },
-            },
-        },
-    });
+    // Copy sidepanel/index.html (no bundling needed since it uses an iframe)
+    console.log('Copying sidepanel static files...');
     await mkdir(resolve(chromeExtensionDir, 'sidepanel'), { recursive: true });
-    await copyFile(resolve(tempSidepanelDir, 'index.js'), resolve(chromeExtensionDir, 'sidepanel/index.js'));
-    await copyFile(resolve(tempSidepanelDir, 'src/sidepanel/index.html'), resolve(chromeExtensionDir, 'sidepanel/index.html'));
-    await rm(tempSidepanelDir, { recursive: true });
+    await copyFile(resolve(process.cwd(), 'src/sidepanel/index.html'), resolve(chromeExtensionDir, 'sidepanel/index.html'));
 
     // Build content script
     console.log('Building content script...');
@@ -105,7 +74,7 @@ async function buildActiveContent() {
     if (existsSync(tempActiveContentDir)) {
         await rm(tempActiveContentDir, { recursive: true });
     }
-    const basePath = '/CitizenX/active-content/';
+    const basePath = '/CitizenX/dist/active-content/';
     console.log('Base path for active-content:', basePath);
     await build({
         configFile: false,
