@@ -1,15 +1,28 @@
 {
   "manifest_version": 3,
   "name": "CitizenX",
-  "version": "1.0",
-  "description": "Decentralized web annotation extension",
-  "permissions": ["sidePanel", "storage", "tabs", "activeTab"],
+  "version": "1.0.0",
+  "description": "A Chrome extension for decentralized web annotations using OrbitDB",
+  "permissions": [
+    "sidePanel",
+    "activeTab",
+    "storage"
+  ],
   "icons": {
     "16": "icons/icon16.png",
-    "32": "icons/icon32.png",
+    "48": "icons/icon32.png",
     "128": "icons/icon128.png"
   },
   "side_panel": {
     "default_path": "sidepanel/index.html"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content/index.js"]
+    }
+  ],
+  "options_ui": {
+    "page": "https://waltika.github.io/CitizenX/active-content/"
   }
 }

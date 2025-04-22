@@ -1,5 +1,4 @@
-import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { createOrbitDB } from '@orbitdb/core';
 import { createHelia } from 'helia';
 import { webSockets } from '@libp2p/websockets';
@@ -9,15 +8,21 @@ import { gossipsub } from '@chainsafe/libp2p-gossipsub';
 import { bootstrap } from '@libp2p/bootstrap';
 import { identify } from '@libp2p/identify';
 import { FaultTolerance } from '@libp2p/interface';
-const App = () => {
+
+interface AnnotationUIProps {
+    url: string;
+}
+
+const AnnotationUI: React.FC<AnnotationUIProps> = ({ url }) => {
     const [annotation, setAnnotation] = useState('');
-    const [annotations, setAnnotations] = useState([]);
-    const [db, setDb] = useState(null);
-    const [error, setError] = useState(null);
+    const [annotations, setAnnotations] = useState<{ _id: string; url: string; text: string; timestamp: number }[]>([]);
+    const [db, setDb] = useState<any>(null);
+    const [error, setError] = useState<string | null>(null);
+
     useEffect(() => {
         async function initOrbitDB() {
             try {
-                console.log('Starting OrbitDB initialization for GitHub Pages');
+                console.log('Starting OrbitDB initialization for', url);
                 let ipfs;
                 try {
                     ipfs = await createHelia({
@@ -53,8 +58,7 @@ const App = () => {
                     ipfs.libp2p.addEventListener('peer:disconnect', (event) => {
                         console.log('Disconnected from peer:', event.detail.toString());
                     });
-                }
-                catch (heliaError) {
+                } catch (heliaError) {
                     console.error('Failed to initialize Helia:', heliaError);
                     throw new Error('IPFS initialization failed');
                 }
@@ -72,11 +76,11 @@ const App = () => {
                 console.log('Local annotations on init:', localAnnotations);
                 setAnnotations(localAnnotations);
                 // Wait for the initial update event to ensure the database is fully loaded
-                await new Promise((resolve) => {
+                await new Promise<void>((resolve) => {
                     db.events.on('update', async () => {
                         const docs = await db.all();
                         console.log('Initial update, annotations loaded:', docs);
-                        setAnnotations(docs.map((doc) => doc.value));
+                        setAnnotations(docs.map((doc: any) => doc.value));
                         resolve();
                     });
                 });
@@ -88,35 +92,34 @@ const App = () => {
                             try {
                                 await db.put(localDoc);
                                 console.log('Synced local annotation to OrbitDB:', localDoc);
-                            }
-                            catch (syncError) {
+                            } catch (syncError) {
                                 console.error('Failed to sync local annotation:', syncError);
                             }
                         }
                         localStorage.removeItem('citizenx-annotations');
                         const updatedDocs = await db.all();
-                        setAnnotations(updatedDocs.map((doc) => doc.value));
+                        setAnnotations(updatedDocs.map((doc: any) => doc.value));
                     });
                 }
                 db.events.on('update', async () => {
                     const updatedDocs = await db.all();
                     console.log('Database updated, new docs:', updatedDocs);
-                    setAnnotations(updatedDocs.map((doc) => doc.value));
-                    console.log('GitHub Pages database updated:', updatedDocs);
+                    setAnnotations(updatedDocs.map((doc: any) => doc.value));
+                    console.log('Annotations database updated:', updatedDocs);
                 });
-            }
-            catch (error) {
+            } catch (error) {
                 console.error('OrbitDB initialization failed:', error);
                 setError('Failed to initialize decentralized storage');
             }
         }
         initOrbitDB();
     }, []);
+
     const handleSaveAnnotation = async () => {
         if (annotation.trim() && db) {
             const doc = {
                 _id: Date.now().toString(),
-                url: 'sidepanel',
+                url: url,
                 text: annotation.trim(),
                 timestamp: Date.now(),
             };
@@ -126,10 +129,9 @@ const App = () => {
                 setAnnotation('');
                 const docs = await db.all();
                 console.log('Annotations after save:', docs);
-                setAnnotations(docs.map((d) => d.value));
-            }
-            catch (error) {
-                const err = error;
+                setAnnotations(docs.map((d: any) => d.value));
+            } catch (error: unknown) {
+                const err = error as Error;
                 if (err.message.includes('NoPeersSubscribedToTopic')) {
                     console.warn('No peers subscribed, saving to localStorage:', doc);
                     const localAnnotations = JSON.parse(localStorage.getItem('citizenx-annotations') || '[]');
@@ -144,36 +146,77 @@ const App = () => {
                             console.log('Successfully saved to OrbitDB after peer connection:', doc);
                             localStorage.removeItem('citizenx-annotations');
                             const updatedDocs = await db.all();
-                            setAnnotations(updatedDocs.map((d) => d.value));
-                        }
-                        catch (retryError) {
+                            setAnnotations(updatedDocs.map((d: any) => d.value));
+                        } catch (retryError) {
                             console.error('Retry failed:', retryError);
                         }
                     });
-                }
-                else {
+                } else {
                     console.error('Failed to save annotation:', err);
                     setError('Failed to save annotation');
                 }
             }
         }
     };
-    return (_jsxs("div", { style: { padding: '16px', maxWidth: '300px' }, children: [_jsx("h1", { style: { fontSize: '1.5rem', fontWeight: 'bold', margin: '0 0 8px 0' }, children: "CitizenX Annotations" }), error && (_jsx("p", { style: { color: 'red', margin: '0 0 8px 0' }, children: error })), _jsxs("div", { style: { display: 'flex', gap: '8px', marginBottom: '8px' }, children: [_jsx("input", { type: "text", value: annotation, onChange: (e) => setAnnotation(e.target.value), placeholder: "Enter annotation...", style: {
-                            flex: 1,
-                            padding: '5px',
-                            border: '1px solid #ccc',
-                            borderRadius: '3px',
-                        } }), _jsx("button", { onClick: handleSaveAnnotation, disabled: !db, style: {
-                            padding: '5px 10px',
-                            background: db ? '#007bff' : '#ccc',
-                            color: '#fff',
-                            border: 'none',
-                            borderRadius: '3px',
-                            cursor: db ? 'pointer' : 'not-allowed',
-                        }, children: "Save" })] }), _jsx("div", { style: { maxHeight: '300px', overflowY: 'auto' }, children: annotations.length === 0 ? (_jsx("p", { style: { margin: 0, color: '#666' }, children: "No annotations yet." })) : (_jsx("ul", { style: { margin: 0, padding: 0, listStyle: 'none' }, children: annotations.map((note) => (_jsxs("li", { style: {
-                            padding: '5px 0',
-                            borderBottom: '1px solid #eee',
-                            wordBreak: 'break-word',
-                        }, children: [note.text, " ", _jsxs("small", { children: ["(", new Date(note.timestamp).toLocaleString(), ")"] })] }, note._id))) })) })] }));
+
+    return (
+        <div style={{ padding: '16px', maxWidth: '300px' }}>
+            <h1 style={{ fontSize: '1.5rem', fontWeight: 'bold', margin: '0 0 8px 0' }}>
+                CitizenX Annotations
+            </h1>
+            {error && (
+                <p style={{ color: 'red', margin: '0 0 8px 0' }}>{error}</p>
+            )}
+            <div style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>
+                <input
+                    type="text"
+                    value={annotation}
+                    onChange={(e) => setAnnotation(e.target.value)}
+                    placeholder="Enter annotation..."
+                    style={{
+                        flex: 1,
+                        padding: '5px',
+                        border: '1px solid #ccc',
+                        borderRadius: '3px',
+                    }}
+                />
+                <button
+                    onClick={handleSaveAnnotation}
+                    disabled={!db}
+                    style={{
+                        padding: '5px 10px',
+                        background: db ? '#007bff' : '#ccc',
+                        color: '#fff',
+                        border: 'none',
+                        borderRadius: '3px',
+                        cursor: db ? 'pointer' : 'not-allowed',
+                    }}
+                >
+                    Save
+                </button>
+            </div>
+            <div style={{ maxHeight: '300px', overflowY: 'auto' }}>
+                {annotations.length === 0 ? (
+                    <p style={{ margin: 0, color: '#666' }}>No annotations yet.</p>
+                ) : (
+                    <ul style={{ margin: 0, padding: 0, listStyle: 'none' }}>
+                        {annotations.map((note) => (
+                            <li
+                                key={note._id}
+                                style={{
+                                    padding: '5px 0',
+                                    borderBottom: '1px solid #eee',
+                                    wordBreak: 'break-word',
+                                }}
+                            >
+                                {note.text} <small>({new Date(note.timestamp).toLocaleString()})</small>
+                            </li>
+                        ))}
+                    </ul>
+                )}
+            </div>
+        </div>
+    );
 };
-export default App;
+
+export default AnnotationUI;

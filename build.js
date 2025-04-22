@@ -1,18 +1,36 @@
 import { build } from 'vite';
-import { resolve, join } from 'path';
-import { copyFileSync, existsSync, rmSync, mkdirSync, readdirSync } from 'fs';
+import { resolve } from 'path';
+import { copyFile, mkdir, rm } from 'fs/promises';
+import { existsSync } from 'fs';
 
-async function runBuild() {
-    const distDir = resolve(process.cwd(), 'dist');
-    const tempSidepanelDir = resolve(process.cwd(), 'temp-sidepanel');
-    const tempContentDir = resolve(process.cwd(), 'temp-content');
+const chromeExtensionDir = resolve(process.cwd(), 'dist/chrome-extension');
+const activeContentDir = resolve(process.cwd(), 'dist/active-content');
 
-    // Clean up ALL build artifacts, including dist, to prevent duplicates
-    if (existsSync(distDir)) rmSync(distDir, { recursive: true, force: true });
-    if (existsSync(tempSidepanelDir)) rmSync(tempSidepanelDir, { recursive: true, force: true });
-    if (existsSync(tempContentDir)) rmSync(tempContentDir, { recursive: true, force: true });
+async function clean() {
+    if (existsSync(chromeExtensionDir)) {
+        await rm(chromeExtensionDir, { recursive: true });
+    }
+    if (existsSync(activeContentDir)) {
+        await rm(activeContentDir, { recursive: true });
+    }
+}
+
+async function copyStaticFiles() {
+    await mkdir(resolve(chromeExtensionDir, 'icons'), { recursive: true });
+    await copyFile(resolve(process.cwd(), 'icons/icon16.png'), resolve(chromeExtensionDir, 'icons/icon16.png'));
+    await copyFile(resolve(process.cwd(), 'icons/icon32.png'), resolve(chromeExtensionDir, 'icons/icon48.png'));
+    await copyFile(resolve(process.cwd(), 'icons/icon128.png'), resolve(chromeExtensionDir, 'icons/icon128.png'));
+    await copyFile(resolve(process.cwd(), 'manifest.json'), resolve(chromeExtensionDir, 'manifest.json'));
+}
+
+async function buildChromeExtension() {
+    await mkdir(chromeExtensionDir, { recursive: true });
 
     // Build sidepanel
+    const tempSidepanelDir = resolve(process.cwd(), 'temp-sidepanel');
+    if (existsSync(tempSidepanelDir)) {
+        await rm(tempSidepanelDir, { recursive: true });
+    }
     await build({
         configFile: false,
         plugins: [(await import('@vitejs/plugin-react')).default()],
@@ -40,8 +58,16 @@ async function runBuild() {
             },
         },
     });
+    await mkdir(resolve(chromeExtensionDir, 'sidepanel'), { recursive: true });
+    await copyFile(resolve(tempSidepanelDir, 'index.js'), resolve(chromeExtensionDir, 'sidepanel/index.js'));
+    await copyFile(resolve(tempSidepanelDir, 'src/sidepanel/index.html'), resolve(chromeExtensionDir, 'sidepanel/index.html'));
+    await rm(tempSidepanelDir, { recursive: true });
 
-    // Build content
+    // Build content script
+    const tempContentDir = resolve(process.cwd(), 'temp-content');
+    if (existsSync(tempContentDir)) {
+        await rm(tempContentDir, { recursive: true });
+    }
     await build({
         configFile: false,
         plugins: [(await import('@vitejs/plugin-react')).default()],
@@ -58,7 +84,6 @@ async function runBuild() {
                 },
                 output: {
                     entryFileNames: 'index.js',
-                    assetFileNames: 'assets/[name]-[hash].[ext]',
                     format: 'iife',
                     inlineDynamicImports: false,
                     preserveModules: false,
@@ -69,86 +94,47 @@ async function runBuild() {
             },
         },
     });
-
-    // Create dist structure without duplicates
-    mkdirSync(distDir, { recursive: true });
-    mkdirSync(join(distDir, 'sidepanel'), { recursive: true });
-    mkdirSync(join(distDir, 'content'), { recursive: true });
-    mkdirSync(join(distDir, 'assets'), { recursive: true });
-
-    // Copy sidepanel outputs
-    const sidepanelJsPath = join(tempSidepanelDir, 'index.js');
-    const sidepanelHtmlPath = join(tempSidepanelDir, 'src/sidepanel/index.html');
-    if (existsSync(sidepanelJsPath)) {
-        copyFileSync(sidepanelJsPath, join(distDir, 'sidepanel/index.js'));
-    } else {
-        throw new Error(`Sidepanel JS not found: ${sidepanelJsPath}`);
-    }
-    if (existsSync(sidepanelHtmlPath)) {
-        copyFileSync(sidepanelHtmlPath, join(distDir, 'sidepanel/index.html'));
-    } else {
-        throw new Error(`Sidepanel HTML not found: ${sidepanelHtmlPath}`);
-    }
-
-    // Copy content output
-    const contentJsPath = join(tempContentDir, 'index.js');
-    if (existsSync(contentJsPath)) {
-        copyFileSync(contentJsPath, join(distDir, 'content/index.js'));
-    } else {
-        throw new Error(`Content JS not found: ${contentJsPath}`);
-    }
-
-    // Copy assets (merge from both builds, avoid duplicates)
-    const sidepanelAssets = readdirSync(tempSidepanelDir).filter(f => f.startsWith('assets'));
-    for (const asset of sidepanelAssets) {
-        copyFileSync(
-            join(tempSidepanelDir, asset),
-            join(distDir, asset)
-        );
-    }
-    const contentAssets = readdirSync(tempContentDir).filter(f => f.startsWith('assets'));
-    for (const asset of contentAssets) {
-        copyFileSync(
-            join(tempContentDir, asset),
-            join(distDir, asset)
-        );
-    }
-
-    // Copy icons folder if it exists
-    const iconsSrcDir = resolve(process.cwd(), 'public/icons');
-    const iconsDestDir = join(distDir, 'icons');
-    if (existsSync(iconsSrcDir)) {
-        mkdirSync(iconsDestDir, { recursive: true });
-        const iconFiles = readdirSync(iconsSrcDir);
-        if (iconFiles.length === 0) {
-            console.warn(`No icon files found in ${iconsSrcDir}`);
-        } else {
-            for (const iconFile of iconFiles) {
-                copyFileSync(
-                    join(iconsSrcDir, iconFile),
-                    join(iconsDestDir, iconFile)
-                );
-            }
-            console.log(`Copied icons to ${iconsDestDir}`);
-        }
-    }
-
-    // Copy manifest.json
-    const manifestPath = resolve(process.cwd(), 'manifest.json');
-    if (existsSync(manifestPath)) {
-        copyFileSync(manifestPath, join(distDir, 'manifest.json'));
-    } else {
-        throw new Error(`Manifest not found: ${manifestPath}`);
-    }
-
-    // Clean up temp directories
-    rmSync(tempSidepanelDir, { recursive: true, force: true });
-    rmSync(tempContentDir, { recursive: true, force: true });
-
-    console.log('Build completed successfully');
+    await mkdir(resolve(chromeExtensionDir, 'content'), { recursive: true });
+    await copyFile(resolve(tempContentDir, 'index.js'), resolve(chromeExtensionDir, 'content/index.js'));
+    await rm(tempContentDir, { recursive: true });
 }
 
-runBuild().catch(err => {
-    console.error('Build failed:', err);
+async function buildActiveContent() {
+    await build({
+        configFile: false,
+        plugins: [(await import('@vitejs/plugin-react')).default()],
+        resolve: {
+            alias: {
+                'events': 'events',
+            },
+        },
+        build: {
+            outDir: activeContentDir,
+            rollupOptions: {
+                input: {
+                    index: resolve(process.cwd(), 'src/sidepanel/index.html'),
+                },
+                output: {
+                    entryFileNames: 'assets/index.js',
+                    chunkFileNames: 'assets/[name].js',
+                    assetFileNames: 'assets/[name].[ext]',
+                },
+            },
+        },
+        base: '/CitizenX/active-content/',
+    });
+}
+
+async function main() {
+    await clean();
+    await Promise.all([
+        copyStaticFiles(),
+        buildChromeExtension(),
+        buildActiveContent(),
+    ]);
+}
+
+main().catch((error) => {
+    console.error(error);
     process.exit(1);
 });
