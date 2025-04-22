@@ -57,12 +57,18 @@ async function buildChromeExtension() {
                     interop: 'compat',
                 },
             },
+            base: './', // Use relative paths for Chrome extension
         },
     });
     await mkdir(resolve(chromeExtensionDir, 'sidepanel'), { recursive: true });
     await copyFile(resolve(tempSidepanelDir, 'index.js'), resolve(chromeExtensionDir, 'sidepanel/index.js'));
     // Copy the transpiled index.html from the correct path
-    await copyFile(resolve(tempSidepanelDir, 'src/sidepanel/index.html'), resolve(chromeExtensionDir, 'sidepanel/index.html'));
+    const indexHtmlPath = resolve(tempSidepanelDir, 'src/sidepanel/index.html');
+    let indexHtmlContent = await readFile(indexHtmlPath, 'utf-8');
+    // Ensure the script path is relative
+    indexHtmlContent = indexHtmlContent.replace('src="/index.js"', 'src="index.js"');
+    await writeFile(indexHtmlPath, indexHtmlContent);
+    await copyFile(indexHtmlPath, resolve(chromeExtensionDir, 'sidepanel/index.html'));
     await rm(tempSidepanelDir, { recursive: true });
 
     // Build content script
