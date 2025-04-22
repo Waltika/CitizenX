@@ -15,6 +15,9 @@ export default {
         '^@libp2p/bootstrap$': '<rootDir>/__mocks__/@libp2p/bootstrap.js',
         '^@libp2p/identify$': '<rootDir>/__mocks__/@libp2p/identify.js',
         '^@libp2p/interface$': '<rootDir>/__mocks__/@libp2p/interface.js',
-    },
-    setupFilesAfterEnv: ['@testing-library/jest-dom'],
-};
+        '^@orbitdb/core$': '<rootDir>/__mocks__/@orbitdb/core.js',
+}
+,
+setupFilesAfterEnv: ['@testing-library/jest-dom'],
+}
+;
