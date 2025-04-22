@@ -1,13 +1,13 @@
 import { build } from 'vite';
 import { resolve } from 'path';
-import { copyFile, mkdir, rm } from 'fs/promises';
+import { copyFile, mkdir, rm, rename, readFile, writeFile } from 'fs/promises';
 import { existsSync } from 'fs';
-import {rename} from "node:fs/promises";
 
 const chromeExtensionDir = resolve(process.cwd(), 'dist/chrome-extension');
 const activeContentDir = resolve(process.cwd(), 'dist/active-content');
 
 async function clean() {
+    console.log('Cleaning dist directories...');
     if (existsSync(chromeExtensionDir)) {
         await rm(chromeExtensionDir, { recursive: true });
     }
@@ -17,6 +17,7 @@ async function clean() {
 }
 
 async function copyStaticFiles() {
+    console.log('Copying static files...');
     await mkdir(resolve(chromeExtensionDir, 'icons'), { recursive: true });
     await copyFile(resolve(process.cwd(), 'icons/icon16.png'), resolve(chromeExtensionDir, 'icons/icon16.png'));
     await copyFile(resolve(process.cwd(), 'icons/icon32.png'), resolve(chromeExtensionDir, 'icons/icon32.png'));
@@ -28,6 +29,7 @@ async function buildChromeExtension() {
     await mkdir(chromeExtensionDir, { recursive: true });
 
     // Build sidepanel
+    console.log('Building sidepanel...');
     const tempSidepanelDir = resolve(process.cwd(), 'temp-sidepanel');
     if (existsSync(tempSidepanelDir)) {
         await rm(tempSidepanelDir, { recursive: true });
@@ -63,6 +65,7 @@ async function buildChromeExtension() {
     await rm(tempSidepanelDir, { recursive: true });
 
     // Build content script
+    console.log('Building content script...');
     const tempContentDir = resolve(process.cwd(), 'temp-content');
     if (existsSync(tempContentDir)) {
         await rm(tempContentDir, { recursive: true });
@@ -97,10 +100,13 @@ async function buildChromeExtension() {
 }
 
 async function buildActiveContent() {
+    console.log('Building active-content...');
     const tempActiveContentDir = resolve(process.cwd(), 'temp-active-content');
     if (existsSync(tempActiveContentDir)) {
         await rm(tempActiveContentDir, { recursive: true });
     }
+    const basePath = '/CitizenX/active-content/';
+    console.log('Base path for active-content:', basePath);
     await build({
         configFile: false,
         plugins: [(await import('@vitejs/plugin-react')).default()],
@@ -114,24 +120,28 @@ async function buildActiveContent() {
             rollupOptions: {
                 input: resolve(process.cwd(), 'src/sidepanel/index.html'),
                 output: {
-                    entryFileNames: 'assets/index.js', // No hash
+                    entryFileNames: 'assets/index.js',
                     chunkFileNames: 'assets/[name].js',
                     assetFileNames: 'assets/[name].[ext]',
                 },
             },
-            base: '/CitizenX/active-content/',
+            base: basePath,
             assetsDir: 'assets',
             chunkSizeWarningLimit: 2000,
-            // Disable filename hashing
-            minify: true, // Still minify for production
+            minify: true,
         },
     });
-    // Move index.html and the bundled index.js to the final location
     await mkdir(activeContentDir, { recursive: true });
-    await rename(
-        resolve(tempActiveContentDir, 'src/sidepanel/index.html'),
-        resolve(activeContentDir, 'index.html')
+    // Read index.html, fix the script path, and write it back
+    const indexHtmlPath = resolve(tempActiveContentDir, 'src/sidepanel/index.html');
+    let indexHtmlContent = await readFile(indexHtmlPath, 'utf-8');
+    indexHtmlContent = indexHtmlContent.replace(
+        '/assets/index.js',
+        '/CitizenX/active-content/assets/index.js'
     );
+    await writeFile(indexHtmlPath, indexHtmlContent);
+    // Move index.html and the bundled index.js to the final location
+    await rename(indexHtmlPath, resolve(activeContentDir, 'index.html'));
     await mkdir(resolve(activeContentDir, 'assets'), { recursive: true });
     await copyFile(
         resolve(tempActiveContentDir, 'assets/index.js'),
