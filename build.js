@@ -42,9 +42,7 @@ async function buildChromeExtension() {
         build: {
             outDir: tempSidepanelDir,
             rollupOptions: {
-                input: {
-                    sidepanel: resolve(process.cwd(), 'src/sidepanel/index.html'),
-                },
+                input: resolve(process.cwd(), 'src/sidepanel/index.html'), // Simplified input
                 output: {
                     entryFileNames: 'index.js',
                     assetFileNames: 'assets/[name]-[hash].[ext]',
@@ -79,9 +77,7 @@ async function buildChromeExtension() {
         build: {
             outDir: tempContentDir,
             rollupOptions: {
-                input: {
-                    content: resolve(process.cwd(), 'src/content/index.tsx'),
-                },
+                input: resolve(process.cwd(), 'src/content/index.tsx'), // Simplified input
                 output: {
                     entryFileNames: 'index.js',
                     format: 'iife',
@@ -111,17 +107,16 @@ async function buildActiveContent() {
         build: {
             outDir: activeContentDir,
             rollupOptions: {
-                input: {
-                    index: resolve(process.cwd(), 'src/sidepanel/index.html'),
-                },
+                input: resolve(process.cwd(), 'src/sidepanel/index.html'), // Simplified input
                 output: {
                     entryFileNames: 'assets/index.js',
                     chunkFileNames: 'assets/[name].js',
                     assetFileNames: 'assets/[name].[ext]',
                 },
             },
+            base: '/CitizenX/active-content/',
+            assetsDir: 'assets',
         },
-        base: '/CitizenX/active-content/',
     });
 }
 
