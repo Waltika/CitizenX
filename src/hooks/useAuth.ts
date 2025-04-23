@@ -1,97 +1,79 @@
 // src/hooks/useAuth.ts
 import { useState, useEffect } from 'react';
-import { ethers, BrowserProvider } from 'ethers';
+import { generateKeyPair, signMessage, verifySignature } from '../utils/crypto';
 
 interface UseAuthResult {
-    walletAddress: string | null;
-    connectWallet: () => Promise<void>;
+    did: string | null;
+    authenticate: () => Promise<void>;
     signOut: () => void;
     error: string | null;
 }
 
 const useAuth = (): UseAuthResult => {
-    const [walletAddress, setWalletAddress] = useState<string | null>(null);
+    const [did, setDid] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
 
-    const sendMessage = (message: any): Promise<any> => {
-        console.log('Side panel sending message:', message);
-        return new Promise((resolve, reject) => {
-            chrome.runtime.sendMessage(message, (response) => {
-                if (chrome.runtime.lastError) {
-                    console.error('Message sending error:', chrome.runtime.lastError.message);
-                    reject(new Error(chrome.runtime.lastError.message));
-                } else if (response.error) {
-                    console.error('Content script response error:', response.error);
-                    reject(new Error(response.error));
-                } else {
-                    console.log('Content script response:', response);
-                    resolve(response);
-                }
-            });
-        });
-    };
-
-    const connectWallet = async () => {
+    const authenticate = async () => {
         try {
-            const { hasEthereum } = await sendMessage({ type: 'CHECK_ETHEREUM_PROVIDER' });
-            if (!hasEthereum) {
-                throw new Error('Please install MetaMask or another Ethereum wallet provider.');
-            }
+            // Check if we already have a key pair in storage
+            chrome.storage.local.get(['did', 'privateKey'], async (result) => {
+                let publicKey: string;
+                let privateKey: string;
 
-            const { walletAddress: address } = await sendMessage({ type: 'CONNECT_WALLET' });
-            setWalletAddress(address);
-            setError(null);
+                if (result.did && result.privateKey) {
+                    publicKey = result.did;
+                    privateKey = result.privateKey;
+                } else {
+                    // Generate a new key pair
+                    const keyPair = await generateKeyPair();
+                    publicKey = keyPair.publicKey;
+                    privateKey = keyPair.privateKey;
+
+                    // Store the key pair in chrome.storage.local
+                    chrome.storage.local.set({ did: publicKey, privateKey }, () => {
+                        console.log('Key pair stored in chrome.storage.local');
+                    });
+                }
+
+                // Use the public key as the DID
+                setDid(publicKey);
+
+                // Sign a challenge to verify the private key (optional)
+                const challenge = Date.now().toString();
+                const signature = await signMessage(challenge, privateKey);
+                const isValid = await verifySignature(challenge, signature, publicKey);
+
+                if (!isValid) {
+                    throw new Error('Failed to verify key pair');
+                }
+
+                setError(null);
+            });
         } catch (err) {
+            console.error('Authentication error:', err);
             setError((err as Error).message);
-            setWalletAddress(null);
+            setDid(null);
         }
     };
 
     const signOut = () => {
-        setWalletAddress(null);
+        setDid(null);
         setError(null);
+        chrome.storage.local.remove(['did', 'privateKey'], () => {
+            console.log('Cleared DID and private key from chrome.storage.local');
+        });
     };
 
     useEffect(() => {
-        const checkWalletConnection = async () => {
-            try {
-                const { hasEthereum } = await sendMessage({ type: 'CHECK_ETHEREUM_PROVIDER' });
-                if (hasEthereum) {
-                    const { walletAddress: address } = await sendMessage({ type: 'CONNECT_WALLET' });
-                    if (address) {
-                        setWalletAddress(address);
-                    }
-                }
-            } catch (err) {
-                console.error('Failed to check wallet connection:', err);
+        // Check for an existing DID on load
+        chrome.storage.local.get(['did'], (result) => {
+            if (result.did) {
+                setDid(result.did);
             }
-        };
-
-        checkWalletConnection();
-
-        sendMessage({ type: 'SUBSCRIBE_ACCOUNTS_CHANGED' }).catch(err => {
-            console.error('Failed to subscribe to accounts changed:', err);
         });
-
-        const handleAccountsChanged = (message: any) => {
-            if (message.type === 'ACCOUNTS_CHANGED') {
-                const accounts = message.accounts;
-                if (accounts.length > 0) {
-                    setWalletAddress(accounts[0]);
-                } else {
-                    setWalletAddress(null);
-                }
-            }
-        };
-
-        chrome.runtime.onMessage.addListener(handleAccountsChanged);
-
-        return () => {
-            chrome.runtime.onMessage.removeListener(handleAccountsChanged);
-        };
     }, []);
 
-    return { walletAddress, connectWallet, signOut, error };
+    return { did, authenticate, signOut, error };
 };
 
 export default useAuth;

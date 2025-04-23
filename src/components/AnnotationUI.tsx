@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { useOrbitDB } from '../hooks/useOrbitDB';
 import { useAnnotations } from '../hooks/useAnnotations';
-import useAuth from '../hooks/useAuth'; // Changed to default import
+import useAuth from '../hooks/useAuth';
 import AnnotationList from './AnnotationList';
 
 interface AnnotationUIProps {
@@ -11,12 +11,14 @@ interface AnnotationUIProps {
 
 const AnnotationUI: React.FC<AnnotationUIProps> = ({ url }) => {
     const [annotation, setAnnotation] = useState('');
-    const { walletAddress, connectWallet, signOut, error: authError } = useAuth();
-    const { db, error: dbError } = useOrbitDB(url);
-    const { annotations, error: annotationsError, handleSaveAnnotation, handleDeleteAnnotation } = useAnnotations(
-        url,
-        db
-    );
+    const { did, authenticate, signOut, error: authError } = useAuth();
+
+    // Skip annotation logic for popup URLs (if any remain)
+    const isPopupUrl = url.startsWith('chrome-extension://');
+    const { db, error: dbError } = isPopupUrl ? { db: null, error: null } : useOrbitDB(url);
+    const { annotations, error: annotationsError, handleSaveAnnotation, handleDeleteAnnotation } = isPopupUrl
+        ? { annotations: [], error: null, handleSaveAnnotation: async () => {}, handleDeleteAnnotation: async () => {} }
+        : useAnnotations(url, db, did);
 
     const error = authError || dbError || annotationsError;
 
@@ -30,10 +32,10 @@ const AnnotationUI: React.FC<AnnotationUIProps> = ({ url }) => {
             <h1 style={{ fontSize: '1.5rem', fontWeight: 'bold', margin: '0 0 8px 0' }}>
                 CitizenX Annotations
             </h1>
-            {walletAddress ? (
+            {did ? (
                 <div style={{ marginBottom: '8px' }}>
                     <p style={{ margin: '0', fontSize: '0.9rem' }}>
-                        Connected: {walletAddress.slice(0, 6)}...{walletAddress.slice(-4)}
+                        Connected: {did.slice(0, 6)}...{did.slice(-4)}
                     </p>
                     <button
                         onClick={signOut}
@@ -46,13 +48,13 @@ const AnnotationUI: React.FC<AnnotationUIProps> = ({ url }) => {
                             cursor: 'pointer',
                         }}
                     >
-                        Disconnect Wallet
+                        Sign Out
                     </button>
                 </div>
             ) : (
                 <div style={{ marginBottom: '8px' }}>
                     <button
-                        onClick={connectWallet}
+                        onClick={authenticate}
                         style={{
                             padding: '5px 10px',
                             background: '#007bff',
@@ -62,44 +64,33 @@ const AnnotationUI: React.FC<AnnotationUIProps> = ({ url }) => {
                             cursor: 'pointer',
                         }}
                     >
-                        Connect Wallet
+                        Authenticate
                     </button>
                 </div>
             )}
-            {error && (
-                <p style={{ color: 'red', margin: '0 0 8px 0' }}>{error}</p>
-            )}
-            <div style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>
-                <input
-                    type="text"
-                    value={annotation}
-                    onChange={(e) => setAnnotation(e.target.value)}
-                    placeholder="Enter annotation..."
-                    style={{
-                        flex: 1,
-                        padding: '5px',
-                        border: '1px solid #ccc',
-                        borderRadius: '3px',
-                    }}
-                />
-                <button
-                    onClick={onSave}
-                    disabled={!db}
-                    style={{
-                        padding: '5px 10px',
-                        background: db ? '#007bff' : '#ccc',
-                        color: '#fff',
-                        border: 'none',
-                        borderRadius: '3px',
-                        cursor: db ? 'pointer' : 'not-allowed',
-                    }}
-                >
-                    Save
-                </button>
-            </div>
-            <div style={{ maxHeight: '300px', overflowY: 'auto' }}>
-                <AnnotationList annotations={annotations} onDelete={handleDeleteAnnotation} />
-            </div>
+            {error && <p style={{ color: 'red', margin: '0 0 8px 0' }}>{error}</p>}
+            <textarea
+                value={annotation}
+                onChange={(e) => setAnnotation(e.target.value)}
+                placeholder="Enter annotation..."
+                style={{ width: '100%', height: '80px', marginBottom: '8px' }}
+            />
+            <button
+                onClick={onSave}
+                disabled={!db}
+                style={{
+                    padding: '5px 10px',
+                    background: db ? '#28a745' : '#ccc',
+                    color: '#fff',
+                    border: 'none',
+                    borderRadius: '3px',
+                    cursor: db ? 'pointer' : 'not-allowed',
+                    marginBottom: '16px',
+                }}
+            >
+                Save
+            </button>
+            <AnnotationList annotations={annotations} onDelete={handleDeleteAnnotation} />
         </div>
     );
 };
