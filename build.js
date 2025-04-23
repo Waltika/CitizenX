@@ -1,7 +1,7 @@
 // build.js
 import { build } from 'vite';
 import { resolve } from 'path';
-import { copyFile, mkdir, rm, rename, readFile, writeFile } from 'fs/promises';
+import { copyFile, mkdir, rm, rename, readFile, writeFile, readdir } from 'fs/promises';
 import { existsSync } from 'fs';
 
 const chromeExtensionDir = resolve(process.cwd(), 'dist/chrome-extension');
@@ -68,44 +68,19 @@ async function buildChromeExtension() {
     indexHtmlContent = indexHtmlContent.replace('src="/index.js"', 'src="index.js"');
     await writeFile(indexHtmlPath, indexHtmlContent);
     await copyFile(indexHtmlPath, resolve(chromeExtensionDir, 'sidepanel/index.html'));
+
+    // Copy loader.html
+    console.log('Copying loader.html...');
+    await copyFile(
+        resolve(process.cwd(), 'src/sidepanel/loader.html'),
+        resolve(chromeExtensionDir, 'sidepanel/loader.html')
+    );
+
     await rm(tempSidepanelDir, { recursive: true });
 
-    // Build content script (index.tsx)
-    console.log('Building content script (index.tsx)...');
-    const tempContentDir = resolve(process.cwd(), 'temp-content');
-    if (existsSync(tempContentDir)) {
-        await rm(tempContentDir, { recursive: true });
-    }
-    await build({
-        configFile: false,
-        plugins: [(await import('@vitejs/plugin-react')).default()],
-        resolve: {
-            alias: {
-                'events': 'events',
-            },
-        },
-        build: {
-            outDir: tempContentDir,
-            rollupOptions: {
-                input: resolve(process.cwd(), 'src/content/index.tsx'),
-                output: {
-                    entryFileNames: 'index.js',
-                    format: 'iife',
-                    inlineDynamicImports: false,
-                    preserveModules: false,
-                    manualChunks: () => undefined,
-                    compact: true,
-                    interop: 'compat',
-                },
-            },
-        },
-    });
-    await mkdir(resolve(chromeExtensionDir, 'content'), { recursive: true });
-    await copyFile(resolve(tempContentDir, 'index.js'), resolve(chromeExtensionDir, 'content/index.js'));
-    await rm(tempContentDir, { recursive: true });
-
-    // Copy walletConnector.js (content script)
+    // Copy walletConnector.js for wallet connection (if still used)
     console.log('Copying walletConnector.js...');
+    await mkdir(resolve(chromeExtensionDir, 'content'), { recursive: true });
     await copyFile(
         resolve(process.cwd(), 'src/content/walletConnector.js'),
         resolve(chromeExtensionDir, 'content/walletConnector.js')
@@ -140,9 +115,9 @@ async function buildActiveContent() {
             rollupOptions: {
                 input: resolve(process.cwd(), 'src/sidepanel/index.html'),
                 output: {
-                    entryFileNames: 'assets/index.js',
-                    chunkFileNames: 'assets/[name].js',
-                    assetFileNames: 'assets/[name].[ext]',
+                    entryFileNames: 'assets/index.[hash].js', // Use [hash] for entry file
+                    chunkFileNames: 'assets/[name].[hash].js', // Use [hash] for chunks
+                    assetFileNames: 'assets/[name].[hash].[ext]', // Use [hash] for other assets
                 },
             },
             base: basePath,
@@ -151,20 +126,38 @@ async function buildActiveContent() {
             minify: true,
         },
     });
+
     await mkdir(activeContentDir, { recursive: true });
     const indexHtmlPath = resolve(tempActiveContentDir, 'src/sidepanel/index.html');
     let indexHtmlContent = await readFile(indexHtmlPath, 'utf-8');
+
+    // Find the hashed filename for index.js
+    const assetsDir = resolve(tempActiveContentDir, 'assets');
+    const files = await readdir(assetsDir);
+    const hashedIndexJsFile = files.find(file => file.startsWith('index.') && file.endsWith('.js'));
+    if (!hashedIndexJsFile) {
+        throw new Error('Could not find hashed index.js in assets directory');
+    }
+    const hashedIndexJsPath = `/assets/${hashedIndexJsFile}`;
+    console.log('Found hashed index.js:', hashedIndexJsPath);
+
+    // Update index.html to reference the correct path
     indexHtmlContent = indexHtmlContent.replace(
-        '/assets/index.js',
-        '/CitizenX/dist/active-content/assets/index.js'
+        hashedIndexJsPath,
+        `/CitizenX/dist/active-content${hashedIndexJsPath}`
     );
     await writeFile(indexHtmlPath, indexHtmlContent);
     await rename(indexHtmlPath, resolve(activeContentDir, 'index.html'));
+
+    // Copy the hashed index.js file and other assets
     await mkdir(resolve(activeContentDir, 'assets'), { recursive: true });
-    await copyFile(
-        resolve(tempActiveContentDir, 'assets/index.js'),
-        resolve(activeContentDir, 'assets/index.js')
-    );
+    for (const file of files) {
+        await copyFile(
+            resolve(assetsDir, file),
+            resolve(activeContentDir, 'assets', file)
+        );
+    }
+
     await rm(tempActiveContentDir, { recursive: true });
 }
 
