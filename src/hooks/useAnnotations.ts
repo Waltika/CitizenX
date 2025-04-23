@@ -11,95 +11,150 @@ interface UseAnnotationsResult {
     handleDeleteAnnotation: (id: string) => Promise<void>;
 }
 
-export const useAnnotations = (url: string, db: any): UseAnnotationsResult => {
+export const useAnnotations = (url: string, db: any, walletAddress: string | null): UseAnnotationsResult => {
     const [annotations, setAnnotations] = useState<Annotation[]>([]);
     const [error, setError] = useState<string | null>(null);
 
-    // Normalize the URL
+    console.log('Starting OrbitDB initialization for', url);
     const normalizedUrl = normalizeUrl(url);
+    console.log('Normalized URL:', normalizedUrl);
 
-    // Fetch annotations on mount or when db or normalizedUrl changes
     useEffect(() => {
         async function fetchAnnotations() {
             if (db) {
                 try {
-                    // Load annotations from localStorage first
-                    const localAnnotations = JSON.parse(localStorage.getItem('citizenx-annotations') || '[]');
+                    let localAnnotations = JSON.parse(localStorage.getItem('citizenx-annotations') || '[]');
                     console.log('Local annotations on init:', localAnnotations);
-                    // Filter annotations by normalized URL
-                    const filteredLocalAnnotations = localAnnotations.filter((doc: Annotation) => normalizeUrl(doc.url) === normalizedUrl);
+                    const validLocalAnnotations = localAnnotations.filter((doc: Annotation) => {
+                        try {
+                            normalizeUrl(doc.url);
+                            return true;
+                        } catch (e) {
+                            console.warn('Removing annotation with invalid URL from localStorage:', doc.url, e);
+                            return false;
+                        }
+                    });
+                    if (localAnnotations.length !== validLocalAnnotations.length) {
+                        console.warn('Invalid URLs detected in localStorage, cleaning up...');
+                        localStorage.setItem('citizenx-annotations', JSON.stringify(validLocalAnnotations));
+                        localAnnotations = validLocalAnnotations;
+                    }
+
+                    const filteredLocalAnnotations = walletAddress
+                        ? localAnnotations.filter((doc: Annotation) => {
+                            try {
+                                const docNormalizedUrl = normalizeUrl(doc.url);
+                                return docNormalizedUrl === normalizedUrl && doc.walletAddress === walletAddress;
+                            } catch (e) {
+                                console.warn('Skipping annotation with invalid URL:', doc.url, e);
+                                return false;
+                            }
+                        })
+                        : [];
                     setAnnotations(filteredLocalAnnotations);
 
-                    // Wait for the initial update event to ensure the database is fully loaded
-                    await new Promise<void>((resolve) => {
+                    await new Promise<void>(async (resolve) => {
+                        const docs = await db.all();
+                        console.log('Initial OrbitDB docs:', docs);
+                        for (const doc of docs) {
+                            try {
+                                normalizeUrl(doc.value.url);
+                            } catch (e) {
+                                console.warn('Removing OrbitDB doc with invalid URL:', doc.value.url, e);
+                                try {
+                                    await db.del(doc.hash);
+                                    console.log('Deleted invalid doc from OrbitDB:', doc.hash);
+                                } catch (deleteError) {
+                                    console.error('Failed to delete invalid doc from OrbitDB:', deleteError);
+                                }
+                            }
+                        }
+
                         db.events.on('update', async () => {
-                            const docs = await db.all();
-                            console.log('Initial update, annotations loaded:', docs);
-                            // Filter annotations by normalized URL
-                            const filteredDocs = docs.filter((doc: any) => normalizeUrl(doc.value.url) === normalizedUrl);
+                            const updatedDocs = await db.all();
+                            console.log('Initial update, annotations loaded:', updatedDocs);
+                            const filteredDocs = walletAddress
+                                ? updatedDocs.filter((doc: any) => {
+                                    try {
+                                        const docNormalizedUrl = normalizeUrl(doc.value.url);
+                                        return docNormalizedUrl === normalizedUrl && doc.value.walletAddress === walletAddress;
+                                    } catch (e) {
+                                        console.warn('Skipping OrbitDB doc with invalid URL:', doc.value.url, e);
+                                        return false;
+                                    }
+                                })
+                                : [];
                             setAnnotations(filteredDocs.map((doc: any) => doc.value));
                             resolve();
                         });
                     });
-
-                    // Try to sync localStorage annotations to OrbitDB if peers are available
-                    if (localAnnotations.length > 0) {
-                        db.events.on('peer', async () => {
-                            console.log('Peer connected, syncing localStorage annotations to OrbitDB');
-                            for (const localDoc of localAnnotations) {
-                                try {
-                                    await db.put(localDoc);
-                                    console.log('Synced local annotation to OrbitDB:', localDoc);
-                                } catch (syncError) {
-                                    console.error('Failed to sync local annotation:', syncError);
-                                }
-                            }
-                            localStorage.removeItem('citizenx-annotations');
-                            const updatedDocs = await db.all();
-                            // Filter updatedDocs by normalized URL
-                            const filteredUpdatedDocs = updatedDocs.filter((doc: any) => normalizeUrl(doc.value.url) === normalizedUrl);
-                            setAnnotations(filteredUpdatedDocs.map((doc: any) => doc.value));
-                        });
-                    }
-
-                    db.events.on('update', async () => {
-                        const updatedDocs = await db.all();
-                        console.log('Database updated, new docs:', updatedDocs);
-                        // Filter updatedDocs by normalized URL
-                        const filteredUpdatedDocs = updatedDocs.filter((doc: any) => normalizeUrl(doc.value.url) === normalizedUrl);
-                        setAnnotations(filteredUpdatedDocs.map((doc: any) => doc.value)); // Fixed: filteredDocs → filteredUpdatedDocs
-                        console.log('Annotations database updated:', filteredUpdatedDocs);
-                    });
+                    // Rest of the code...
                 } catch (fetchError) {
                     console.error('Failed to fetch annotations:', fetchError);
                     setError('Failed to load annotations');
                 }
             } else {
-                // If db is null, load from localStorage
-                const localAnnotations = JSON.parse(localStorage.getItem('citizenx-annotations') || '[]');
-                // Filter annotations by normalized URL
-                const filteredLocalAnnotations = localAnnotations.filter((doc: Annotation) => normalizeUrl(doc.url) === normalizedUrl);
+                let localAnnotations = JSON.parse(localStorage.getItem('citizenx-annotations') || '[]');
+                const validLocalAnnotations = localAnnotations.filter((doc: Annotation) => {
+                    try {
+                        normalizeUrl(doc.url);
+                        return true;
+                    } catch (e) {
+                        console.warn('Removing annotation with invalid URL from localStorage:', doc.url, e);
+                        return false;
+                    }
+                });
+                if (localAnnotations.length !== validLocalAnnotations.length) {
+                    console.warn('Invalid URLs detected in localStorage, cleaning up...');
+                    localStorage.setItem('citizenx-annotations', JSON.stringify(validLocalAnnotations));
+                    localAnnotations = validLocalAnnotations;
+                }
+
+                const filteredLocalAnnotations = walletAddress
+                    ? localAnnotations.filter((doc: Annotation) => {
+                        try {
+                            const docNormalizedUrl = normalizeUrl(doc.url);
+                            return docNormalizedUrl === normalizedUrl && doc.walletAddress === walletAddress;
+                        } catch (e) {
+                            console.warn('Skipping annotation with invalid URL:', doc.url, e);
+                            return false;
+                        }
+                    })
+                    : [];
                 setAnnotations(filteredLocalAnnotations);
             }
         }
         fetchAnnotations();
-    }, [db, normalizedUrl]); // Depend on normalizedUrl
+    }, [db, normalizedUrl, walletAddress]);
 
     const handleSaveAnnotation = async (text: string) => {
+        if (!walletAddress) {
+            setError('Please connect your wallet to save annotations.');
+            return;
+        }
+
         if (text.trim() && db) {
             const doc: Annotation = {
                 _id: Date.now().toString(),
-                url: normalizedUrl, // Use normalized URL
+                url: normalizedUrl,
                 text: text.trim(),
                 timestamp: Date.now(),
+                walletAddress,
             };
             try {
                 await db.put(doc);
                 console.log('Successfully saved to OrbitDB:', doc);
                 const docs = await db.all();
                 console.log('Annotations after save:', docs);
-                // Filter docs by normalized URL
-                const filteredDocs = docs.filter((d: any) => normalizeUrl(d.value.url) === normalizedUrl);
+                const filteredDocs = docs.filter((d: any) => {
+                    try {
+                        const docNormalizedUrl = normalizeUrl(d.value.url);
+                        return docNormalizedUrl === normalizedUrl && d.value.walletAddress === walletAddress;
+                    } catch (e) {
+                        console.warn('Skipping OrbitDB doc with invalid URL:', d.value.url, e);
+                        return false;
+                    }
+                });
                 setAnnotations(filteredDocs.map((d: any) => d.value));
             } catch (error: unknown) {
                 const err = error as Error;
@@ -108,8 +163,15 @@ export const useAnnotations = (url: string, db: any): UseAnnotationsResult => {
                     const localAnnotations = JSON.parse(localStorage.getItem('citizenx-annotations') || '[]');
                     localAnnotations.push(doc);
                     localStorage.setItem('citizenx-annotations', JSON.stringify(localAnnotations));
-                    // Filter localAnnotations by normalized URL
-                    const filteredLocalAnnotations = localAnnotations.filter((d: Annotation) => normalizeUrl(d.url) === normalizedUrl);
+                    const filteredLocalAnnotations = localAnnotations.filter((d: Annotation) => {
+                        try {
+                            const docNormalizedUrl = normalizeUrl(d.url);
+                            return docNormalizedUrl === normalizedUrl && d.walletAddress === walletAddress;
+                        } catch (e) {
+                            console.warn('Skipping annotation with invalid URL:', d.url, e);
+                            return false;
+                        }
+                    });
                     setAnnotations(filteredLocalAnnotations);
                     db.events.on('peer', async () => {
                         console.log('Peer connected, retrying save to OrbitDB');
@@ -118,8 +180,17 @@ export const useAnnotations = (url: string, db: any): UseAnnotationsResult => {
                             console.log('Successfully saved to OrbitDB after peer connection:', doc);
                             localStorage.removeItem('citizenx-annotations');
                             const updatedDocs = await db.all();
-                            // Filter updatedDocs by normalized URL
-                            const filteredUpdatedDocs = updatedDocs.filter((d: any) => normalizeUrl(d.value.url) === normalizedUrl);
+                            const filteredUpdatedDocs = walletAddress
+                                ? updatedDocs.filter((d: any) => {
+                                    try {
+                                        const docNormalizedUrl = normalizeUrl(d.value.url);
+                                        return docNormalizedUrl === normalizedUrl && d.value.walletAddress === walletAddress;
+                                    } catch (e) {
+                                        console.warn('Skipping OrbitDB doc with invalid URL:', d.value.url, e);
+                                        return false;
+                                    }
+                                })
+                                : [];
                             setAnnotations(filteredUpdatedDocs.map((d: any) => d.value));
                         } catch (retryError) {
                             console.error('Retry failed:', retryError);
@@ -131,18 +202,25 @@ export const useAnnotations = (url: string, db: any): UseAnnotationsResult => {
                 }
             }
         } else if (text.trim()) {
-            // If db is null, save to localStorage
             const doc: Annotation = {
                 _id: Date.now().toString(),
-                url: normalizedUrl, // Use normalized URL
+                url: normalizedUrl,
                 text: text.trim(),
                 timestamp: Date.now(),
+                walletAddress: walletAddress!,
             };
             const localAnnotations = JSON.parse(localStorage.getItem('citizenx-annotations') || '[]');
             localAnnotations.push(doc);
             localStorage.setItem('citizenx-annotations', JSON.stringify(localAnnotations));
-            // Filter localAnnotations by normalized URL
-            const filteredLocalAnnotations = localAnnotations.filter((d: Annotation) => normalizeUrl(d.url) === normalizedUrl);
+            const filteredLocalAnnotations = localAnnotations.filter((d: Annotation) => {
+                try {
+                    const docNormalizedUrl = normalizeUrl(d.url);
+                    return docNormalizedUrl === normalizedUrl && d.walletAddress === walletAddress;
+                } catch (e) {
+                    console.warn('Skipping annotation with invalid URL:', d.url, e);
+                    return false;
+                }
+            });
             setAnnotations(filteredLocalAnnotations);
         }
     };
@@ -153,8 +231,17 @@ export const useAnnotations = (url: string, db: any): UseAnnotationsResult => {
                 await db.del(id);
                 console.log('Successfully deleted annotation from OrbitDB:', id);
                 const docs = await db.all();
-                // Filter docs by normalized URL
-                const filteredDocs = docs.filter((d: any) => normalizeUrl(d.value.url) === normalizedUrl);
+                const filteredDocs = walletAddress
+                    ? docs.filter((d: any) => {
+                        try {
+                            const docNormalizedUrl = normalizeUrl(d.value.url);
+                            return docNormalizedUrl === normalizedUrl && d.value.walletAddress === walletAddress;
+                        } catch (e) {
+                            console.warn('Skipping OrbitDB doc with invalid URL:', d.value.url, e);
+                            return false;
+                        }
+                    })
+                    : [];
                 setAnnotations(filteredDocs.map((d: any) => d.value));
             } catch (error) {
                 console.error('Failed to delete annotation:', error);
@@ -164,8 +251,17 @@ export const useAnnotations = (url: string, db: any): UseAnnotationsResult => {
             const localAnnotations = JSON.parse(localStorage.getItem('citizenx-annotations') || '[]');
             const updatedAnnotations = localAnnotations.filter((note: any) => note._id !== id);
             localStorage.setItem('citizenx-annotations', JSON.stringify(updatedAnnotations));
-            // Filter updatedAnnotations by normalized URL
-            const filteredUpdatedAnnotations = updatedAnnotations.filter((d: Annotation) => normalizeUrl(d.url) === normalizedUrl);
+            const filteredUpdatedAnnotations = walletAddress
+                ? updatedAnnotations.filter((d: Annotation) => {
+                    try {
+                        const docNormalizedUrl = normalizeUrl(d.url);
+                        return docNormalizedUrl === normalizedUrl && d.walletAddress === walletAddress;
+                    } catch (e) {
+                        console.warn('Skipping annotation with invalid URL:', d.url, e);
+                        return false;
+                    }
+                })
+                : [];
             setAnnotations(filteredUpdatedAnnotations);
             console.warn('No peers subscribed, deleted from localStorage:', id);
         }
