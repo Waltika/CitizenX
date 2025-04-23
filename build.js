@@ -1,7 +1,7 @@
 // build.js
 import { build } from 'vite';
 import { resolve } from 'path';
-import { copyFile, mkdir, rm, rename, readFile, writeFile, readdir } from 'fs/promises';
+import { copyFile, mkdir, rm, rename, readFile, writeFile } from 'fs/promises';
 import { existsSync } from 'fs';
 
 const chromeExtensionDir = resolve(process.cwd(), 'dist/chrome-extension');
@@ -76,15 +76,14 @@ async function buildChromeExtension() {
         resolve(chromeExtensionDir, 'sidepanel/loader.html')
     );
 
-    await rm(tempSidepanelDir, { recursive: true });
-
-    // Copy walletConnector.js for wallet connection (if still used)
-    console.log('Copying walletConnector.js...');
-    await mkdir(resolve(chromeExtensionDir, 'content'), { recursive: true });
+    // Copy loader.js
+    console.log('Copying loader.js...');
     await copyFile(
-        resolve(process.cwd(), 'src/content/walletConnector.js'),
-        resolve(chromeExtensionDir, 'content/walletConnector.js')
+        resolve(process.cwd(), 'src/sidepanel/loader.js'),
+        resolve(chromeExtensionDir, 'sidepanel/loader.js')
     );
+
+    await rm(tempSidepanelDir, { recursive: true });
 
     // Copy background.js
     console.log('Copying background.js...');
@@ -115,9 +114,9 @@ async function buildActiveContent() {
             rollupOptions: {
                 input: resolve(process.cwd(), 'src/sidepanel/index.html'),
                 output: {
-                    entryFileNames: 'assets/index.[hash].js', // Use [hash] for entry file
-                    chunkFileNames: 'assets/[name].[hash].js', // Use [hash] for chunks
-                    assetFileNames: 'assets/[name].[hash].[ext]', // Use [hash] for other assets
+                    entryFileNames: 'assets/index.js',
+                    chunkFileNames: 'assets/[name].js',
+                    assetFileNames: 'assets/[name].[ext]',
                 },
             },
             base: basePath,
@@ -126,38 +125,20 @@ async function buildActiveContent() {
             minify: true,
         },
     });
-
     await mkdir(activeContentDir, { recursive: true });
     const indexHtmlPath = resolve(tempActiveContentDir, 'src/sidepanel/index.html');
     let indexHtmlContent = await readFile(indexHtmlPath, 'utf-8');
-
-    // Find the hashed filename for index.js
-    const assetsDir = resolve(tempActiveContentDir, 'assets');
-    const files = await readdir(assetsDir);
-    const hashedIndexJsFile = files.find(file => file.startsWith('index.') && file.endsWith('.js'));
-    if (!hashedIndexJsFile) {
-        throw new Error('Could not find hashed index.js in assets directory');
-    }
-    const hashedIndexJsPath = `/assets/${hashedIndexJsFile}`;
-    console.log('Found hashed index.js:', hashedIndexJsPath);
-
-    // Update index.html to reference the correct path
     indexHtmlContent = indexHtmlContent.replace(
-        hashedIndexJsPath,
-        `/CitizenX/dist/active-content${hashedIndexJsPath}`
+        '/assets/index.js',
+        '/CitizenX/dist/active-content/assets/index.js'
     );
     await writeFile(indexHtmlPath, indexHtmlContent);
     await rename(indexHtmlPath, resolve(activeContentDir, 'index.html'));
-
-    // Copy the hashed index.js file and other assets
     await mkdir(resolve(activeContentDir, 'assets'), { recursive: true });
-    for (const file of files) {
-        await copyFile(
-            resolve(assetsDir, file),
-            resolve(activeContentDir, 'assets', file)
-        );
-    }
-
+    await copyFile(
+        resolve(tempActiveContentDir, 'assets/index.js'),
+        resolve(activeContentDir, 'assets/index.js')
+    );
     await rm(tempActiveContentDir, { recursive: true });
 }
 
