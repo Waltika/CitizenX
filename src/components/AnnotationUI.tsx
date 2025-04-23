@@ -1,7 +1,8 @@
-// src/components/AnnotationUI.tsx
-import React, { useState } from 'react';
+// src/components/AnnotationUI.tsx (updated)
+import React, { useState, useEffect } from 'react';
 import { useOrbitDB } from '../hooks/useOrbitDB';
 import { useAnnotations } from '../hooks/useAnnotations';
+import { useUserProfiles } from '../hooks/useUserProfiles';
 import useAuth from '../hooks/useAuth';
 import AnnotationList from './AnnotationList';
 
@@ -11,13 +12,17 @@ interface AnnotationUIProps {
 
 const AnnotationUI: React.FC<AnnotationUIProps> = ({ url }) => {
     const [annotation, setAnnotation] = useState('');
-    const { did, authenticate, signOut, exportIdentity, importIdentity, error: authError } = useAuth();
+    const { did, profile, authenticate, signOut, exportIdentity, importIdentity, createProfile, updateProfile, error: authError } = useAuth();
+    const { profiles, error: profilesError } = useUserProfiles(did);
     const [exportedIdentity, setExportedIdentity] = useState('');
     const [importData, setImportData] = useState('');
     const [passphrase, setPassphrase] = useState('');
     const [importPassphrase, setImportPassphrase] = useState('');
     const [importError, setImportError] = useState('');
-    const [exportError, setExportError] = useState(''); // Local state for export errors
+    const [exportError, setExportError] = useState('');
+    const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
+    const [newHandle, setNewHandle] = useState('');
+    const [newProfilePicture, setNewProfilePicture] = useState('');
 
     const isPopupUrl = url.startsWith('chrome-extension://');
     const { db, error: dbError } = isPopupUrl ? { db: null, error: null } : useOrbitDB(url);
@@ -25,7 +30,13 @@ const AnnotationUI: React.FC<AnnotationUIProps> = ({ url }) => {
         ? { annotations: [], error: null, handleSaveAnnotation: async () => {}, handleDeleteAnnotation: async () => {} }
         : useAnnotations(url, db, did);
 
-    const error = authError || dbError || annotationsError;
+    const error = authError || dbError || annotationsError || profilesError;
+
+    useEffect(() => {
+        if (did && !profile) {
+            setIsProfileModalOpen(true); // Prompt to set profile if none exists
+        }
+    }, [did, profile]);
 
     const onSave = async () => {
         await handleSaveAnnotation(annotation);
@@ -62,6 +73,38 @@ const AnnotationUI: React.FC<AnnotationUIProps> = ({ url }) => {
         }
     };
 
+    const handleProfileSubmit = async () => {
+        try {
+            if (!newHandle || !newProfilePicture) {
+                setExportError('Please provide a handle and profile picture');
+                return;
+            }
+            if (profile) {
+                await updateProfile(newHandle, newProfilePicture);
+            } else {
+                await createProfile(newHandle, newProfilePicture);
+            }
+            setIsProfileModalOpen(false);
+            setNewHandle('');
+            setNewProfilePicture('');
+        } catch (err) {
+            setExportError((err as Error).message);
+        }
+    };
+
+    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (file) {
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                if (event.target?.result) {
+                    setNewProfilePicture(event.target.result as string);
+                }
+            };
+            reader.readAsDataURL(file);
+        }
+    };
+
     return (
         <div style={{ padding: '16px', maxWidth: '300px' }}>
             <h1 style={{ fontSize: '1.5rem', fontWeight: 'bold', margin: '0 0 8px 0' }}>
@@ -69,9 +112,32 @@ const AnnotationUI: React.FC<AnnotationUIProps> = ({ url }) => {
             </h1>
             {did ? (
                 <div style={{ marginBottom: '8px' }}>
-                    <p style={{ margin: '0', fontSize: '0.9rem' }}>
-                        Connected: {did.slice(0, 6)}...{did.slice(-4)}
-                    </p>
+                    <div style={{ display: 'flex', alignItems: 'center', marginBottom: '8px' }}>
+                        {profile && profile.profilePicture && (
+                            <img
+                                src={profile.profilePicture}
+                                alt="Profile"
+                                style={{ width: '32px', height: '32px', borderRadius: '50%', marginRight: '8px' }}
+                            />
+                        )}
+                        <p style={{ margin: '0', fontSize: '0.9rem' }}>
+                            Connected: {profile?.handle || 'Set your handle'}
+                        </p>
+                        <button
+                            onClick={() => setIsProfileModalOpen(true)}
+                            style={{
+                                marginLeft: '8px',
+                                padding: '2px 8px',
+                                background: '#007bff',
+                                color: '#fff',
+                                border: 'none',
+                                borderRadius: '3px',
+                                cursor: 'pointer',
+                            }}
+                        >
+                            Edit Profile
+                        </button>
+                    </div>
                     <button
                         onClick={signOut}
                         style={{
@@ -167,6 +233,71 @@ const AnnotationUI: React.FC<AnnotationUIProps> = ({ url }) => {
                     </div>
                 </div>
             )}
+            {isProfileModalOpen && (
+                <div style={{
+                    position: 'fixed',
+                    top: '50%',
+                    left: '50%',
+                    transform: 'translate(-50%, -50%)',
+                    background: '#fff',
+                    padding: '16px',
+                    borderRadius: '5px',
+                    boxShadow: '0 0 10px rgba(0,0,0,0.3)',
+                    zIndex: 1000,
+                }}>
+                    <h2 style={{ fontSize: '1.2rem', margin: '0 0 8px 0' }}>
+                        {profile ? 'Update Profile' : 'Set Profile'}
+                    </h2>
+                    <input
+                        type="text"
+                        placeholder="Enter your handle"
+                        value={newHandle}
+                        onChange={(e) => setNewHandle(e.target.value)}
+                        style={{ width: '100%', marginBottom: '8px' }}
+                    />
+                    <input
+                        type="file"
+                        accept="image/*"
+                        onChange={handleFileChange}
+                        style={{ width: '100%', marginBottom: '8px' }}
+                    />
+                    {newProfilePicture && (
+                        <img
+                            src={newProfilePicture}
+                            alt="Preview"
+                            style={{ width: '50px', height: '50px', borderRadius: '50%', marginBottom: '8px' }}
+                        />
+                    )}
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                        <button
+                            onClick={handleProfileSubmit}
+                            style={{
+                                padding: '5px 10px',
+                                background: '#28a745',
+                                color: '#fff',
+                                border: 'none',
+                                borderRadius: '3px',
+                                cursor: 'pointer',
+                            }}
+                        >
+                            Save
+                        </button>
+                        <button
+                            onClick={() => setIsProfileModalOpen(false)}
+                            style={{
+                                padding: '5px 10px',
+                                background: '#ff0000',
+                                color: '#fff',
+                                border: 'none',
+                                borderRadius: '3px',
+                                cursor: 'pointer',
+                            }}
+                        >
+                            Cancel
+                        </button>
+                    </div>
+                </div>
+            )}
             {error && <p style={{ color: 'red', margin: '0 0 8px 0' }}>{error}</p>}
             <textarea
                 value={annotation}
@@ -189,7 +320,7 @@ const AnnotationUI: React.FC<AnnotationUIProps> = ({ url }) => {
             >
                 Save
             </button>
-            <AnnotationList annotations={annotations} onDelete={handleDeleteAnnotation} />
+            <AnnotationList annotations={annotations} profiles={profiles} onDelete={handleDeleteAnnotation} />
         </div>
     );
 };

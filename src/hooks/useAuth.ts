@@ -1,22 +1,51 @@
 // src/hooks/useAuth.ts
 import { useState, useEffect } from 'react';
 import { generateKeyPair, signMessage, verifySignature, encryptPrivateKey, decryptPrivateKey } from '../utils/crypto';
+import { useUserProfiles } from './useUserProfiles';
+import { UserProfile } from '../shared/types/userProfile';
 
 interface UseAuthResult {
     did: string | null;
+    profile: UserProfile | null;
     authenticate: () => Promise<void>;
     signOut: () => void;
     exportIdentity: (passphrase: string) => Promise<string>;
     importIdentity: (identityData: string, passphrase: string) => Promise<void>;
+    createProfile: (handle: string, profilePicture: string) => Promise<void>;
+    updateProfile: (handle: string, profilePicture: string) => Promise<void>;
     error: string | null;
 }
 
 const useAuth = (): UseAuthResult => {
     const [did, setDid] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
+    const { profiles, createProfile, updateProfile, error: profilesError } = useUserProfiles(did);
+    const [profile, setProfile] = useState<UserProfile | null>(null);
+
+    useEffect(() => {
+        if (!chrome.storage || !chrome.storage.local) {
+            setError('chrome.storage.local is not available');
+            return;
+        }
+        chrome.storage.local.get(['did'], (result) => {
+            if (result.did) {
+                setDid(result.did);
+            }
+        });
+    }, []);
+
+    useEffect(() => {
+        if (did && profiles.size > 0) {
+            const userProfile = profiles.get(did);
+            setProfile(userProfile || null);
+        }
+    }, [did, profiles]);
 
     const authenticate = async () => {
         try {
+            if (!chrome.storage || !chrome.storage.local) {
+                throw new Error('chrome.storage.local is not available');
+            }
             const result = await new Promise<{ did?: string; privateKey?: string }>((resolve) => {
                 chrome.storage.local.get(['did', 'privateKey'], resolve);
             });
@@ -47,6 +76,7 @@ const useAuth = (): UseAuthResult => {
 
     const signOut = () => {
         setDid(null);
+        setProfile(null);
         setError(null);
         chrome.storage.local.remove(['did', 'privateKey'], () => {
             console.log('Cleared DID and private key from chrome.storage.local');
@@ -54,6 +84,9 @@ const useAuth = (): UseAuthResult => {
     };
 
     const exportIdentity = async (passphrase: string): Promise<string> => {
+        if (!chrome.storage || !chrome.storage.local) {
+            throw new Error('chrome.storage.local is not available');
+        }
         const result = await new Promise<{ did?: string; privateKey?: string }>((resolve) => {
             chrome.storage.local.get(['did', 'privateKey'], resolve);
         });
@@ -73,6 +106,9 @@ const useAuth = (): UseAuthResult => {
 
     const importIdentity = async (identityData: string, passphrase: string) => {
         try {
+            if (!chrome.storage || !chrome.storage.local) {
+                throw new Error('chrome.storage.local is not available');
+            }
             const { did, privateKey: encryptedPrivateKey } = JSON.parse(identityData);
             const privateKey = await decryptPrivateKey(encryptedPrivateKey, passphrase);
             const challenge = Date.now().toString();
@@ -94,15 +130,7 @@ const useAuth = (): UseAuthResult => {
         }
     };
 
-    useEffect(() => {
-        chrome.storage.local.get(['did'], (result) => {
-            if (result.did) {
-                setDid(result.did);
-            }
-        });
-    }, []);
-
-    return { did, authenticate, signOut, exportIdentity, importIdentity, error };
+    return { did, profile, authenticate, signOut, exportIdentity, importIdentity, createProfile, updateProfile, error: error || profilesError };
 };
 
 export default useAuth;
