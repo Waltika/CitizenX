@@ -20,8 +20,8 @@ interface UseAuthResult {
 const useAuth = (): UseAuthResult => {
     const [did, setDid] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
-    const { profiles, loading, createProfile, updateProfile, error: profilesError } = useUserProfiles(did);
     const [profile, setProfile] = useState<UserProfile | null>(null);
+    const { profiles, loading, createProfile, updateProfile, error: profilesError } = useUserProfiles(did);
 
     useEffect(() => {
         const chromeStorage = chrome as typeof chrome;
@@ -33,14 +33,28 @@ const useAuth = (): UseAuthResult => {
             if (result.did) {
                 setDid(result.did);
                 console.log('useAuth: Initial DID from storage:', result.did);
-                // Check for DID mismatch in localStorage profiles
+                // Synchronously check localStorage for a matching profile
                 const localProfilesRaw = localStorage.getItem('citizenx-user-profiles') || '[]';
                 console.log('useAuth: Checking localStorage profiles for DID mismatch:', localProfilesRaw);
-                const localProfiles = JSON.parse(localProfilesRaw);
-                const matchingProfile = localProfiles.find((p: UserProfile) => p._id === result.did);
+                let localProfiles: UserProfile[];
+                try {
+                    localProfiles = JSON.parse(localProfilesRaw);
+                } catch (e) {
+                    console.error('useAuth: Failed to parse localStorage profiles:', e);
+                    localProfiles = [];
+                }
+                const matchingProfile = localProfiles.find((p: UserProfile) => {
+                    console.log('useAuth: Comparing DID', result.did, 'with profile _id', p._id);
+                    return p._id === result.did;
+                });
                 if (!matchingProfile && localProfiles.length > 0) {
                     console.log('useAuth: DID mismatch detected, clearing stale profiles');
                     localStorage.setItem('citizenx-user-profiles', JSON.stringify([]));
+                }
+                // Synchronously set the initial profile if found
+                if (matchingProfile) {
+                    console.log('useAuth: Setting initial profile from localStorage:', matchingProfile);
+                    setProfile(matchingProfile);
                 }
             } else {
                 console.log('useAuth: No DID found in storage');

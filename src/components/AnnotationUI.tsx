@@ -36,10 +36,12 @@ const AnnotationUI: React.FC<AnnotationUIProps> = ({ url }) => {
     const error = authError || dbError || annotationsError || profilesError;
 
     useEffect(() => {
-        console.log('AnnotationUI: Checking profile modal conditions - loading:', loading, 'did:', did, 'profile:', profile);
-        if (!loading && did && !profile) {
-            console.log('AnnotationUI: Opening Update Profile modal');
-            setIsProfileModalOpen(true);
+        if (!loading && did) {
+            console.log('AnnotationUI: Delayed check for profile modal - loading:', loading, 'did:', did, 'profile:', profile);
+            if (!profile) {
+                console.log('AnnotationUI: Opening Update Profile modal');
+                setIsProfileModalOpen(true);
+            }
         }
     }, [did, profile, loading]);
 
