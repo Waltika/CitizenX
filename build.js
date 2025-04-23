@@ -70,16 +70,12 @@ async function buildChromeExtension() {
     await copyFile(indexHtmlPath, resolve(chromeExtensionDir, 'sidepanel/index.html'));
     await rm(tempSidepanelDir, { recursive: true });
 
-    // Copy popup.html and popup.js
-    console.log('Copying popup.html...');
+    // Copy popupWalletConnector.js for wallet connection
+    console.log('Copying popupWalletConnector.js...');
+    await mkdir(resolve(chromeExtensionDir, 'content'), { recursive: true });
     await copyFile(
-        resolve(process.cwd(), 'src/popup.html'),
-        resolve(chromeExtensionDir, 'popup.html')
-    );
-    console.log('Copying popup.js...');
-    await copyFile(
-        resolve(process.cwd(), 'src/popup.js'),
-        resolve(chromeExtensionDir, 'popup.js')
+        resolve(process.cwd(), 'src/content/popupWalletConnector.js'),
+        resolve(chromeExtensionDir, 'content/popupWalletConnector.js')
     );
 
     // Copy background.js
@@ -144,7 +140,8 @@ async function main() {
     await Promise.all([
         copyStaticFiles(),
         buildChromeExtension(),
-        buildActiveContent(),
+        // Optionally build active-content if needed for deployment
+        process.env.BUILD_ACTIVE_CONTENT === 'true' ? buildActiveContent() : Promise.resolve(),
     ]);
 }
 

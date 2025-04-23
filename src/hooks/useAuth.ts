@@ -14,10 +14,10 @@ const useAuth = (): UseAuthResult => {
 
     const connectWallet = async () => {
         try {
-            // Open the popup to connect to MetaMask
+            console.log('Opening popup to connect wallet...');
             chrome.runtime.sendMessage({ type: 'OPEN_POPUP' });
-            // The popup will send a message back with the wallet address or error
         } catch (err) {
+            console.error('Error opening popup:', err);
             setError((err as Error).message);
             setWalletAddress(null);
         }
@@ -29,7 +29,8 @@ const useAuth = (): UseAuthResult => {
     };
 
     useEffect(() => {
-        const handleWalletMessages = (message: any) => {
+        const handleWalletMessages = (message: any, sender: any, sendResponse: (response?: any) => void) => {
+            console.log('Side panel received message:', message);
             if (message.type === 'WALLET_CONNECTED') {
                 setWalletAddress(message.walletAddress);
                 setError(null);
@@ -47,9 +48,11 @@ const useAuth = (): UseAuthResult => {
         };
 
         chrome.runtime.onMessage.addListener(handleWalletMessages);
+        console.log('Side panel listener set up');
 
         return () => {
             chrome.runtime.onMessage.removeListener(handleWalletMessages);
+            console.log('Side panel listener removed');
         };
     }, []);
 
