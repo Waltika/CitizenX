@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { useOrbitDB } from '../hooks/useOrbitDB';
 import { useAnnotations } from '../hooks/useAnnotations';
-import useAuth from '../hooks/useAuth';
+import useAuth from '../hooks/useAuth'; // Changed to default import
 import AnnotationList from './AnnotationList';
 
 interface AnnotationUIProps {
@@ -15,8 +15,7 @@ const AnnotationUI: React.FC<AnnotationUIProps> = ({ url }) => {
     const { db, error: dbError } = useOrbitDB(url);
     const { annotations, error: annotationsError, handleSaveAnnotation, handleDeleteAnnotation } = useAnnotations(
         url,
-        db,
-        walletAddress
+        db
     );
 
     const error = authError || dbError || annotationsError;
@@ -67,29 +66,40 @@ const AnnotationUI: React.FC<AnnotationUIProps> = ({ url }) => {
                     </button>
                 </div>
             )}
-            {error && <p style={{ color: 'red', margin: '0 0 8px 0' }}>{error}</p>}
-            <textarea
-                value={annotation}
-                onChange={(e) => setAnnotation(e.target.value)}
-                placeholder="Enter annotation..."
-                style={{ width: '100%', height: '80px', marginBottom: '8px' }}
-            />
-            <button
-                onClick={onSave}
-                disabled={!db}
-                style={{
-                    padding: '5px 10px',
-                    background: db ? '#28a745' : '#ccc',
-                    color: '#fff',
-                    border: 'none',
-                    borderRadius: '3px',
-                    cursor: db ? 'pointer' : 'not-allowed',
-                    marginBottom: '16px',
-                }}
-            >
-                Save
-            </button>
-            <AnnotationList annotations={annotations} onDelete={handleDeleteAnnotation} />
+            {error && (
+                <p style={{ color: 'red', margin: '0 0 8px 0' }}>{error}</p>
+            )}
+            <div style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>
+                <input
+                    type="text"
+                    value={annotation}
+                    onChange={(e) => setAnnotation(e.target.value)}
+                    placeholder="Enter annotation..."
+                    style={{
+                        flex: 1,
+                        padding: '5px',
+                        border: '1px solid #ccc',
+                        borderRadius: '3px',
+                    }}
+                />
+                <button
+                    onClick={onSave}
+                    disabled={!db}
+                    style={{
+                        padding: '5px 10px',
+                        background: db ? '#007bff' : '#ccc',
+                        color: '#fff',
+                        border: 'none',
+                        borderRadius: '3px',
+                        cursor: db ? 'pointer' : 'not-allowed',
+                    }}
+                >
+                    Save
+                </button>
+            </div>
+            <div style={{ maxHeight: '300px', overflowY: 'auto' }}>
+                <AnnotationList annotations={annotations} onDelete={handleDeleteAnnotation} />
+            </div>
         </div>
     );
 };

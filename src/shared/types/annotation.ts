@@ -4,5 +4,4 @@ export interface Annotation {
     url: string;
     text: string;
     timestamp: number;
-    walletAddress?: string; // Add walletAddress as an optional property
 }

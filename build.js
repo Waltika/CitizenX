@@ -70,12 +70,45 @@ async function buildChromeExtension() {
     await copyFile(indexHtmlPath, resolve(chromeExtensionDir, 'sidepanel/index.html'));
     await rm(tempSidepanelDir, { recursive: true });
 
-    // Copy popupWalletConnector.js for wallet connection
-    console.log('Copying popupWalletConnector.js...');
+    // Build content script (index.tsx)
+    console.log('Building content script (index.tsx)...');
+    const tempContentDir = resolve(process.cwd(), 'temp-content');
+    if (existsSync(tempContentDir)) {
+        await rm(tempContentDir, { recursive: true });
+    }
+    await build({
+        configFile: false,
+        plugins: [(await import('@vitejs/plugin-react')).default()],
+        resolve: {
+            alias: {
+                'events': 'events',
+            },
+        },
+        build: {
+            outDir: tempContentDir,
+            rollupOptions: {
+                input: resolve(process.cwd(), 'src/content/index.tsx'),
+                output: {
+                    entryFileNames: 'index.js',
+                    format: 'iife',
+                    inlineDynamicImports: false,
+                    preserveModules: false,
+                    manualChunks: () => undefined,
+                    compact: true,
+                    interop: 'compat',
+                },
+            },
+        },
+    });
     await mkdir(resolve(chromeExtensionDir, 'content'), { recursive: true });
+    await copyFile(resolve(tempContentDir, 'index.js'), resolve(chromeExtensionDir, 'content/index.js'));
+    await rm(tempContentDir, { recursive: true });
+
+    // Copy walletConnector.js (content script)
+    console.log('Copying walletConnector.js...');
     await copyFile(
-        resolve(process.cwd(), 'src/content/popupWalletConnector.js'),
-        resolve(chromeExtensionDir, 'content/popupWalletConnector.js')
+        resolve(process.cwd(), 'src/content/walletConnector.js'),
+        resolve(chromeExtensionDir, 'content/walletConnector.js')
     );
 
     // Copy background.js
@@ -140,7 +173,7 @@ async function main() {
     await Promise.all([
         copyStaticFiles(),
         buildChromeExtension(),
-        process.env.BUILD_ACTIVE_CONTENT === 'true' ? buildActiveContent() : Promise.resolve(),
+        buildActiveContent(),
     ]);
 }
 
