@@ -12,7 +12,7 @@ interface UseAnnotationsResult {
 
 const LOCAL_STORAGE_KEY = 'citizenx-pending-annotations';
 
-export const useAnnotations = (url: string, db: any, did: string | null): UseAnnotationsResult => {
+export const useAnnotations = (url: string, db: any, did: string | null, isDbReady: boolean): UseAnnotationsResult => {
     const [annotations, setAnnotations] = useState<Annotation[]>([]);
     const [error, setError] = useState<string | null>(null);
 
@@ -23,7 +23,13 @@ export const useAnnotations = (url: string, db: any, did: string | null): UseAnn
             if (pending) {
                 const pendingAnnotations = JSON.parse(pending);
                 const normalizedUrl = url.split('?')[0];
-                const urlPendingAnnotations = pendingAnnotations.filter((a: Annotation) => a.url === normalizedUrl);
+                const urlPendingAnnotations = pendingAnnotations
+                    .filter((a: Annotation) => a.url === normalizedUrl)
+                    .map((a: Annotation) => ({
+                        ...a,
+                        source: 'local', // Tag as local
+                        comments: (a.comments || []).map((c: Comment) => ({ ...c, source: 'local' })),
+                    }));
                 setAnnotations(urlPendingAnnotations);
             } else {
                 setAnnotations([]);
@@ -34,20 +40,29 @@ export const useAnnotations = (url: string, db: any, did: string | null): UseAnn
 
     useEffect(() => {
         async function initAnnotationsDB() {
-            if (!db) return;
+            if (!db || !isDbReady) return;
             try {
                 const normalizedUrl = url.split('?')[0];
                 const allDocs = await db.all();
                 const urlAnnotations = allDocs
                     .filter((doc: any) => doc.value.url === normalizedUrl)
-                    .map((doc: any) => doc.value);
+                    .map((doc: any) => ({
+                        ...doc.value,
+                        source: 'orbitdb', // Tag as orbitdb
+                        comments: (doc.value.comments || []).map((c: Comment) => ({ ...c, source: 'orbitdb' })),
+                    }));
 
                 // Merge OrbitDB annotations with localStorage annotations
                 const pending = localStorage.getItem(LOCAL_STORAGE_KEY) || '[]';
                 const pendingAnnotations = JSON.parse(pending);
-                const urlPendingAnnotations = pendingAnnotations.filter((a: Annotation) => a.url === normalizedUrl);
+                const urlPendingAnnotations = pendingAnnotations
+                    .filter((a: Annotation) => a.url === normalizedUrl)
+                    .map((a: Annotation) => ({
+                        ...a,
+                        source: 'local',
+                        comments: (a.comments || []).map((c: Comment) => ({ ...c, source: 'local' })),
+                    }));
 
-                // Combine annotations, avoiding duplicates by _id
                 const combinedAnnotations = [
                     ...urlAnnotations,
                     ...urlPendingAnnotations.filter(
@@ -60,12 +75,19 @@ export const useAnnotations = (url: string, db: any, did: string | null): UseAnn
                 if (pendingAnnotations.length > 0) {
                     for (const annotation of urlPendingAnnotations) {
                         try {
-                            await db.put(annotation);
-                            // Remove from pending if successfully published
+                            // Remove the source field before saving to OrbitDB
+                            const { source: _source, comments, ...annotationToSave } = annotation;
+                            annotationToSave.comments = comments.map(({ source: _commentSource, ...comment }: Comment) => comment);
+                            await db.put(annotationToSave);
                             const updatedPending = pendingAnnotations.filter((a: Annotation) => a._id !== annotation._id);
                             localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(updatedPending));
+                            // Update the source to orbitdb after successful save
                             setAnnotations((prev) =>
-                                prev.map((a) => (a._id === annotation._id ? annotation : a))
+                                prev.map((a) =>
+                                    a._id === annotation._id
+                                        ? { ...a, source: 'orbitdb', comments: a.comments.map((c) => ({ ...c, source: 'orbitdb' })) }
+                                        : a
+                                )
                             );
                         } catch (err) {
                             console.warn('Failed to publish pending annotation:', err);
@@ -75,29 +97,43 @@ export const useAnnotations = (url: string, db: any, did: string | null): UseAnn
             } catch (err) {
                 console.error('Failed to load annotations:', err);
                 setError('Failed to load annotations');
-                // On error, ensure localStorage annotations are still displayed
                 const pending = localStorage.getItem(LOCAL_STORAGE_KEY) || '[]';
                 const pendingAnnotations = JSON.parse(pending);
                 const normalizedUrl = url.split('?')[0];
-                const urlPendingAnnotations = pendingAnnotations.filter((a: Annotation) => a.url === normalizedUrl);
+                const urlPendingAnnotations = pendingAnnotations
+                    .filter((a: Annotation) => a.url === normalizedUrl)
+                    .map((a: Annotation) => ({
+                        ...a,
+                        source: 'local',
+                        comments: (a.comments || []).map((c: Comment) => ({ ...c, source: 'local' })),
+                    }));
                 setAnnotations(urlPendingAnnotations);
             }
         }
         initAnnotationsDB();
 
-        if (db) {
+        if (db && isDbReady) {
             db.events.on('update', async () => {
                 try {
                     const normalizedUrl = url.split('?')[0];
                     const allDocs = await db.all();
                     const urlAnnotations = allDocs
                         .filter((doc: any) => doc.value.url === normalizedUrl)
-                        .map((doc: any) => doc.value);
+                        .map((doc: any) => ({
+                            ...doc.value,
+                            source: 'orbitdb',
+                            comments: (doc.value.comments || []).map((c: Comment) => ({ ...c, source: 'orbitdb' })),
+                        }));
 
-                    // Merge with localStorage annotations
                     const pending = localStorage.getItem(LOCAL_STORAGE_KEY) || '[]';
                     const pendingAnnotations = JSON.parse(pending);
-                    const urlPendingAnnotations = pendingAnnotations.filter((a: Annotation) => a.url === normalizedUrl);
+                    const urlPendingAnnotations = pendingAnnotations
+                        .filter((a: Annotation) => a.url === normalizedUrl)
+                        .map((a: Annotation) => ({
+                            ...a,
+                            source: 'local',
+                            comments: (a.comments || []).map((c: Comment) => ({ ...c, source: 'local' })),
+                        }));
 
                     const combinedAnnotations = [
                         ...urlAnnotations,
@@ -112,13 +148,13 @@ export const useAnnotations = (url: string, db: any, did: string | null): UseAnn
                 }
             });
         }
-    }, [db, url]);
+    }, [db, url, isDbReady]);
 
     const handleSaveAnnotation = async (content: string) => {
         if (!did) {
             throw new Error('User not authenticated');
         }
-        if (!db) {
+        if (!db || !isDbReady) {
             throw new Error('Database not initialized');
         }
         const annotation: Annotation = {
@@ -128,10 +164,11 @@ export const useAnnotations = (url: string, db: any, did: string | null): UseAnn
             timestamp: Date.now(),
             did,
             comments: [],
+            source: 'local', // Initially saved to local
         };
         try {
             await db.put(annotation);
-            setAnnotations((prev) => [...prev, annotation]);
+            setAnnotations((prev) => [...prev, { ...annotation, source: 'orbitdb' }]);
         } catch (err) {
             console.error('Failed to save annotation:', err);
             if (err.message.includes('NoPeersSubscribedToTopic')) {
@@ -149,7 +186,7 @@ export const useAnnotations = (url: string, db: any, did: string | null): UseAnn
     };
 
     const handleDeleteAnnotation = async (id: string) => {
-        if (!db) {
+        if (!db || !isDbReady) {
             throw new Error('Database not initialized');
         }
         try {
@@ -165,7 +202,7 @@ export const useAnnotations = (url: string, db: any, did: string | null): UseAnn
         if (!did) {
             throw new Error('User not authenticated');
         }
-        if (!db) {
+        if (!db || !isDbReady) {
             throw new Error('Database not initialized');
         }
         try {
@@ -178,14 +215,21 @@ export const useAnnotations = (url: string, db: any, did: string | null): UseAnn
                 text: content,
                 timestamp: Date.now(),
                 did,
+                source: 'local', // Initially saved to local
             };
             const updatedAnnotation: Annotation = {
                 ...annotation,
                 comments: [...(annotation.comments || []), comment],
             };
-            await db.put(updatedAnnotation);
+            const { source: _source, comments, ...annotationToSave } = updatedAnnotation;
+            annotationToSave.comments = comments.map(({ source: _commentSource, ...c }: Comment) => c);
+            await db.put(annotationToSave);
             setAnnotations((prev) =>
-                prev.map((a) => (a._id === annotationId ? updatedAnnotation : a))
+                prev.map((a) =>
+                    a._id === annotationId
+                        ? { ...updatedAnnotation, source: 'orbitdb', comments: updatedAnnotation.comments.map((c) => ({ ...c, source: 'orbitdb' })) }
+                        : a
+                )
             );
         } catch (err) {
             console.error('Failed to save comment:', err);
@@ -198,6 +242,7 @@ export const useAnnotations = (url: string, db: any, did: string | null): UseAnn
                     text: content,
                     timestamp: Date.now(),
                     did,
+                    source: 'local',
                 };
                 if (annotationIndex !== -1) {
                     pendingAnnotations[annotationIndex].comments = [
