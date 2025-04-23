@@ -1,151 +1,142 @@
 // src/utils/crypto.ts
-export async function generateKeyPair() {
-    const keyPair = await crypto.subtle.generateKey(
-        {
-            name: 'ECDSA',
-            namedCurve: 'P-256'
-        },
-        true, // extractable
-        ['sign', 'verify']
-    );
+import { encode, decode } from 'base64-arraybuffer';
 
-    const publicKey = await crypto.subtle.exportKey('spki', keyPair.publicKey);
-    const publicKeyBase64 = btoa(String.fromCharCode(...new Uint8Array(publicKey)));
-
-    const privateKey = await crypto.subtle.exportKey('pkcs8', keyPair.privateKey);
-    const privateKeyBase64 = btoa(String.fromCharCode(...new Uint8Array(privateKey)));
-
-    return {
-        publicKey: publicKeyBase64,
-        privateKey: privateKeyBase64,
-        rawPublicKey: keyPair.publicKey,
-        rawPrivateKey: keyPair.privateKey
-    };
+// Helper function to convert a string to an ArrayBuffer
+function stringToArrayBuffer(str: string): ArrayBuffer {
+    const encoder = new TextEncoder();
+    return encoder.encode(str).buffer;
 }
 
-export async function signMessage(message: string, privateKeyBase64: string) {
-    const privateKeyArray = Uint8Array.from(atob(privateKeyBase64), c => c.charCodeAt(0));
-    const privateKey = await crypto.subtle.importKey(
-        'pkcs8',
-        privateKeyArray,
-        { name: 'ECDSA', namedCurve: 'P-256' },
-        false,
-        ['sign']
-    );
-
-    const encoder = new TextEncoder();
-    const data = encoder.encode(message);
-    const signature = await crypto.subtle.sign(
-        { name: 'ECDSA', hash: 'SHA-256' },
-        privateKey,
-        data
-    );
-
-    return btoa(String.fromCharCode(...new Uint8Array(signature)));
+// Helper function to convert an ArrayBuffer to a string
+function arrayBufferToString(buffer: ArrayBuffer): string {
+    const decoder = new TextDecoder();
+    return decoder.decode(buffer);
 }
 
-export async function verifySignature(message: string, signatureBase64: string, publicKeyBase64: string) {
-    const publicKeyArray = Uint8Array.from(atob(publicKeyBase64), c => c.charCodeAt(0));
-    const publicKey = await crypto.subtle.importKey(
-        'spki',
-        publicKeyArray,
-        { name: 'ECDSA', namedCurve: 'P-256' },
-        false,
-        ['verify']
-    );
+// Generate a key pair and derive a DID from the public key
+export async function generateKeyPair(): Promise<{ did: string; privateKey: string }> {
+    try {
+        // Generate an ECDSA key pair using the P-256 curve
+        const keyPair = await crypto.subtle.generateKey(
+            {
+                name: 'ECDSA',
+                namedCurve: 'P-256',
+            },
+            true, // Extractable
+            ['sign', 'verify'] // Usages
+        );
 
-    const signatureArray = Uint8Array.from(atob(signatureBase64), c => c.charCodeAt(0));
-    const encoder = new TextEncoder();
-    const data = encoder.encode(message);
+        // Export the public key to derive the DID
+        const publicKey = await crypto.subtle.exportKey('spki', keyPair.publicKey);
+        const publicKeyBase64 = encode(publicKey);
+        const did = `did:key:${publicKeyBase64}`; // Simplified DID format
 
-    return await crypto.subtle.verify(
-        { name: 'ECDSA', hash: 'SHA-256' },
-        publicKey,
-        signatureArray,
-        data
-    );
+        // Export the private key as JWK (JSON Web Key) for storage
+        const privateKeyJwk = await crypto.subtle.exportKey('jwk', keyPair.privateKey);
+        const privateKeyString = JSON.stringify(privateKeyJwk);
+
+        return { did, privateKey: privateKeyString };
+    } catch (err) {
+        console.error('Failed to generate key pair:', err);
+        throw new Error('Failed to generate key pair');
+    }
 }
 
-export async function encryptPrivateKey(privateKeyBase64: string, passphrase: string) {
-    const encoder = new TextEncoder();
-    const passphraseData = encoder.encode(passphrase);
+// Export the key pair with encryption using a passphrase
+export async function exportKeyPair(did: string, privateKey: string, passphrase: string): Promise<string> {
+    try {
+        // Derive a key from the passphrase using PBKDF2
+        const passphraseKey = await crypto.subtle.importKey(
+            'raw',
+            stringToArrayBuffer(passphrase),
+            { name: 'PBKDF2' },
+            false,
+            ['deriveBits', 'deriveKey']
+        );
 
-    // Derive a key from the passphrase using PBKDF2
-    const salt = crypto.getRandomValues(new Uint8Array(16));
-    const keyMaterial = await crypto.subtle.importKey(
-        'raw',
-        passphraseData,
-        { name: 'PBKDF2' },
-        false,
-        ['deriveBits', 'deriveKey']
-    );
-    const derivedKey = await crypto.subtle.deriveKey(
-        {
-            name: 'PBKDF2',
-            salt: salt,
-            iterations: 100000,
-            hash: 'SHA-256'
-        },
-        keyMaterial,
-        { name: 'AES-GCM', length: 256 },
-        true,
-        ['encrypt', 'decrypt']
-    );
+        const salt = crypto.getRandomValues(new Uint8Array(16));
+        const derivedKey = await crypto.subtle.deriveKey(
+            {
+                name: 'PBKDF2',
+                salt,
+                iterations: 100000,
+                hash: 'SHA-256',
+            },
+            passphraseKey,
+            { name: 'AES-GCM', length: 256 },
+            false,
+            ['encrypt']
+        );
 
-    // Encrypt the private key
-    const iv = crypto.getRandomValues(new Uint8Array(12));
-    const privateKeyArray = encoder.encode(privateKeyBase64);
-    const encrypted = await crypto.subtle.encrypt(
-        { name: 'AES-GCM', iv },
-        derivedKey,
-        privateKeyArray
-    );
+        // Encrypt the private key with the derived key
+        const iv = crypto.getRandomValues(new Uint8Array(12));
+        const encryptedPrivateKey = await crypto.subtle.encrypt(
+            {
+                name: 'AES-GCM',
+                iv,
+            },
+            derivedKey,
+            stringToArrayBuffer(privateKey)
+        );
 
-    // Combine salt, iv, and encrypted data
-    const combined = new Uint8Array(salt.length + iv.length + encrypted.byteLength);
-    combined.set(salt, 0);
-    combined.set(iv, salt.length);
-    combined.set(new Uint8Array(encrypted), salt.length + iv.length);
+        // Combine the salt, IV, and encrypted data into a single string
+        const exportData = {
+            salt: encode(salt),
+            iv: encode(iv),
+            encryptedPrivateKey: encode(encryptedPrivateKey),
+            did,
+        };
 
-    return btoa(String.fromCharCode(...combined));
+        return JSON.stringify(exportData);
+    } catch (err) {
+        console.error('Failed to export key pair:', err);
+        throw new Error('Failed to export key pair');
+    }
 }
 
-export async function decryptPrivateKey(encryptedBase64: string, passphrase: string) {
-    const combined = Uint8Array.from(atob(encryptedBase64), c => c.charCodeAt(0));
-    const salt = combined.slice(0, 16);
-    const iv = combined.slice(16, 28);
-    const encryptedData = combined.slice(28);
+// Import the key pair by decrypting with a passphrase
+export async function importKeyPair(identityData: string, passphrase: string): Promise<{ did: string; privateKey: string }> {
+    try {
+        const parsedData = JSON.parse(identityData);
+        const { salt, iv, encryptedPrivateKey, did } = parsedData;
 
-    const encoder = new TextEncoder();
-    const passphraseData = encoder.encode(passphrase);
+        // Derive the key from the passphrase using PBKDF2
+        const passphraseKey = await crypto.subtle.importKey(
+            'raw',
+            stringToArrayBuffer(passphrase),
+            { name: 'PBKDF2' },
+            false,
+            ['deriveBits', 'deriveKey']
+        );
 
-    // Derive the key from the passphrase
-    const keyMaterial = await crypto.subtle.importKey(
-        'raw',
-        passphraseData,
-        { name: 'PBKDF2' },
-        false,
-        ['deriveBits', 'deriveKey']
-    );
-    const derivedKey = await crypto.subtle.deriveKey(
-        {
-            name: 'PBKDF2',
-            salt: salt,
-            iterations: 100000,
-            hash: 'SHA-256'
-        },
-        keyMaterial,
-        { name: 'AES-GCM', length: 256 },
-        true,
-        ['encrypt', 'decrypt']
-    );
+        const derivedKey = await crypto.subtle.deriveKey(
+            {
+                name: 'PBKDF2',
+                salt: decode(salt),
+                iterations: 100000,
+                hash: 'SHA-256',
+            },
+            passphraseKey,
+            { name: 'AES-GCM', length: 256 },
+            false,
+            ['decrypt']
+        );
 
-    // Decrypt the private key
-    const decrypted = await crypto.subtle.decrypt(
-        { name: 'AES-GCM', iv },
-        derivedKey,
-        encryptedData
-    );
+        // Decrypt the private key
+        const decryptedPrivateKey = await crypto.subtle.decrypt(
+            {
+                name: 'AES-GCM',
+                iv: decode(iv),
+            },
+            derivedKey,
+            decode(encryptedPrivateKey)
+        );
 
-    return new TextDecoder().decode(decrypted);
+        const privateKeyString = arrayBufferToString(decryptedPrivateKey);
+
+        return { did, privateKey: privateKeyString };
+    } catch (err) {
+        console.error('Failed to import key pair:', err);
+        throw new Error('Failed to import key pair');
+    }
 }

@@ -126,7 +126,139 @@ export default function useAuth(): UseAuthResult {
         };
     }, []);
 
-    // ... (rest of the code remains the same)
+    useEffect(() => {
+        if (!db) return;
+
+        db.events.on('update', async () => {
+            const orbitdbProfiles: Profile[] = [];
+            try {
+                const allDocsIterator = await db.all();
+                for await (const doc of allDocsIterator) {
+                    orbitdbProfiles.push(doc.value);
+                }
+            } catch (err) {
+                console.error('useAuth: Failed to iterate over database.all() in update:', err);
+                const allDocs = await db.get('');
+                orbitdbProfiles.push(...allDocs.map((doc: any) => doc.value));
+            }
+            const updatedProfiles = [...profiles, ...orbitdbProfiles];
+            const uniqueProfiles = Array.from(new Map(updatedProfiles.map((p: Profile) => [p._id, p])).values());
+            setProfiles(uniqueProfiles);
+            localStorage.setItem('citizenx-profiles', JSON.stringify(uniqueProfiles));
+            console.log('Profiles after refresh:', uniqueProfiles);
+
+            if (did) {
+                const userProfile = uniqueProfiles.find((p: Profile) => p._id === did);
+                console.log('useAuth: Profile for DID', did, ':', userProfile);
+                setProfile(userProfile || null);
+            }
+        });
+    }, [db, did]);
+
+    const authenticate = async () => {
+        try {
+            setLoading(true);
+            const { did: newDid, privateKey } = await generateKeyPair();
+            await chrome.storage.local.set({ did: newDid, privateKey });
+            console.log('useAuth: Key pair stored in chrome.storage.local');
+            console.log('useAuth: New authenticated DID:', newDid);
+            setDid(newDid);
+            setLoading(false);
+        } catch (err) {
+            console.error('Authentication failed:', err);
+            setError('Authentication failed');
+            setLoading(false);
+        }
+    };
+
+    const signOut = async () => {
+        // Instead of clearing all profiles, remove only the current user's profile
+        const localProfiles = localStorage.getItem('citizenx-profiles');
+        let updatedProfiles = localProfiles ? JSON.parse(localProfiles) : [];
+        updatedProfiles = updatedProfiles.filter((p: Profile) => p._id !== did);
+        console.log('useAuth: Updated profiles after sign-out:', updatedProfiles);
+        localStorage.setItem('citizenx-profiles', JSON.stringify(updatedProfiles));
+        setProfiles(updatedProfiles);
+        setProfile(null);
+        console.log('useAuth: Cleared DID and private key from chrome.storage.local');
+        await chrome.storage.local.remove(['did', 'privateKey']);
+        setDid(null);
+        console.log('useAuth: Loading profiles, loading:', loading, 'profiles:', updatedProfiles);
+    };
+
+    const exportIdentity = async (passphrase: string): Promise<string> => {
+        const result = await chrome.storage.local.get(['did', 'privateKey']);
+        if (!result.did || !result.privateKey) {
+            throw new Error('No identity found to export');
+        }
+        const identityData = await exportKeyPair(result.did, result.privateKey, passphrase);
+        return identityData;
+    };
+
+    const importIdentity = async (identityData: string, passphrase: string) => {
+        const { did: importedDid, privateKey } = await importKeyPair(identityData, passphrase);
+        await chrome.storage.local.set({ did: importedDid, privateKey });
+        setDid(importedDid);
+
+        const localProfiles = localStorage.getItem('citizenx-profiles');
+        const parsedProfiles = localProfiles ? JSON.parse(localProfiles) : [];
+        const userProfile = parsedProfiles.find((p: Profile) => p._id === importedDid);
+        if (userProfile) {
+            setProfile(userProfile);
+        }
+    };
+
+    const createProfile = async (handle: string, profilePicture: string) => {
+        if (!did || !db) {
+            throw new Error('User not authenticated or database not initialized');
+        }
+        const profile: Profile = {
+            _id: did,
+            handle,
+            profilePicture,
+        };
+        try {
+            await db.put(profile);
+            setProfile(profile);
+            const updatedProfiles = [...profiles, profile];
+            setProfiles(updatedProfiles);
+            localStorage.setItem('citizenx-profiles', JSON.stringify(updatedProfiles));
+            console.log('Profiles after local save:', updatedProfiles);
+        } catch (err) {
+            console.log('No peers subscribed, saving profile to localStorage:', profile);
+            const updatedProfiles = [...profiles, profile];
+            setProfiles(updatedProfiles);
+            localStorage.setItem('citizenx-profiles', JSON.stringify(updatedProfiles));
+            console.log('Profiles after local save:', updatedProfiles);
+            setProfile(profile);
+        }
+    };
+
+    const updateProfile = async (handle: string, profilePicture: string) => {
+        if (!did || !db) {
+            throw new Error('User not authenticated or database not initialized');
+        }
+        const updatedProfile: Profile = {
+            _id: did,
+            handle,
+            profilePicture,
+        };
+        try {
+            await db.put(updatedProfile);
+            setProfile(updatedProfile);
+            const updatedProfiles = profiles.map((p) => (p._id === did ? updatedProfile : p));
+            setProfiles(updatedProfiles);
+            localStorage.setItem('citizenx-profiles', JSON.stringify(updatedProfiles));
+        } catch (err) {
+            console.log('No peers subscribed, saving profile to localStorage:', updatedProfile);
+            const updatedProfiles = profiles.map((p) => (p._id === did ? updatedProfile : p));
+            setProfiles(updatedProfiles);
+            localStorage.setItem('citizenx-profiles', JSON.stringify(updatedProfiles));
+            setProfile(updatedProfile);
+        }
+    };
+
+    console.log('useAuth: Loading profiles, loading:', loading, 'profiles:', profiles);
 
     return {
         did,
