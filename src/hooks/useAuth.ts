@@ -147,9 +147,6 @@ export default function useAuth(): UseAuthResult {
             localStorage.setItem('citizenx-profiles', JSON.stringify(uniqueProfiles));
             console.log('Profiles after refresh:', uniqueProfiles);
 
-            // Dispatch a custom event to notify other hooks of the profile update
-            window.dispatchEvent(new Event('citizenx-profiles-updated'));
-
             if (did) {
                 const userProfile = uniqueProfiles.find((p: Profile) => p._id === did);
                 console.log('useAuth: Profile for DID', did, ':', userProfile);
@@ -175,7 +172,6 @@ export default function useAuth(): UseAuthResult {
     };
 
     const signOut = async () => {
-        // Instead of clearing all profiles, remove only the current user's profile
         const localProfiles = localStorage.getItem('citizenx-profiles');
         let updatedProfiles = localProfiles ? JSON.parse(localProfiles) : [];
         updatedProfiles = updatedProfiles.filter((p: Profile) => p._id !== did);
@@ -187,9 +183,6 @@ export default function useAuth(): UseAuthResult {
         await chrome.storage.local.remove(['did', 'privateKey']);
         setDid(null);
         console.log('useAuth: Loading profiles, loading:', loading, 'profiles:', updatedProfiles);
-
-        // Dispatch a custom event to notify other hooks of the profile update
-        window.dispatchEvent(new Event('citizenx-profiles-updated'));
     };
 
     const exportIdentity = async (passphrase: string): Promise<string> => {
@@ -212,9 +205,6 @@ export default function useAuth(): UseAuthResult {
         if (userProfile) {
             setProfile(userProfile);
         }
-
-        // Dispatch a custom event to notify other hooks of the profile update
-        window.dispatchEvent(new Event('citizenx-profiles-updated'));
     };
 
     const createProfile = async (handle: string, profilePicture: string) => {
@@ -233,9 +223,6 @@ export default function useAuth(): UseAuthResult {
             setProfiles(updatedProfiles);
             localStorage.setItem('citizenx-profiles', JSON.stringify(updatedProfiles));
             console.log('Profiles after local save:', updatedProfiles);
-
-            // Dispatch a custom event to notify other hooks of the profile update
-            window.dispatchEvent(new Event('citizenx-profiles-updated'));
         } catch (err) {
             console.log('No peers subscribed, saving profile to localStorage:', profile);
             const updatedProfiles = [...profiles, profile];
@@ -243,9 +230,6 @@ export default function useAuth(): UseAuthResult {
             localStorage.setItem('citizenx-profiles', JSON.stringify(updatedProfiles));
             console.log('Profiles after local save:', updatedProfiles);
             setProfile(profile);
-
-            // Dispatch a custom event to notify other hooks of the profile update
-            window.dispatchEvent(new Event('citizenx-profiles-updated'));
         }
     };
 
@@ -264,18 +248,12 @@ export default function useAuth(): UseAuthResult {
             const updatedProfiles = profiles.map((p) => (p._id === did ? updatedProfile : p));
             setProfiles(updatedProfiles);
             localStorage.setItem('citizenx-profiles', JSON.stringify(updatedProfiles));
-
-            // Dispatch a custom event to notify other hooks of the profile update
-            window.dispatchEvent(new Event('citizenx-profiles-updated'));
         } catch (err) {
             console.log('No peers subscribed, saving profile to localStorage:', updatedProfile);
             const updatedProfiles = profiles.map((p) => (p._id === did ? updatedProfile : p));
             setProfiles(updatedProfiles);
             localStorage.setItem('citizenx-profiles', JSON.stringify(updatedProfiles));
             setProfile(updatedProfile);
-
-            // Dispatch a custom event to notify other hooks of the profile update
-            window.dispatchEvent(new Event('citizenx-profiles-updated'));
         }
     };
 
