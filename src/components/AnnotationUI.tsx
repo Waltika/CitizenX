@@ -36,8 +36,9 @@ const AnnotationUI: React.FC<AnnotationUIProps> = ({ url }) => {
     const error = authError || dbError || annotationsError || profilesError;
 
     useEffect(() => {
-        // Only open the profile modal if loading is complete, did exists, and profile is null
+        console.log('AnnotationUI: Checking profile modal conditions - loading:', loading, 'did:', did, 'profile:', profile);
         if (!loading && did && !profile) {
+            console.log('AnnotationUI: Opening Update Profile modal');
             setIsProfileModalOpen(true);
         }
     }, [did, profile, loading]);

@@ -15,17 +15,18 @@ interface UseUserProfilesResult {
     profiles: Map<string, UserProfile>;
     createProfile: (handle: string, profilePicture: string) => Promise<void>;
     updateProfile: (handle: string, profilePicture: string) => Promise<void>;
-    loading: boolean; // New loading state
+    loading: boolean;
     error: string | null;
 }
 
 export const useUserProfiles = (did: string | null): UseUserProfilesResult => {
     const [profiles, setProfiles] = useState<Map<string, UserProfile>>(new Map());
-    const [loading, setLoading] = useState(true); // Initialize as loading
+    const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [db, setDb] = useState<any>(null);
 
     useEffect(() => {
+        console.log('useUserProfiles: Current DID:', did);
         async function initUserProfilesDB() {
             try {
                 console.log('Initializing user profiles database...');
@@ -78,7 +79,10 @@ export const useUserProfiles = (did: string | null): UseUserProfilesResult => {
                 });
 
                 // Merge with locally stored profiles
-                const localProfiles = JSON.parse(localStorage.getItem('citizenx-user-profiles') || '[]');
+                const localProfilesRaw = localStorage.getItem('citizenx-user-profiles') || '[]';
+                console.log('Raw localStorage profiles:', localProfilesRaw);
+                const localProfiles = JSON.parse(localProfilesRaw);
+                console.log('Parsed localStorage profiles:', localProfiles);
                 localProfiles.forEach((profile: UserProfile) => {
                     if (!profilesMap.has(profile._id)) {
                         profilesMap.set(profile._id, profile);
@@ -86,7 +90,7 @@ export const useUserProfiles = (did: string | null): UseUserProfilesResult => {
                 });
                 setProfiles(profilesMap);
                 console.log('Initial profiles loaded:', Array.from(profilesMap.entries()));
-                setLoading(false); // Loading complete
+                setLoading(false);
 
                 // Listen for updates from OrbitDB
                 userProfilesDb.events.on('update', async () => {
@@ -132,7 +136,7 @@ export const useUserProfiles = (did: string | null): UseUserProfilesResult => {
             } catch (err) {
                 console.error('Failed to initialize user profiles database:', err);
                 setError('Failed to initialize user profiles database');
-                setLoading(false); // Loading complete, even on error
+                setLoading(false);
             }
         }
         initUserProfilesDB();

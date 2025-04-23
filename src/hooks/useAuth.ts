@@ -7,7 +7,7 @@ import { UserProfile } from '../shared/types/userProfile';
 interface UseAuthResult {
     did: string | null;
     profile: UserProfile | null;
-    loading: boolean; // Add loading state
+    loading: boolean;
     authenticate: () => Promise<void>;
     signOut: () => void;
     exportIdentity: (passphrase: string) => Promise<string>;
@@ -32,14 +32,18 @@ const useAuth = (): UseAuthResult => {
         chromeStorage.storage.local.get(['did'], (result) => {
             if (result.did) {
                 setDid(result.did);
-                console.log('Initial DID from storage:', result.did);
+                console.log('useAuth: Initial DID from storage:', result.did);
+            } else {
+                console.log('useAuth: No DID found in storage');
             }
         });
     }, []);
 
     useEffect(() => {
-        if (did && !loading && profiles.size > 0) {
+        console.log('useAuth: Loading profiles, loading:', loading, 'profiles:', Array.from(profiles.entries()));
+        if (did && !loading) {
             const userProfile = profiles.get(did);
+            console.log('useAuth: Profile for DID', did, ':', userProfile);
             setProfile(userProfile || null);
         }
     }, [did, profiles, loading]);
@@ -56,7 +60,7 @@ const useAuth = (): UseAuthResult => {
 
             if (result.did && result.privateKey) {
                 setDid(result.did);
-                console.log('Authenticated DID:', result.did);
+                console.log('useAuth: Authenticated DID:', result.did);
                 const challenge = Date.now().toString();
                 const signature = await signMessage(challenge, result.privateKey);
                 const isValid = await verifySignature(challenge, signature, result.did);
@@ -67,14 +71,14 @@ const useAuth = (): UseAuthResult => {
             } else {
                 const keyPair = await generateKeyPair();
                 chromeStorage.storage.local.set({ did: keyPair.publicKey, privateKey: keyPair.privateKey }, () => {
-                    console.log('Key pair stored in chrome.storage.local');
+                    console.log('useAuth: Key pair stored in chrome.storage.local');
                     setDid(keyPair.publicKey);
-                    console.log('New authenticated DID:', keyPair.publicKey);
+                    console.log('useAuth: New authenticated DID:', keyPair.publicKey);
                     setError(null);
                 });
             }
         } catch (err) {
-            console.error('Authentication error:', err);
+            console.error('useAuth: Authentication error:', err);
             setError((err as Error).message);
             setDid(null);
         }
@@ -87,8 +91,11 @@ const useAuth = (): UseAuthResult => {
         const chromeStorage = chrome as typeof chrome;
         if (chromeStorage.storage && chromeStorage.storage.local) {
             chromeStorage.storage.local.remove(['did', 'privateKey'], () => {
-                console.log('Cleared DID and private key from chrome.storage.local');
+                console.log('useAuth: Cleared DID and private key from chrome.storage.local');
             });
+            // Clear profiles from localStorage to prevent stale data
+            localStorage.setItem('citizenx-user-profiles', JSON.stringify([]));
+            console.log('useAuth: Cleared profiles from localStorage');
         }
     };
 
@@ -129,13 +136,13 @@ const useAuth = (): UseAuthResult => {
                 throw new Error('Invalid key pair or passphrase');
             }
             chromeStorage.storage.local.set({ did, privateKey }, () => {
-                console.log('Imported identity stored in chrome.storage.local');
+                console.log('useAuth: Imported identity stored in chrome.storage.local');
                 setDid(did);
-                console.log('Imported DID:', did);
+                console.log('useAuth: Imported DID:', did);
                 setError(null);
             });
         } catch (err) {
-            console.error('Import error:', err);
+            console.error('useAuth: Import error:', err);
             setError((err as Error).message);
             setDid(null);
             throw err;
