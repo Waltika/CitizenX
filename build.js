@@ -110,6 +110,13 @@ async function buildChromeExtension() {
         resolve(process.cwd(), 'src/content/walletConnector.js'),
         resolve(chromeExtensionDir, 'content/walletConnector.js')
     );
+
+    // Copy background.js
+    console.log('Copying background.js...');
+    await copyFile(
+        resolve(process.cwd(), 'src/background.js'),
+        resolve(chromeExtensionDir, 'background.js')
+    );
 }
 
 async function buildActiveContent() {
