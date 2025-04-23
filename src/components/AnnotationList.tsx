@@ -10,10 +10,13 @@ interface AnnotationListProps {
 }
 
 const AnnotationList: React.FC<AnnotationListProps> = ({ annotations, profiles, onDelete }) => {
+    console.log('AnnotationList profiles:', Array.from(profiles.entries()));
     return (
         <div>
             {annotations.map((annotation) => {
+                console.log(`Annotation DID: ${annotation.did}`);
                 const creatorProfile = annotation.did ? profiles.get(annotation.did) : null;
+                console.log(`Creator profile for DID ${annotation.did}:`, creatorProfile);
                 return (
                     <div key={annotation._id} style={{ marginBottom: '8px', borderBottom: '1px solid #ccc', paddingBottom: '8px' }}>
                         <div style={{ display: 'flex', alignItems: 'center', marginBottom: '4px' }}>

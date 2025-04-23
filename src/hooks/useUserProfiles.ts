@@ -83,6 +83,7 @@ export const useUserProfiles = (did: string | null): UseUserProfilesResult => {
                     }
                 });
                 setProfiles(profilesMap);
+                console.log('Initial profiles loaded:', Array.from(profilesMap.entries()));
 
                 // Listen for updates from OrbitDB
                 userProfilesDb.events.on('update', async () => {
@@ -100,7 +101,7 @@ export const useUserProfiles = (did: string | null): UseUserProfilesResult => {
                         }
                     });
                     setProfiles(updatedProfilesMap);
-                    console.log('User profiles updated:', updatedProfilesMap);
+                    console.log('User profiles updated:', Array.from(updatedProfilesMap.entries()));
                 });
 
                 // Sync local profiles to OrbitDB when peers connect
@@ -123,6 +124,7 @@ export const useUserProfiles = (did: string | null): UseUserProfilesResult => {
                         updatedProfilesMap.set(doc.value._id, doc.value);
                     });
                     setProfiles(updatedProfilesMap);
+                    console.log('Profiles after sync:', Array.from(updatedProfilesMap.entries()));
                 });
             } catch (err) {
                 console.error('Failed to initialize user profiles database:', err);
@@ -152,6 +154,7 @@ export const useUserProfiles = (did: string | null): UseUserProfilesResult => {
             setProfiles((prev) => {
                 const newProfiles = new Map(prev);
                 newProfiles.set(did, profile);
+                console.log('Profiles after create:', Array.from(newProfiles.entries()));
                 return newProfiles;
             });
         } catch (err: any) {
@@ -170,6 +173,7 @@ export const useUserProfiles = (did: string | null): UseUserProfilesResult => {
                 setProfiles((prev) => {
                     const newProfiles = new Map(prev);
                     newProfiles.set(did, profile);
+                    console.log('Profiles after local save:', Array.from(newProfiles.entries()));
                     return newProfiles;
                 });
             } else {
@@ -203,6 +207,7 @@ export const useUserProfiles = (did: string | null): UseUserProfilesResult => {
             setProfiles((prev) => {
                 const newProfiles = new Map(prev);
                 newProfiles.set(did, updatedProfile);
+                console.log('Profiles after update:', Array.from(newProfiles.entries()));
                 return newProfiles;
             });
         } catch (err: any) {
@@ -226,6 +231,7 @@ export const useUserProfiles = (did: string | null): UseUserProfilesResult => {
                 setProfiles((prev) => {
                     const newProfiles = new Map(prev);
                     newProfiles.set(did, updatedProfile);
+                    console.log('Profiles after local update:', Array.from(newProfiles.entries()));
                     return newProfiles;
                 });
             } else {

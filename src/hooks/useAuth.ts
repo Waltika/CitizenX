@@ -23,13 +23,15 @@ const useAuth = (): UseAuthResult => {
     const [profile, setProfile] = useState<UserProfile | null>(null);
 
     useEffect(() => {
-        if (!chrome.storage || !chrome.storage.local) {
+        const chromeStorage = chrome as typeof chrome;
+        if (!chromeStorage.storage || !chromeStorage.storage.local) {
             setError('chrome.storage.local is not available');
             return;
         }
-        chrome.storage.local.get(['did'], (result) => {
+        chromeStorage.storage.local.get(['did'], (result) => {
             if (result.did) {
                 setDid(result.did);
+                console.log('Initial DID from storage:', result.did);
             }
         });
     }, []);
@@ -43,15 +45,17 @@ const useAuth = (): UseAuthResult => {
 
     const authenticate = async () => {
         try {
-            if (!chrome.storage || !chrome.storage.local) {
+            const chromeStorage = chrome as typeof chrome;
+            if (!chromeStorage.storage || !chromeStorage.storage.local) {
                 throw new Error('chrome.storage.local is not available');
             }
             const result = await new Promise<{ did?: string; privateKey?: string }>((resolve) => {
-                chrome.storage.local.get(['did', 'privateKey'], resolve);
+                chromeStorage.storage.local.get(['did', 'privateKey'], resolve);
             });
 
             if (result.did && result.privateKey) {
                 setDid(result.did);
+                console.log('Authenticated DID:', result.did);
                 const challenge = Date.now().toString();
                 const signature = await signMessage(challenge, result.privateKey);
                 const isValid = await verifySignature(challenge, signature, result.did);
@@ -61,9 +65,10 @@ const useAuth = (): UseAuthResult => {
                 setError(null);
             } else {
                 const keyPair = await generateKeyPair();
-                chrome.storage.local.set({ did: keyPair.publicKey, privateKey: keyPair.privateKey }, () => {
+                chromeStorage.storage.local.set({ did: keyPair.publicKey, privateKey: keyPair.privateKey }, () => {
                     console.log('Key pair stored in chrome.storage.local');
                     setDid(keyPair.publicKey);
+                    console.log('New authenticated DID:', keyPair.publicKey);
                     setError(null);
                 });
             }
@@ -78,17 +83,21 @@ const useAuth = (): UseAuthResult => {
         setDid(null);
         setProfile(null);
         setError(null);
-        chrome.storage.local.remove(['did', 'privateKey'], () => {
-            console.log('Cleared DID and private key from chrome.storage.local');
-        });
+        const chromeStorage = chrome as typeof chrome;
+        if (chromeStorage.storage && chromeStorage.storage.local) {
+            chromeStorage.storage.local.remove(['did', 'privateKey'], () => {
+                console.log('Cleared DID and private key from chrome.storage.local');
+            });
+        }
     };
 
     const exportIdentity = async (passphrase: string): Promise<string> => {
-        if (!chrome.storage || !chrome.storage.local) {
+        const chromeStorage = chrome as typeof chrome;
+        if (!chromeStorage.storage || !chromeStorage.storage.local) {
             throw new Error('chrome.storage.local is not available');
         }
         const result = await new Promise<{ did?: string; privateKey?: string }>((resolve) => {
-            chrome.storage.local.get(['did', 'privateKey'], resolve);
+            chromeStorage.storage.local.get(['did', 'privateKey'], resolve);
         });
 
         if (!result.did || !result.privateKey) {
@@ -106,7 +115,8 @@ const useAuth = (): UseAuthResult => {
 
     const importIdentity = async (identityData: string, passphrase: string) => {
         try {
-            if (!chrome.storage || !chrome.storage.local) {
+            const chromeStorage = chrome as typeof chrome;
+            if (!chromeStorage.storage || !chromeStorage.storage.local) {
                 throw new Error('chrome.storage.local is not available');
             }
             const { did, privateKey: encryptedPrivateKey } = JSON.parse(identityData);
@@ -117,9 +127,10 @@ const useAuth = (): UseAuthResult => {
             if (!isValid) {
                 throw new Error('Invalid key pair or passphrase');
             }
-            chrome.storage.local.set({ did, privateKey }, () => {
+            chromeStorage.storage.local.set({ did, privateKey }, () => {
                 console.log('Imported identity stored in chrome.storage.local');
                 setDid(did);
+                console.log('Imported DID:', did);
                 setError(null);
             });
         } catch (err) {

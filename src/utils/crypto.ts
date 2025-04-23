@@ -1,5 +1,4 @@
 // src/utils/crypto.ts
-// Generate a key pair (unchanged)
 export async function generateKeyPair() {
     const keyPair = await crypto.subtle.generateKey(
         {
@@ -24,7 +23,6 @@ export async function generateKeyPair() {
     };
 }
 
-// Sign a message (unchanged)
 export async function signMessage(message: string, privateKeyBase64: string) {
     const privateKeyArray = Uint8Array.from(atob(privateKeyBase64), c => c.charCodeAt(0));
     const privateKey = await crypto.subtle.importKey(
@@ -46,7 +44,6 @@ export async function signMessage(message: string, privateKeyBase64: string) {
     return btoa(String.fromCharCode(...new Uint8Array(signature)));
 }
 
-// Verify a signature (unchanged)
 export async function verifySignature(message: string, signatureBase64: string, publicKeyBase64: string) {
     const publicKeyArray = Uint8Array.from(atob(publicKeyBase64), c => c.charCodeAt(0));
     const publicKey = await crypto.subtle.importKey(
@@ -69,7 +66,6 @@ export async function verifySignature(message: string, signatureBase64: string, 
     );
 }
 
-// Encrypt the private key with a passphrase
 export async function encryptPrivateKey(privateKeyBase64: string, passphrase: string) {
     const encoder = new TextEncoder();
     const passphraseData = encoder.encode(passphrase);
@@ -114,7 +110,6 @@ export async function encryptPrivateKey(privateKeyBase64: string, passphrase: st
     return btoa(String.fromCharCode(...combined));
 }
 
-// Decrypt the private key with a passphrase
 export async function decryptPrivateKey(encryptedBase64: string, passphrase: string) {
     const combined = Uint8Array.from(atob(encryptedBase64), c => c.charCodeAt(0));
     const salt = combined.slice(0, 16);
