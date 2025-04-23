@@ -21,6 +21,7 @@ const AnnotationUI: React.FC<AnnotationUIProps> = ({ url }) => {
     const [importError, setImportError] = useState('');
     const [exportError, setExportError] = useState('');
     const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
+    const [isExportModalOpen, setIsExportModalOpen] = useState(false); // New state for export modal
     const [newHandle, setNewHandle] = useState('');
     const [newProfilePicture, setNewProfilePicture] = useState('');
     const [isSettingsMenuOpen, setIsSettingsMenuOpen] = useState(false);
@@ -66,7 +67,6 @@ const AnnotationUI: React.FC<AnnotationUIProps> = ({ url }) => {
             const identityData = await exportIdentity(passphrase);
             setExportedIdentity(identityData);
             setExportError('');
-            setIsSettingsMenuOpen(false);
         } catch (err) {
             setExportError((err as Error).message);
         }
@@ -123,6 +123,14 @@ const AnnotationUI: React.FC<AnnotationUIProps> = ({ url }) => {
 
     const toggleSettingsMenu = () => {
         setIsSettingsMenuOpen((prev) => !prev);
+    };
+
+    const openExportModal = () => {
+        setIsSettingsMenuOpen(false);
+        setIsExportModalOpen(true);
+        setPassphrase(''); // Reset passphrase
+        setExportedIdentity(''); // Reset exported identity
+        setExportError(''); // Reset error
     };
 
     return (
@@ -204,7 +212,7 @@ const AnnotationUI: React.FC<AnnotationUIProps> = ({ url }) => {
                                         Edit Profile
                                     </button>
                                     <button
-                                        onClick={() => setIsSettingsMenuOpen(false)} // We’ll handle export in a modal
+                                        onClick={openExportModal}
                                         style={{
                                             display: 'block',
                                             padding: '8px 16px',
@@ -395,6 +403,92 @@ const AnnotationUI: React.FC<AnnotationUIProps> = ({ url }) => {
                             Cancel
                         </button>
                     </div>
+                </div>
+            )}
+            {isExportModalOpen && (
+                <div style={{
+                    position: 'fixed',
+                    top: '50%',
+                    left: '50%',
+                    transform: 'translate(-50%, -50%)',
+                    background: '#fff',
+                    padding: '16px',
+                    borderRadius: '5px',
+                    boxShadow: '0 0 10px rgba(0,0,0,0.3)',
+                    zIndex: 1000,
+                }}>
+                    <h2 style={{ fontSize: '1.2rem', margin: '0 0 8px 0', color: '#333' }}>
+                        Export Identity
+                    </h2>
+                    <input
+                        type="password"
+                        placeholder="Enter passphrase to export"
+                        value={passphrase}
+                        onChange={(e) => setPassphrase(e.target.value)}
+                        style={{
+                            width: '100%',
+                            marginBottom: '8px',
+                            padding: '8px',
+                            border: '1px solid #e5e7eb',
+                            borderRadius: '5px',
+                            fontSize: '0.9rem',
+                            color: '#333',
+                            backgroundColor: '#fff',
+                        }}
+                    />
+                    <button
+                        onClick={handleExport}
+                        style={{
+                            padding: '8px 16px',
+                            background: '#2c7a7b',
+                            color: '#fff',
+                            border: 'none',
+                            borderRadius: '5px',
+                            cursor: 'pointer',
+                            width: '100%',
+                            fontSize: '0.9rem',
+                            marginBottom: '8px',
+                        }}
+                        onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#4a999a')}
+                        onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = '#2c7a7b')}
+                    >
+                        Export
+                    </button>
+                    {exportError && <p style={{ color: '#e11d48', margin: '4px 0 8px 0', fontSize: '0.8rem' }}>{exportError}</p>}
+                    {exportedIdentity && (
+                        <textarea
+                            value={exportedIdentity}
+                            readOnly
+                            style={{
+                                width: '100%',
+                                height: '60px',
+                                marginBottom: '8px',
+                                fontSize: '0.8rem',
+                                border: '1px solid #e5e7eb',
+                                borderRadius: '5px',
+                                padding: '8px',
+                                color: '#333',
+                                backgroundColor: '#fff',
+                            }}
+                        />
+                    )}
+                    <button
+                        onClick={() => setIsExportModalOpen(false)}
+                        style={{
+                            padding: '8px 16px',
+                            background: '#f97316',
+                            color: '#fff',
+                            border: 'none',
+                            borderRadius: '5px',
+                            cursor: 'pointer',
+                            width: '100%',
+                            fontSize: '0.9rem',
+                        }}
+                        onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#fb923c')}
+                        onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = '#f97316')}
+                    >
+                        Close
+                    </button>
                 </div>
             )}
             {error && <p style={{ color: '#e11d48', margin: '0 0 8px 0', fontSize: '0.8rem' }}>{error}</p>}
