@@ -4,4 +4,5 @@ export interface Annotation {
     url: string;
     text: string;
     timestamp: number;
+    walletAddress?: string; // Stores the did; optional for backward compatibility
 }

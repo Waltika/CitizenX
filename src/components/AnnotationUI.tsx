@@ -11,9 +11,14 @@ interface AnnotationUIProps {
 
 const AnnotationUI: React.FC<AnnotationUIProps> = ({ url }) => {
     const [annotation, setAnnotation] = useState('');
-    const { did, authenticate, signOut, error: authError } = useAuth();
+    const { did, authenticate, signOut, exportIdentity, importIdentity, error: authError } = useAuth();
+    const [exportedIdentity, setExportedIdentity] = useState('');
+    const [importData, setImportData] = useState('');
+    const [passphrase, setPassphrase] = useState('');
+    const [importPassphrase, setImportPassphrase] = useState('');
+    const [importError, setImportError] = useState('');
+    const [exportError, setExportError] = useState(''); // Local state for export errors
 
-    // Skip annotation logic for popup URLs (if any remain)
     const isPopupUrl = url.startsWith('chrome-extension://');
     const { db, error: dbError } = isPopupUrl ? { db: null, error: null } : useOrbitDB(url);
     const { annotations, error: annotationsError, handleSaveAnnotation, handleDeleteAnnotation } = isPopupUrl
@@ -25,6 +30,36 @@ const AnnotationUI: React.FC<AnnotationUIProps> = ({ url }) => {
     const onSave = async () => {
         await handleSaveAnnotation(annotation);
         setAnnotation('');
+    };
+
+    const handleExport = async () => {
+        try {
+            if (!passphrase) {
+                setExportError('Please enter a passphrase to export your identity');
+                return;
+            }
+            const identityData = await exportIdentity(passphrase);
+            setExportedIdentity(identityData);
+            setExportError('');
+        } catch (err) {
+            setExportError((err as Error).message);
+        }
+    };
+
+    const handleImport = async () => {
+        try {
+            if (!importData || !importPassphrase) {
+                setImportError('Please enter the identity data and passphrase');
+                return;
+            }
+            await importIdentity(importData, importPassphrase);
+            setImportData('');
+            setImportPassphrase('');
+            setImportError('');
+            setExportedIdentity('');
+        } catch (err) {
+            setImportError((err as Error).message);
+        }
     };
 
     return (
@@ -46,10 +81,42 @@ const AnnotationUI: React.FC<AnnotationUIProps> = ({ url }) => {
                             border: 'none',
                             borderRadius: '3px',
                             cursor: 'pointer',
+                            marginBottom: '8px',
                         }}
                     >
                         Sign Out
                     </button>
+                    <div style={{ marginBottom: '8px' }}>
+                        <input
+                            type="password"
+                            placeholder="Enter passphrase to export"
+                            value={passphrase}
+                            onChange={(e) => setPassphrase(e.target.value)}
+                            style={{ width: '100%', marginBottom: '4px' }}
+                        />
+                        <button
+                            onClick={handleExport}
+                            style={{
+                                padding: '5px 10px',
+                                background: '#007bff',
+                                color: '#fff',
+                                border: 'none',
+                                borderRadius: '3px',
+                                cursor: 'pointer',
+                                width: '100%',
+                            }}
+                        >
+                            Export Identity
+                        </button>
+                        {exportError && <p style={{ color: 'red', margin: '4px 0 0 0', fontSize: '0.8rem' }}>{exportError}</p>}
+                        {exportedIdentity && (
+                            <textarea
+                                value={exportedIdentity}
+                                readOnly
+                                style={{ width: '100%', height: '60px', marginTop: '4px', fontSize: '0.8rem' }}
+                            />
+                        )}
+                    </div>
                 </div>
             ) : (
                 <div style={{ marginBottom: '8px' }}>
@@ -62,10 +129,42 @@ const AnnotationUI: React.FC<AnnotationUIProps> = ({ url }) => {
                             border: 'none',
                             borderRadius: '3px',
                             cursor: 'pointer',
+                            marginBottom: '8px',
+                            width: '100%',
                         }}
                     >
                         Authenticate
                     </button>
+                    <div>
+                        <textarea
+                            value={importData}
+                            onChange={(e) => setImportData(e.target.value)}
+                            placeholder="Paste your exported identity here..."
+                            style={{ width: '100%', height: '60px', marginBottom: '4px', fontSize: '0.8rem' }}
+                        />
+                        <input
+                            type="password"
+                            placeholder="Enter passphrase to import"
+                            value={importPassphrase}
+                            onChange={(e) => setImportPassphrase(e.target.value)}
+                            style={{ width: '100%', marginBottom: '4px' }}
+                        />
+                        <button
+                            onClick={handleImport}
+                            style={{
+                                padding: '5px 10px',
+                                background: '#007bff',
+                                color: '#fff',
+                                border: 'none',
+                                borderRadius: '3px',
+                                cursor: 'pointer',
+                                width: '100%',
+                            }}
+                        >
+                            Import Identity
+                        </button>
+                        {importError && <p style={{ color: 'red', margin: '4px 0 0 0', fontSize: '0.8rem' }}>{importError}</p>}
+                    </div>
                 </div>
             )}
             {error && <p style={{ color: 'red', margin: '0 0 8px 0' }}>{error}</p>}

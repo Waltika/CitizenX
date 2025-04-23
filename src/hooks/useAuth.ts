@@ -1,11 +1,13 @@
 // src/hooks/useAuth.ts
 import { useState, useEffect } from 'react';
-import { generateKeyPair, signMessage, verifySignature } from '../utils/crypto';
+import { generateKeyPair, signMessage, verifySignature, encryptPrivateKey, decryptPrivateKey } from '../utils/crypto';
 
 interface UseAuthResult {
     did: string | null;
     authenticate: () => Promise<void>;
     signOut: () => void;
+    exportIdentity: (passphrase: string) => Promise<string>;
+    importIdentity: (identityData: string, passphrase: string) => Promise<void>;
     error: string | null;
 }
 
@@ -15,40 +17,27 @@ const useAuth = (): UseAuthResult => {
 
     const authenticate = async () => {
         try {
-            // Check if we already have a key pair in storage
-            chrome.storage.local.get(['did', 'privateKey'], async (result) => {
-                let publicKey: string;
-                let privateKey: string;
-
-                if (result.did && result.privateKey) {
-                    publicKey = result.did;
-                    privateKey = result.privateKey;
-                } else {
-                    // Generate a new key pair
-                    const keyPair = await generateKeyPair();
-                    publicKey = keyPair.publicKey;
-                    privateKey = keyPair.privateKey;
-
-                    // Store the key pair in chrome.storage.local
-                    chrome.storage.local.set({ did: publicKey, privateKey }, () => {
-                        console.log('Key pair stored in chrome.storage.local');
-                    });
-                }
-
-                // Use the public key as the DID
-                setDid(publicKey);
-
-                // Sign a challenge to verify the private key (optional)
-                const challenge = Date.now().toString();
-                const signature = await signMessage(challenge, privateKey);
-                const isValid = await verifySignature(challenge, signature, publicKey);
-
-                if (!isValid) {
-                    throw new Error('Failed to verify key pair');
-                }
-
-                setError(null);
+            const result = await new Promise<{ did?: string; privateKey?: string }>((resolve) => {
+                chrome.storage.local.get(['did', 'privateKey'], resolve);
             });
+
+            if (result.did && result.privateKey) {
+                setDid(result.did);
+                const challenge = Date.now().toString();
+                const signature = await signMessage(challenge, result.privateKey);
+                const isValid = await verifySignature(challenge, signature, result.did);
+                if (!isValid) {
+                    throw new Error('Failed to verify existing key pair');
+                }
+                setError(null);
+            } else {
+                const keyPair = await generateKeyPair();
+                chrome.storage.local.set({ did: keyPair.publicKey, privateKey: keyPair.privateKey }, () => {
+                    console.log('Key pair stored in chrome.storage.local');
+                    setDid(keyPair.publicKey);
+                    setError(null);
+                });
+            }
         } catch (err) {
             console.error('Authentication error:', err);
             setError((err as Error).message);
@@ -64,8 +53,48 @@ const useAuth = (): UseAuthResult => {
         });
     };
 
+    const exportIdentity = async (passphrase: string): Promise<string> => {
+        const result = await new Promise<{ did?: string; privateKey?: string }>((resolve) => {
+            chrome.storage.local.get(['did', 'privateKey'], resolve);
+        });
+
+        if (!result.did || !result.privateKey) {
+            throw new Error('No identity found to export');
+        }
+
+        const encryptedPrivateKey = await encryptPrivateKey(result.privateKey, passphrase);
+        const identityData = JSON.stringify({
+            did: result.did,
+            privateKey: encryptedPrivateKey
+        });
+
+        return identityData;
+    };
+
+    const importIdentity = async (identityData: string, passphrase: string) => {
+        try {
+            const { did, privateKey: encryptedPrivateKey } = JSON.parse(identityData);
+            const privateKey = await decryptPrivateKey(encryptedPrivateKey, passphrase);
+            const challenge = Date.now().toString();
+            const signature = await signMessage(challenge, privateKey);
+            const isValid = await verifySignature(challenge, signature, did);
+            if (!isValid) {
+                throw new Error('Invalid key pair or passphrase');
+            }
+            chrome.storage.local.set({ did, privateKey }, () => {
+                console.log('Imported identity stored in chrome.storage.local');
+                setDid(did);
+                setError(null);
+            });
+        } catch (err) {
+            console.error('Import error:', err);
+            setError((err as Error).message);
+            setDid(null);
+            throw err;
+        }
+    };
+
     useEffect(() => {
-        // Check for an existing DID on load
         chrome.storage.local.get(['did'], (result) => {
             if (result.did) {
                 setDid(result.did);
@@ -73,7 +102,7 @@ const useAuth = (): UseAuthResult => {
         });
     }, []);
 
-    return { did, authenticate, signOut, error };
+    return { did, authenticate, signOut, exportIdentity, importIdentity, error };
 };
 
 export default useAuth;
