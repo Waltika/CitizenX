@@ -25,6 +25,7 @@ export const useUserProfiles = (did: string | null): UseUserProfilesResult => {
     const [profiles, setProfiles] = useState<{ [did: string]: { handle: string; profilePicture: string } }>({});
     const [error, setError] = useState<string | null>(null);
     const [db, setDb] = useState<any>(null);
+    const [forceReload, setForceReload] = useState(0); // Add state to trigger reload
 
     useEffect(() => {
         async function initProfilesDB() {
@@ -120,6 +121,20 @@ export const useUserProfiles = (did: string | null): UseUserProfilesResult => {
             if (db) {
                 db.close();
             }
+        };
+    }, [did, forceReload]); // Add forceReload as a dependency
+
+    // Listen for profile updates from useAuth
+    useEffect(() => {
+        const handleProfilesUpdated = () => {
+            console.log('useUserProfiles: Profiles updated event received, forcing reload');
+            setForceReload((prev) => prev + 1); // Trigger useEffect to reload profiles
+        };
+
+        window.addEventListener('citizenx-profiles-updated', handleProfilesUpdated);
+
+        return () => {
+            window.removeEventListener('citizenx-profiles-updated', handleProfilesUpdated);
         };
     }, []);
 
