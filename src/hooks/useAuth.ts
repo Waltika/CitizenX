@@ -1,6 +1,6 @@
 // src/hooks/useAuth.ts
 import { useState, useEffect } from 'react';
-import { ethers } from 'ethers';
+import { ethers, BrowserProvider } from 'ethers'; // Use BrowserProvider for ethers v6
 
 interface UseAuthResult {
     walletAddress: string | null;
@@ -9,29 +9,46 @@ interface UseAuthResult {
     error: string | null;
 }
 
-export const useAuth = (): UseAuthResult => {
+const useAuth = (): UseAuthResult => {
     const [walletAddress, setWalletAddress] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
 
+    const connectWallet = async () => {
+        try {
+            if (!window.ethereum) {
+                throw new Error('Please install MetaMask or another Ethereum wallet provider.');
+            }
+
+            const provider = new BrowserProvider(window.ethereum);
+            await provider.send('eth_requestAccounts', []);
+            const signer = await provider.getSigner();
+            const address = await signer.getAddress();
+            setWalletAddress(address);
+            setError(null);
+        } catch (err) {
+            setError((err as Error).message);
+            setWalletAddress(null);
+        }
+    };
+
+    const signOut = () => {
+        setWalletAddress(null);
+        setError(null);
+    };
+
     useEffect(() => {
-        // Check if MetaMask is installed and if the user is already connected
-        const checkConnection = async () => {
+        const checkWalletConnection = async () => {
             if (window.ethereum) {
-                try {
-                    const provider = new ethers.BrowserProvider(window.ethereum);
-                    const accounts = await provider.listAccounts();
-                    if (accounts.length > 0) {
-                        setWalletAddress(accounts[0].address);
-                    }
-                } catch (err) {
-                    console.error('Failed to check wallet connection:', err);
+                const provider = new BrowserProvider(window.ethereum);
+                const accounts = await provider.listAccounts();
+                if (accounts.length > 0) {
+                    setWalletAddress(accounts[0].address);
                 }
             }
         };
 
-        checkConnection();
+        checkWalletConnection();
 
-        // Listen for account changes
         if (window.ethereum) {
             window.ethereum.on('accountsChanged', (accounts: string[]) => {
                 if (accounts.length > 0) {
@@ -42,7 +59,6 @@ export const useAuth = (): UseAuthResult => {
             });
         }
 
-        // Cleanup listener on unmount
         return () => {
             if (window.ethereum) {
                 window.ethereum.removeListener('accountsChanged', () => {});
@@ -50,17 +66,7 @@ export const useAuth = (): UseAuthResult => {
         };
     }, []);
 
-    const connectWallet = async () => {
-        if (!window.ethereum) {
-            setError('MetaMask is not installed. Please install it to continue.');
-            return;
-        }
+    return { walletAddress, connectWallet, signOut, error };
+};
 
-        try {
-            const provider = new ethers.BrowserProvider(window.ethereum);
-            const accounts = await provider.send('eth_requestAccounts', []);
-            setWalletAddress(accounts[0]);
-            setError(null);
-        } catch (err) {
-            setError('Failed to connect wallet. Please try again.');
-            console.error('Wallet connection
+export default useAuth;

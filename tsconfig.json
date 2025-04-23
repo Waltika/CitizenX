@@ -10,6 +10,10 @@
     "skipLibCheck": true,
     "baseUrl": "src",
     "types": ["jest", "@testing-library/jest-dom", "chrome"],
+    "typeRoots": [
+      "./node_modules/@types",
+      "./src/types" // Ensure this path is correct
+    ],
     "paths": {
       "@/*": ["*"],
       "@orbitdb/core": ["src/types/orbitdb-core"]
