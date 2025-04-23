@@ -21,7 +21,7 @@ const AnnotationUI: React.FC<AnnotationUIProps> = ({ url }) => {
     const [importError, setImportError] = useState('');
     const [exportError, setExportError] = useState('');
     const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
-    const [isExportModalOpen, setIsExportModalOpen] = useState(false); // New state for export modal
+    const [isExportModalOpen, setIsExportModalOpen] = useState(false);
     const [newHandle, setNewHandle] = useState('');
     const [newProfilePicture, setNewProfilePicture] = useState('');
     const [isSettingsMenuOpen, setIsSettingsMenuOpen] = useState(false);
@@ -128,36 +128,36 @@ const AnnotationUI: React.FC<AnnotationUIProps> = ({ url }) => {
     const openExportModal = () => {
         setIsSettingsMenuOpen(false);
         setIsExportModalOpen(true);
-        setPassphrase(''); // Reset passphrase
-        setExportedIdentity(''); // Reset exported identity
-        setExportError(''); // Reset error
+        setPassphrase('');
+        setExportedIdentity('');
+        setExportError('');
     };
 
     return (
-        <div style={{ padding: '16px', maxWidth: '300px', backgroundColor: '#f5f7fa', minHeight: '100vh', fontFamily: 'Arial, sans-serif' }}>
-            <h1 style={{ fontSize: '1.5rem', fontWeight: 'bold', margin: '0 0 16px 0', color: '#333' }}>
+        <div style={{ padding: '1rem', width: '100%', backgroundColor: '#f5f7fa', minHeight: '100vh', fontFamily: 'Arial, sans-serif' }}>
+            <h1 style={{ fontSize: '1.5rem', fontWeight: 'bold', margin: '0 0 1rem 0', color: '#333' }}>
                 CitizenX Annotations
             </h1>
             {did ? (
-                <div style={{ marginBottom: '16px', backgroundColor: '#fff', padding: '8px', borderRadius: '5px', border: '1px solid #e5e7eb' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                        <div style={{ display: 'flex', alignItems: 'center' }}>
+                <div style={{ marginBottom: '1rem', backgroundColor: '#fff', padding: '0.5rem', borderRadius: '5px', border: '1px solid #e5e7eb' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>
                             {profile && profile.profilePicture && (
                                 <img
                                     src={profile.profilePicture}
                                     alt="Profile"
-                                    style={{ width: '32px', height: '32px', borderRadius: '50%', marginRight: '8px' }}
+                                    style={{ width: '2rem', height: '2rem', borderRadius: '50%', marginRight: '0.5rem' }}
                                 />
                             )}
-                            <p style={{ margin: '0', fontSize: '0.9rem', color: '#333' }}>
+                            <p style={{ margin: '0', fontSize: '0.9rem', color: '#333', whiteSpace: 'nowrap' }}>
                                 Connected: {profile?.handle || 'Set your handle'}
                             </p>
                         </div>
-                        <div style={{ position: 'relative' }}>
+                        <div style={{ position: 'relative', flexShrink: 0 }}>
                             <button
                                 onClick={toggleSettingsMenu}
                                 style={{
-                                    padding: '4px',
+                                    padding: '0.25rem',
                                     background: 'none',
                                     border: 'none',
                                     cursor: 'pointer',
@@ -166,8 +166,8 @@ const AnnotationUI: React.FC<AnnotationUIProps> = ({ url }) => {
                             >
                                 <svg
                                     xmlns="http://www.w3.org/2000/svg"
-                                    width="20"
-                                    height="20"
+                                    width="1.25rem"
+                                    height="1.25rem"
                                     viewBox="0 0 24 24"
                                     fill="none"
                                     stroke="#2c7a7b"
@@ -197,7 +197,7 @@ const AnnotationUI: React.FC<AnnotationUIProps> = ({ url }) => {
                                         onClick={() => setIsProfileModalOpen(true)}
                                         style={{
                                             display: 'block',
-                                            padding: '8px 16px',
+                                            padding: '0.5rem 1rem',
                                             background: 'none',
                                             border: 'none',
                                             width: '100%',
@@ -215,7 +215,7 @@ const AnnotationUI: React.FC<AnnotationUIProps> = ({ url }) => {
                                         onClick={openExportModal}
                                         style={{
                                             display: 'block',
-                                            padding: '8px 16px',
+                                            padding: '0.5rem 1rem',
                                             background: 'none',
                                             border: 'none',
                                             width: '100%',
@@ -233,7 +233,7 @@ const AnnotationUI: React.FC<AnnotationUIProps> = ({ url }) => {
                                         onClick={signOut}
                                         style={{
                                             display: 'block',
-                                            padding: '8px 16px',
+                                            padding: '0.5rem 1rem',
                                             background: 'none',
                                             border: 'none',
                                             width: '100%',
@@ -253,11 +253,11 @@ const AnnotationUI: React.FC<AnnotationUIProps> = ({ url }) => {
                     </div>
                 </div>
             ) : (
-                <div style={{ marginBottom: '16px' }}>
+                <div style={{ marginBottom: '1rem' }}>
                     <button
                         onClick={authenticate}
                         style={{
-                            padding: '8px 16px',
+                            padding: '0.5rem 1rem',
                             background: '#2c7a7b',
                             color: '#fff',
                             border: 'none',
@@ -271,19 +271,19 @@ const AnnotationUI: React.FC<AnnotationUIProps> = ({ url }) => {
                     >
                         Authenticate
                     </button>
-                    <div style={{ marginTop: '8px' }}>
+                    <div style={{ marginTop: '0.5rem' }}>
                         <textarea
                             value={importData}
                             onChange={(e) => setImportData(e.target.value)}
                             placeholder="Paste your exported identity here..."
                             style={{
                                 width: '100%',
-                                height: '60px',
-                                marginBottom: '8px',
+                                height: '3.75rem', // Reduced height to scale better
+                                marginBottom: '0.5rem',
                                 fontSize: '0.8rem',
                                 border: '1px solid #e5e7eb',
                                 borderRadius: '5px',
-                                padding: '8px',
+                                padding: '0.5rem',
                                 color: '#333',
                                 backgroundColor: '#fff',
                             }}
@@ -295,8 +295,8 @@ const AnnotationUI: React.FC<AnnotationUIProps> = ({ url }) => {
                             onChange={(e) => setImportPassphrase(e.target.value)}
                             style={{
                                 width: '100%',
-                                marginBottom: '8px',
-                                padding: '8px',
+                                marginBottom: '0.5rem',
+                                padding: '0.5rem',
                                 border: '1px solid #e5e7eb',
                                 borderRadius: '5px',
                                 fontSize: '0.9rem',
@@ -307,7 +307,7 @@ const AnnotationUI: React.FC<AnnotationUIProps> = ({ url }) => {
                         <button
                             onClick={handleImport}
                             style={{
-                                padding: '8px 16px',
+                                padding: '0.5rem 1rem',
                                 background: '#2c7a7b',
                                 color: '#fff',
                                 border: 'none',
@@ -321,7 +321,7 @@ const AnnotationUI: React.FC<AnnotationUIProps> = ({ url }) => {
                         >
                             Import Identity
                         </button>
-                        {importError && <p style={{ color: '#e11d48', margin: '4px 0 0 0', fontSize: '0.8rem' }}>{importError}</p>}
+                        {importError && <p style={{ color: '#e11d48', margin: '0.25rem 0 0 0', fontSize: '0.8rem' }}>{importError}</p>}
                     </div>
                 </div>
             )}
@@ -332,12 +332,14 @@ const AnnotationUI: React.FC<AnnotationUIProps> = ({ url }) => {
                     left: '50%',
                     transform: 'translate(-50%, -50%)',
                     background: '#fff',
-                    padding: '16px',
+                    padding: '1rem',
                     borderRadius: '5px',
                     boxShadow: '0 0 10px rgba(0,0,0,0.3)',
                     zIndex: 1000,
+                    width: '90%',
+                    maxWidth: '400px',
                 }}>
-                    <h2 style={{ fontSize: '1.2rem', margin: '0 0 8px 0', color: '#333' }}>
+                    <h2 style={{ fontSize: '1.2rem', margin: '0 0 0.5rem 0', color: '#333' }}>
                         {profile ? 'Update Profile' : 'Set Profile'}
                     </h2>
                     <input
@@ -347,8 +349,8 @@ const AnnotationUI: React.FC<AnnotationUIProps> = ({ url }) => {
                         onChange={(e) => setNewHandle(e.target.value)}
                         style={{
                             width: '100%',
-                            marginBottom: '8px',
-                            padding: '8px',
+                            marginBottom: '0.5rem',
+                            padding: '0.5rem',
                             border: '1px solid #e5e7eb',
                             borderRadius: '5px',
                             fontSize: '0.9rem',
@@ -360,26 +362,27 @@ const AnnotationUI: React.FC<AnnotationUIProps> = ({ url }) => {
                         type="file"
                         accept="image/*"
                         onChange={handleFileChange}
-                        style={{ width: '100%', marginBottom: '8px' }}
+                        style={{ width: '100%', marginBottom: '0.5rem' }}
                     />
                     {newProfilePicture && (
                         <img
                             src={newProfilePicture}
                             alt="Preview"
-                            style={{ width: '50px', height: '50px', borderRadius: '50%', marginBottom: '8px' }}
+                            style={{ width: '3.125rem', height: '3.125rem', borderRadius: '50%', marginBottom: '0.5rem' }}
                         />
                     )}
-                    <div style={{ display: 'flex', gap: '8px' }}>
+                    <div style={{ display: 'flex', gap: '0.5rem' }}>
                         <button
                             onClick={handleProfileSubmit}
                             style={{
-                                padding: '8px 16px',
+                                padding: '0.5rem 1rem',
                                 background: '#2c7a7b',
                                 color: '#fff',
                                 border: 'none',
                                 borderRadius: '5px',
                                 cursor: 'pointer',
                                 fontSize: '0.9rem',
+                                flex: 1,
                             }}
                             onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#4a999a')}
                             onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = '#2c7a7b')}
@@ -389,13 +392,14 @@ const AnnotationUI: React.FC<AnnotationUIProps> = ({ url }) => {
                         <button
                             onClick={() => setIsProfileModalOpen(false)}
                             style={{
-                                padding: '8px 16px',
+                                padding: '0.5rem 1rem',
                                 background: '#f97316',
                                 color: '#fff',
                                 border: 'none',
                                 borderRadius: '5px',
                                 cursor: 'pointer',
                                 fontSize: '0.9rem',
+                                flex: 1,
                             }}
                             onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#fb923c')}
                             onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = '#f97316')}
@@ -412,12 +416,14 @@ const AnnotationUI: React.FC<AnnotationUIProps> = ({ url }) => {
                     left: '50%',
                     transform: 'translate(-50%, -50%)',
                     background: '#fff',
-                    padding: '16px',
+                    padding: '1rem',
                     borderRadius: '5px',
                     boxShadow: '0 0 10px rgba(0,0,0,0.3)',
                     zIndex: 1000,
+                    width: '90%',
+                    maxWidth: '400px',
                 }}>
-                    <h2 style={{ fontSize: '1.2rem', margin: '0 0 8px 0', color: '#333' }}>
+                    <h2 style={{ fontSize: '1.2rem', margin: '0 0 0.5rem 0', color: '#333' }}>
                         Export Identity
                     </h2>
                     <input
@@ -427,8 +433,8 @@ const AnnotationUI: React.FC<AnnotationUIProps> = ({ url }) => {
                         onChange={(e) => setPassphrase(e.target.value)}
                         style={{
                             width: '100%',
-                            marginBottom: '8px',
-                            padding: '8px',
+                            marginBottom: '0.5rem',
+                            padding: '0.5rem',
                             border: '1px solid #e5e7eb',
                             borderRadius: '5px',
                             fontSize: '0.9rem',
@@ -439,7 +445,7 @@ const AnnotationUI: React.FC<AnnotationUIProps> = ({ url }) => {
                     <button
                         onClick={handleExport}
                         style={{
-                            padding: '8px 16px',
+                            padding: '0.5rem 1rem',
                             background: '#2c7a7b',
                             color: '#fff',
                             border: 'none',
@@ -447,26 +453,26 @@ const AnnotationUI: React.FC<AnnotationUIProps> = ({ url }) => {
                             cursor: 'pointer',
                             width: '100%',
                             fontSize: '0.9rem',
-                            marginBottom: '8px',
+                            marginBottom: '0.5rem',
                         }}
                         onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#4a999a')}
                         onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = '#2c7a7b')}
                     >
                         Export
                     </button>
-                    {exportError && <p style={{ color: '#e11d48', margin: '4px 0 8px 0', fontSize: '0.8rem' }}>{exportError}</p>}
+                    {exportError && <p style={{ color: '#e11d48', margin: '0.25rem 0 0.5rem 0', fontSize: '0.8rem' }}>{exportError}</p>}
                     {exportedIdentity && (
                         <textarea
                             value={exportedIdentity}
                             readOnly
                             style={{
                                 width: '100%',
-                                height: '60px',
-                                marginBottom: '8px',
+                                height: '3.75rem',
+                                marginBottom: '0.5rem',
                                 fontSize: '0.8rem',
                                 border: '1px solid #e5e7eb',
                                 borderRadius: '5px',
-                                padding: '8px',
+                                padding: '0.5rem',
                                 color: '#333',
                                 backgroundColor: '#fff',
                             }}
@@ -475,7 +481,7 @@ const AnnotationUI: React.FC<AnnotationUIProps> = ({ url }) => {
                     <button
                         onClick={() => setIsExportModalOpen(false)}
                         style={{
-                            padding: '8px 16px',
+                            padding: '0.5rem 1rem',
                             background: '#f97316',
                             color: '#fff',
                             border: 'none',
@@ -491,19 +497,19 @@ const AnnotationUI: React.FC<AnnotationUIProps> = ({ url }) => {
                     </button>
                 </div>
             )}
-            {error && <p style={{ color: '#e11d48', margin: '0 0 8px 0', fontSize: '0.8rem' }}>{error}</p>}
+            {error && <p style={{ color: '#e11d48', margin: '0 0 0.5rem 0', fontSize: '0.8rem' }}>{error}</p>}
             <textarea
                 value={annotation}
                 onChange={(e) => setAnnotation(e.target.value)}
                 placeholder="Enter annotation..."
                 style={{
                     width: '100%',
-                    height: '80px',
-                    marginBottom: '8px',
+                    height: '5rem',
+                    marginBottom: '0.5rem',
                     fontSize: '0.9rem',
                     border: '1px solid #e5e7eb',
                     borderRadius: '5px',
-                    padding: '8px',
+                    padding: '0.5rem',
                     color: '#333',
                     backgroundColor: '#fff',
                 }}
@@ -512,13 +518,13 @@ const AnnotationUI: React.FC<AnnotationUIProps> = ({ url }) => {
                 onClick={onSave}
                 disabled={!db}
                 style={{
-                    padding: '8px 16px',
+                    padding: '0.5rem 1rem',
                     background: db ? '#2c7a7b' : '#d1d5db',
                     color: '#fff',
                     border: 'none',
                     borderRadius: '5px',
                     cursor: db ? 'pointer' : 'not-allowed',
-                    marginBottom: '16px',
+                    marginBottom: '1rem',
                     width: '100%',
                     fontSize: '0.9rem',
                 }}
