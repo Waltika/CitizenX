@@ -7,7 +7,7 @@ const loadActiveContent = () => {
     return new Promise<void>((resolve, reject) => {
         const script = document.createElement('script');
         const timestamp = Date.now(); // Use a timestamp for uniqueness
-        script.src = `https://waltika.github.io/citizenx/active-content/index.js?v=${timestamp}`;
+        script.src = `https://waltika.github.io/citizenx/dist/active-content/index.js?v=${timestamp}`;
         script.async = true;
         script.onload = () => {
             console.log('Active-content script loaded:', script.src);
