@@ -32,6 +32,7 @@ A decentralized Chrome extension for annotating websites in order to bring a kno
 ## Non Functional Requirements - Future Versions
 
 1. Add a pinning service - most probably our own but distributed among willing users and incentivize them in some crypto way
+2. Restructure the OrbitDB organization so that not every user replicates all of the annotations from the whole world but only those from pages they visited (or visit now) and pages they annotated
 
 
 
