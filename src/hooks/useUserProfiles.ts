@@ -59,6 +59,14 @@ export const useUserProfiles = (did: string | null): UseUserProfilesResult => {
                 const database = await orbitdb.open('citizenx-profiles', { type: 'documents' });
                 console.log('User profiles database opened:', database);
 
+                // Wait for the database to be ready
+                await new Promise<void>((resolve) => {
+                    database.events.on('ready', () => {
+                        console.log('Database ready:', database);
+                        resolve();
+                    });
+                });
+
                 setDb(database);
 
                 // Load profiles from localStorage as a fallback
@@ -67,11 +75,24 @@ export const useUserProfiles = (did: string | null): UseUserProfilesResult => {
                 const parsedLocalProfiles = localProfiles ? JSON.parse(localProfiles) : [];
                 console.log('useUserProfiles: Parsed localStorage profiles:', parsedLocalProfiles);
 
-                // Load profiles from OrbitDB using async iterator
-                const orbitdbProfiles: Profile[] = [];
+                // Load profiles from OrbitDB
+                console.log('Fetching all documents from OrbitDB...');
                 const allDocsIterator = await database.all();
-                for await (const doc of allDocsIterator) {
-                    orbitdbProfiles.push(doc.value);
+                console.log('Result of database.all():', allDocsIterator);
+                console.log('Is iterator?', typeof allDocsIterator[Symbol.asyncIterator] === 'function');
+                const orbitdbProfiles: Profile[] = [];
+
+                // Attempt to iterate using async iterator
+                try {
+                    for await (const doc of allDocsIterator) {
+                        console.log('OrbitDB document:', doc);
+                        orbitdbProfiles.push(doc.value);
+                    }
+                } catch (err) {
+                    console.error('Failed to iterate over database.all():', err);
+                    // Fallback: Try fetching documents using a different approach
+                    const allDocs = await database.get('');
+                    orbitdbProfiles.push(...allDocs.map((doc: any) => doc.value));
                 }
                 console.log('useUserProfiles: OrbitDB profiles:', orbitdbProfiles);
 
@@ -106,10 +127,19 @@ export const useUserProfiles = (did: string | null): UseUserProfilesResult => {
         if (!db) return;
 
         db.events.on('update', async () => {
-            const allDocsIterator = await db.all();
+            console.log('useUserProfiles: Database update event triggered');
             const orbitdbProfiles: Profile[] = [];
-            for await (const doc of allDocsIterator) {
-                orbitdbProfiles.push(doc.value);
+            try {
+                const allDocsIterator = await db.all();
+                console.log('useUserProfiles: Update - Result of database.all():', allDocsIterator);
+                for await (const doc of allDocsIterator) {
+                    orbitdbProfiles.push(doc.value);
+                }
+            } catch (err) {
+                console.error('useUserProfiles: Failed to iterate over database.all() in update:', err);
+                // Fallback: Try fetching documents using a different approach
+                const allDocs = await db.get('');
+                orbitdbProfiles.push(...allDocs.map((doc: any) => doc.value));
             }
             console.log('useUserProfiles: Updated OrbitDB profiles:', orbitdbProfiles);
 
