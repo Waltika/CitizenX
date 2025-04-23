@@ -1,0 +1,1 @@
+:root{--side-panel-max-width: 400px}body{margin:0;padding:0;font-family:Arial,sans-serif}#sidepanel-root{width:100%;max-width:var(--side-panel-max-width);box-sizing:border-box;overflow-x:hidden;padding:10px}.annotation-ui{width:100%;box-sizing:border-box}.annotation-ui *{max-width:100%;box-sizing:border-box;word-wrap:break-word}

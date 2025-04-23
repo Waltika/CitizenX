@@ -1,7 +1,7 @@
 // build.js
 import { build } from 'vite';
 import { resolve } from 'path';
-import { copyFile, mkdir, rm, rename, readFile, writeFile } from 'fs/promises';
+import { copyFile, mkdir, rm, rename, readFile, writeFile, readdir } from 'fs/promises';
 import { existsSync } from 'fs';
 
 const chromeExtensionDir = resolve(process.cwd(), 'dist/chrome-extension');
@@ -45,11 +45,12 @@ async function buildChromeExtension() {
         },
         build: {
             outDir: tempSidepanelDir,
+            cssCodeSplit: false, // Ensure CSS is extracted into a separate file
             rollupOptions: {
                 input: resolve(process.cwd(), 'src/sidepanel/index.html'),
                 output: {
                     entryFileNames: 'index.js',
-                    assetFileNames: 'assets/[name]-[hash].[ext]',
+                    assetFileNames: 'assets/[name].[ext]', // Remove hash for simplicity
                     format: 'iife',
                     inlineDynamicImports: false,
                     preserveModules: false,
@@ -63,9 +64,35 @@ async function buildChromeExtension() {
     });
     await mkdir(resolve(chromeExtensionDir, 'sidepanel'), { recursive: true });
     await copyFile(resolve(tempSidepanelDir, 'index.js'), resolve(chromeExtensionDir, 'sidepanel/index.js'));
+
+    // Update index.html to reference the JS and CSS files
     const indexHtmlPath = resolve(tempSidepanelDir, 'src/sidepanel/index.html');
     let indexHtmlContent = await readFile(indexHtmlPath, 'utf-8');
     indexHtmlContent = indexHtmlContent.replace('src="/index.js"', 'src="index.js"');
+
+    // Find and copy the CSS file
+    const assetsDir = resolve(tempSidepanelDir, 'assets');
+    if (existsSync(assetsDir)) {
+        const files = await readdir(assetsDir);
+        const cssFile = files.find((file) => file.endsWith('.css'));
+        if (cssFile) {
+            console.log(`Found CSS file: ${cssFile}, copying to sidepanel directory...`);
+            await copyFile(
+                resolve(assetsDir, cssFile),
+                resolve(chromeExtensionDir, 'sidepanel/index.css')
+            );
+            // Update index.html to include the CSS file
+            indexHtmlContent = indexHtmlContent.replace(
+                '</head>',
+                `<link rel="stylesheet" href="index.css"></head>`
+            );
+        } else {
+            console.warn('No CSS file found in temp-sidepanel/assets/');
+        }
+    } else {
+        console.warn('Assets directory not found in temp-sidepanel/');
+    }
+
     await writeFile(indexHtmlPath, indexHtmlContent);
     await copyFile(indexHtmlPath, resolve(chromeExtensionDir, 'sidepanel/index.html'));
 
@@ -102,7 +129,7 @@ async function buildActiveContent() {
                 output: {
                     entryFileNames: 'assets/index.js',
                     chunkFileNames: 'assets/[name].js',
-                    assetFileNames: 'assets/[name].[ext]',
+                    assetFileNames: 'assets/[name].[ext]', // Remove hash for simplicity
                 },
             },
             base: basePath,
@@ -118,6 +145,30 @@ async function buildActiveContent() {
         '/assets/index.js',
         '/CitizenX/dist/active-content/assets/index.js'
     );
+
+    // Find and copy the CSS file
+    const assetsDir = resolve(tempActiveContentDir, 'assets');
+    if (existsSync(assetsDir)) {
+        const files = await readdir(assetsDir);
+        const cssFile = files.find((file) => file.endsWith('.css'));
+        if (cssFile) {
+            console.log(`Found CSS file: ${cssFile}, copying to active-content directory...`);
+            await copyFile(
+                resolve(assetsDir, cssFile),
+                resolve(activeContentDir, 'index.css')
+            );
+            // Update index.html to include the CSS file
+            indexHtmlContent = indexHtmlContent.replace(
+                '</head>',
+                `<link rel="stylesheet" href="index.css"></head>`
+            );
+        } else {
+            console.warn('No CSS file found in temp-active-content/assets/');
+        }
+    } else {
+        console.warn('Assets directory not found in temp-active-content/');
+    }
+
     await writeFile(indexHtmlPath, indexHtmlContent);
     await rename(indexHtmlPath, resolve(activeContentDir, 'index.html'));
     await mkdir(resolve(activeContentDir, 'assets'), { recursive: true });
