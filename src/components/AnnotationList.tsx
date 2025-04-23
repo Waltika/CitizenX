@@ -18,7 +18,7 @@ const AnnotationList: React.FC<AnnotationListProps> = ({ annotations, profiles, 
                 const creatorProfile = annotation.did ? profiles.get(annotation.did) : null;
                 console.log(`Creator profile for DID ${annotation.did}:`, creatorProfile);
                 return (
-                    <div key={annotation._id} style={{ marginBottom: '8px', borderBottom: '1px solid #ccc', paddingBottom: '8px' }}>
+                    <div key={annotation._id} style={{ marginBottom: '8px', borderBottom: '1px solid #e5e7eb', paddingBottom: '8px' }}>
                         <div style={{ display: 'flex', alignItems: 'center', marginBottom: '4px' }}>
                             {creatorProfile?.profilePicture && (
                                 <img
@@ -27,22 +27,25 @@ const AnnotationList: React.FC<AnnotationListProps> = ({ annotations, profiles, 
                                     style={{ width: '24px', height: '24px', borderRadius: '50%', marginRight: '8px' }}
                                 />
                             )}
-                            <span style={{ fontSize: '0.8rem', fontWeight: 'bold' }}>
+                            <span style={{ fontSize: '0.8rem', fontWeight: 'bold', color: '#333' }}>
                                 {creatorProfile?.handle || (annotation.did ? `${annotation.did.slice(0, 6)}...${annotation.did.slice(-4)}` : 'Unknown')}
                             </span>
                         </div>
-                        <p style={{ margin: '0', fontSize: '0.9rem' }}>{annotation.text}</p>
+                        <p style={{ margin: '0', fontSize: '0.9rem', color: '#333' }}>{annotation.text}</p>
                         <button
                             onClick={() => onDelete(annotation._id)}
                             style={{
-                                padding: '2px 8px',
-                                background: '#ff0000',
+                                padding: '4px 8px',
+                                background: '#f97316',
                                 color: '#fff',
                                 border: 'none',
-                                borderRadius: '3px',
+                                borderRadius: '5px',
                                 cursor: 'pointer',
                                 marginTop: '4px',
+                                fontSize: '0.8rem',
                             }}
+                            onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#fb923c')}
+                            onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = '#f97316')}
                         >
                             Delete
                         </button>

@@ -1,5 +1,5 @@
-// src/components/AnnotationUI.tsx (updated)
-import React, { useState, useEffect } from 'react';
+// src/components/AnnotationUI.tsx
+import React, { useState, useEffect, useRef } from 'react';
 import { useOrbitDB } from '../hooks/useOrbitDB';
 import { useAnnotations } from '../hooks/useAnnotations';
 import { useUserProfiles } from '../hooks/useUserProfiles';
@@ -23,6 +23,8 @@ const AnnotationUI: React.FC<AnnotationUIProps> = ({ url }) => {
     const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
     const [newHandle, setNewHandle] = useState('');
     const [newProfilePicture, setNewProfilePicture] = useState('');
+    const [isSettingsMenuOpen, setIsSettingsMenuOpen] = useState(false);
+    const settingsMenuRef = useRef<HTMLDivElement>(null);
 
     const isPopupUrl = url.startsWith('chrome-extension://');
     const { db, error: dbError } = isPopupUrl ? { db: null, error: null } : useOrbitDB(url);
@@ -34,9 +36,21 @@ const AnnotationUI: React.FC<AnnotationUIProps> = ({ url }) => {
 
     useEffect(() => {
         if (did && !profile) {
-            setIsProfileModalOpen(true); // Prompt to set profile if none exists
+            setIsProfileModalOpen(true);
         }
     }, [did, profile]);
+
+    useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            if (settingsMenuRef.current && !settingsMenuRef.current.contains(event.target as Node)) {
+                setIsSettingsMenuOpen(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => {
+            document.removeEventListener('mousedown', handleClickOutside);
+        };
+    }, []);
 
     const onSave = async () => {
         await handleSaveAnnotation(annotation);
@@ -52,6 +66,7 @@ const AnnotationUI: React.FC<AnnotationUIProps> = ({ url }) => {
             const identityData = await exportIdentity(passphrase);
             setExportedIdentity(identityData);
             setExportError('');
+            setIsSettingsMenuOpen(false);
         } catch (err) {
             setExportError((err as Error).message);
         }
@@ -87,6 +102,7 @@ const AnnotationUI: React.FC<AnnotationUIProps> = ({ url }) => {
             setIsProfileModalOpen(false);
             setNewHandle('');
             setNewProfilePicture('');
+            setIsSettingsMenuOpen(false);
         } catch (err) {
             setExportError((err as Error).message);
         }
@@ -105,131 +121,199 @@ const AnnotationUI: React.FC<AnnotationUIProps> = ({ url }) => {
         }
     };
 
+    const toggleSettingsMenu = () => {
+        setIsSettingsMenuOpen((prev) => !prev);
+    };
+
     return (
-        <div style={{ padding: '16px', maxWidth: '300px' }}>
-            <h1 style={{ fontSize: '1.5rem', fontWeight: 'bold', margin: '0 0 8px 0' }}>
+        <div style={{ padding: '16px', maxWidth: '300px', backgroundColor: '#f5f7fa', minHeight: '100vh', fontFamily: 'Arial, sans-serif' }}>
+            <h1 style={{ fontSize: '1.5rem', fontWeight: 'bold', margin: '0 0 16px 0', color: '#333' }}>
                 CitizenX Annotations
             </h1>
             {did ? (
-                <div style={{ marginBottom: '8px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', marginBottom: '8px' }}>
-                        {profile && profile.profilePicture && (
-                            <img
-                                src={profile.profilePicture}
-                                alt="Profile"
-                                style={{ width: '32px', height: '32px', borderRadius: '50%', marginRight: '8px' }}
-                            />
-                        )}
-                        <p style={{ margin: '0', fontSize: '0.9rem' }}>
-                            Connected: {profile?.handle || 'Set your handle'}
-                        </p>
-                        <button
-                            onClick={() => setIsProfileModalOpen(true)}
-                            style={{
-                                marginLeft: '8px',
-                                padding: '2px 8px',
-                                background: '#007bff',
-                                color: '#fff',
-                                border: 'none',
-                                borderRadius: '3px',
-                                cursor: 'pointer',
-                            }}
-                        >
-                            Edit Profile
-                        </button>
-                    </div>
-                    <button
-                        onClick={signOut}
-                        style={{
-                            padding: '5px 10px',
-                            background: '#ff0000',
-                            color: '#fff',
-                            border: 'none',
-                            borderRadius: '3px',
-                            cursor: 'pointer',
-                            marginBottom: '8px',
-                        }}
-                    >
-                        Sign Out
-                    </button>
-                    <div style={{ marginBottom: '8px' }}>
-                        <input
-                            type="password"
-                            placeholder="Enter passphrase to export"
-                            value={passphrase}
-                            onChange={(e) => setPassphrase(e.target.value)}
-                            style={{ width: '100%', marginBottom: '4px' }}
-                        />
-                        <button
-                            onClick={handleExport}
-                            style={{
-                                padding: '5px 10px',
-                                background: '#007bff',
-                                color: '#fff',
-                                border: 'none',
-                                borderRadius: '3px',
-                                cursor: 'pointer',
-                                width: '100%',
-                            }}
-                        >
-                            Export Identity
-                        </button>
-                        {exportError && <p style={{ color: 'red', margin: '4px 0 0 0', fontSize: '0.8rem' }}>{exportError}</p>}
-                        {exportedIdentity && (
-                            <textarea
-                                value={exportedIdentity}
-                                readOnly
-                                style={{ width: '100%', height: '60px', marginTop: '4px', fontSize: '0.8rem' }}
-                            />
-                        )}
+                <div style={{ marginBottom: '16px', backgroundColor: '#fff', padding: '8px', borderRadius: '5px', border: '1px solid #e5e7eb' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <div style={{ display: 'flex', alignItems: 'center' }}>
+                            {profile && profile.profilePicture && (
+                                <img
+                                    src={profile.profilePicture}
+                                    alt="Profile"
+                                    style={{ width: '32px', height: '32px', borderRadius: '50%', marginRight: '8px' }}
+                                />
+                            )}
+                            <p style={{ margin: '0', fontSize: '0.9rem', color: '#333' }}>
+                                Connected: {profile?.handle || 'Set your handle'}
+                            </p>
+                        </div>
+                        <div style={{ position: 'relative' }}>
+                            <button
+                                onClick={toggleSettingsMenu}
+                                style={{
+                                    padding: '4px',
+                                    background: 'none',
+                                    border: 'none',
+                                    cursor: 'pointer',
+                                }}
+                                aria-label="Settings"
+                            >
+                                <svg
+                                    xmlns="http://www.w3.org/2000/svg"
+                                    width="20"
+                                    height="20"
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="#2c7a7b"
+                                    strokeWidth="2"
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                >
+                                    <circle cx="12" cy="12" r="3"></circle>
+                                    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+                                </svg>
+                            </button>
+                            {isSettingsMenuOpen && (
+                                <div
+                                    ref={settingsMenuRef}
+                                    style={{
+                                        position: 'absolute',
+                                        right: 0,
+                                        top: '100%',
+                                        background: '#fff',
+                                        border: '1px solid #e5e7eb',
+                                        borderRadius: '5px',
+                                        boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+                                        zIndex: 1000,
+                                    }}
+                                >
+                                    <button
+                                        onClick={() => setIsProfileModalOpen(true)}
+                                        style={{
+                                            display: 'block',
+                                            padding: '8px 16px',
+                                            background: 'none',
+                                            border: 'none',
+                                            width: '100%',
+                                            textAlign: 'left',
+                                            cursor: 'pointer',
+                                            color: '#333',
+                                            fontSize: '0.9rem',
+                                        }}
+                                        onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#f5f7fa')}
+                                        onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
+                                    >
+                                        Edit Profile
+                                    </button>
+                                    <button
+                                        onClick={() => setIsSettingsMenuOpen(false)} // We’ll handle export in a modal
+                                        style={{
+                                            display: 'block',
+                                            padding: '8px 16px',
+                                            background: 'none',
+                                            border: 'none',
+                                            width: '100%',
+                                            textAlign: 'left',
+                                            cursor: 'pointer',
+                                            color: '#333',
+                                            fontSize: '0.9rem',
+                                        }}
+                                        onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#f5f7fa')}
+                                        onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
+                                    >
+                                        Export Identity
+                                    </button>
+                                    <button
+                                        onClick={signOut}
+                                        style={{
+                                            display: 'block',
+                                            padding: '8px 16px',
+                                            background: 'none',
+                                            border: 'none',
+                                            width: '100%',
+                                            textAlign: 'left',
+                                            cursor: 'pointer',
+                                            color: '#f97316',
+                                            fontSize: '0.9rem',
+                                        }}
+                                        onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#f5f7fa')}
+                                        onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
+                                    >
+                                        Sign Out
+                                    </button>
+                                </div>
+                            )}
+                        </div>
                     </div>
                 </div>
             ) : (
-                <div style={{ marginBottom: '8px' }}>
+                <div style={{ marginBottom: '16px' }}>
                     <button
                         onClick={authenticate}
                         style={{
-                            padding: '5px 10px',
-                            background: '#007bff',
+                            padding: '8px 16px',
+                            background: '#2c7a7b',
                             color: '#fff',
                             border: 'none',
-                            borderRadius: '3px',
+                            borderRadius: '5px',
                             cursor: 'pointer',
-                            marginBottom: '8px',
                             width: '100%',
+                            fontSize: '0.9rem',
                         }}
+                        onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#4a999a')}
+                        onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = '#2c7a7b')}
                     >
                         Authenticate
                     </button>
-                    <div>
+                    <div style={{ marginTop: '8px' }}>
                         <textarea
                             value={importData}
                             onChange={(e) => setImportData(e.target.value)}
                             placeholder="Paste your exported identity here..."
-                            style={{ width: '100%', height: '60px', marginBottom: '4px', fontSize: '0.8rem' }}
+                            style={{
+                                width: '100%',
+                                height: '60px',
+                                marginBottom: '8px',
+                                fontSize: '0.8rem',
+                                border: '1px solid #e5e7eb',
+                                borderRadius: '5px',
+                                padding: '8px',
+                                color: '#333',
+                                backgroundColor: '#fff',
+                            }}
                         />
                         <input
                             type="password"
                             placeholder="Enter passphrase to import"
                             value={importPassphrase}
                             onChange={(e) => setImportPassphrase(e.target.value)}
-                            style={{ width: '100%', marginBottom: '4px' }}
+                            style={{
+                                width: '100%',
+                                marginBottom: '8px',
+                                padding: '8px',
+                                border: '1px solid #e5e7eb',
+                                borderRadius: '5px',
+                                fontSize: '0.9rem',
+                                color: '#333',
+                                backgroundColor: '#fff',
+                            }}
                         />
                         <button
                             onClick={handleImport}
                             style={{
-                                padding: '5px 10px',
-                                background: '#007bff',
+                                padding: '8px 16px',
+                                background: '#2c7a7b',
                                 color: '#fff',
                                 border: 'none',
-                                borderRadius: '3px',
+                                borderRadius: '5px',
                                 cursor: 'pointer',
                                 width: '100%',
+                                fontSize: '0.9rem',
                             }}
+                            onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#4a999a')}
+                            onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = '#2c7a7b')}
                         >
                             Import Identity
                         </button>
-                        {importError && <p style={{ color: 'red', margin: '4px 0 0 0', fontSize: '0.8rem' }}>{importError}</p>}
+                        {importError && <p style={{ color: '#e11d48', margin: '4px 0 0 0', fontSize: '0.8rem' }}>{importError}</p>}
                     </div>
                 </div>
             )}
@@ -245,7 +329,7 @@ const AnnotationUI: React.FC<AnnotationUIProps> = ({ url }) => {
                     boxShadow: '0 0 10px rgba(0,0,0,0.3)',
                     zIndex: 1000,
                 }}>
-                    <h2 style={{ fontSize: '1.2rem', margin: '0 0 8px 0' }}>
+                    <h2 style={{ fontSize: '1.2rem', margin: '0 0 8px 0', color: '#333' }}>
                         {profile ? 'Update Profile' : 'Set Profile'}
                     </h2>
                     <input
@@ -253,7 +337,16 @@ const AnnotationUI: React.FC<AnnotationUIProps> = ({ url }) => {
                         placeholder="Enter your handle"
                         value={newHandle}
                         onChange={(e) => setNewHandle(e.target.value)}
-                        style={{ width: '100%', marginBottom: '8px' }}
+                        style={{
+                            width: '100%',
+                            marginBottom: '8px',
+                            padding: '8px',
+                            border: '1px solid #e5e7eb',
+                            borderRadius: '5px',
+                            fontSize: '0.9rem',
+                            color: '#333',
+                            backgroundColor: '#fff',
+                        }}
                     />
                     <input
                         type="file"
@@ -272,51 +365,71 @@ const AnnotationUI: React.FC<AnnotationUIProps> = ({ url }) => {
                         <button
                             onClick={handleProfileSubmit}
                             style={{
-                                padding: '5px 10px',
-                                background: '#28a745',
+                                padding: '8px 16px',
+                                background: '#2c7a7b',
                                 color: '#fff',
                                 border: 'none',
-                                borderRadius: '3px',
+                                borderRadius: '5px',
                                 cursor: 'pointer',
+                                fontSize: '0.9rem',
                             }}
+                            onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#4a999a')}
+                            onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = '#2c7a7b')}
                         >
                             Save
                         </button>
                         <button
                             onClick={() => setIsProfileModalOpen(false)}
                             style={{
-                                padding: '5px 10px',
-                                background: '#ff0000',
+                                padding: '8px 16px',
+                                background: '#f97316',
                                 color: '#fff',
                                 border: 'none',
-                                borderRadius: '3px',
+                                borderRadius: '5px',
                                 cursor: 'pointer',
+                                fontSize: '0.9rem',
                             }}
+                            onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#fb923c')}
+                            onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = '#f97316')}
                         >
                             Cancel
                         </button>
                     </div>
                 </div>
             )}
-            {error && <p style={{ color: 'red', margin: '0 0 8px 0' }}>{error}</p>}
+            {error && <p style={{ color: '#e11d48', margin: '0 0 8px 0', fontSize: '0.8rem' }}>{error}</p>}
             <textarea
                 value={annotation}
                 onChange={(e) => setAnnotation(e.target.value)}
                 placeholder="Enter annotation..."
-                style={{ width: '100%', height: '80px', marginBottom: '8px' }}
+                style={{
+                    width: '100%',
+                    height: '80px',
+                    marginBottom: '8px',
+                    fontSize: '0.9rem',
+                    border: '1px solid #e5e7eb',
+                    borderRadius: '5px',
+                    padding: '8px',
+                    color: '#333',
+                    backgroundColor: '#fff',
+                }}
             />
             <button
                 onClick={onSave}
                 disabled={!db}
                 style={{
-                    padding: '5px 10px',
-                    background: db ? '#28a745' : '#ccc',
+                    padding: '8px 16px',
+                    background: db ? '#2c7a7b' : '#d1d5db',
                     color: '#fff',
                     border: 'none',
-                    borderRadius: '3px',
+                    borderRadius: '5px',
                     cursor: db ? 'pointer' : 'not-allowed',
                     marginBottom: '16px',
+                    width: '100%',
+                    fontSize: '0.9rem',
                 }}
+                onMouseEnter={(e) => db && (e.currentTarget.style.backgroundColor = '#4a999a')}
+                onMouseLeave={(e) => db && (e.currentTarget.style.backgroundColor = '#2c7a7b')}
             >
                 Save
             </button>
