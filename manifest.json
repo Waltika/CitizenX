@@ -22,8 +22,5 @@
   },
   "background": {
     "service_worker": "background.js"
-  },
-  "content_security_policy": {
-    "extension_pages": "script-src 'self' https://waltika.github.io; object-src 'self'"
   }
 }
