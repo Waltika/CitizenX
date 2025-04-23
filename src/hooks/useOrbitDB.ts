@@ -72,10 +72,16 @@ export const useOrbitDB = (url: string): UseOrbitDBResult => {
                 }
                 const orbitdb = await createOrbitDB({ ipfs });
                 console.log('OrbitDB instance created:', orbitdb);
-                const db = await orbitdb.open('citizenx-annotations', { type: 'documents' });
-                await db.load();
-                console.log('Database opened:', db);
-                setDb(db);
+                const database = await orbitdb.open('citizenx-annotations', { type: 'documents' });
+                // Wait for the database to be ready
+                await new Promise<void>((resolve) => {
+                    database.events.on('ready', () => {
+                        console.log('Database ready:', database);
+                        resolve();
+                    });
+                });
+                console.log('Database opened:', database);
+                setDb(database);
             } catch (error) {
                 console.error('OrbitDB initialization failed:', error);
                 setError('Failed to initialize decentralized storage');
