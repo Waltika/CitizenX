@@ -107,21 +107,20 @@ const useAuth = (): UseAuthResult => {
         }
     };
 
-    const signOut = () => {
-        setDid(null);
+    const signOut = async () => {
+        // Instead of clearing all profiles, remove only the current user's profile
+        const localProfiles = localStorage.getItem('citizenx-profiles');
+        let updatedProfiles = localProfiles ? JSON.parse(localProfiles) : [];
+        updatedProfiles = updatedProfiles.filter((p: Profile) => p._id !== did);
+        console.log('useAuth: Updated profiles after sign-out:', updatedProfiles);
+        localStorage.setItem('citizenx-profiles', JSON.stringify(updatedProfiles));
+        setProfiles(updatedProfiles);
         setProfile(null);
-        setError(null);
-        const chromeStorage = chrome as typeof chrome;
-        if (chromeStorage.storage && chromeStorage.storage.local) {
-            chromeStorage.storage.local.remove(['did', 'privateKey'], () => {
-                console.log('useAuth: Cleared DID and private key from chrome.storage.local');
-            });
-            // Clear profiles from localStorage to prevent stale data
-            localStorage.setItem('citizenx-user-profiles', JSON.stringify([]));
-            console.log('useAuth: Cleared profiles from localStorage');
-        }
+        console.log('useAuth: Cleared DID and private key from chrome.storage.local');
+        await chrome.storage.local.remove(['did', 'privateKey']);
+        setDid(null);
+        console.log('useAuth: Loading profiles, loading:', loading, 'profiles:', updatedProfiles);
     };
-
     const exportIdentity = async (passphrase: string): Promise<string> => {
         const chromeStorage = chrome as typeof chrome;
         if (!chromeStorage.storage || !chromeStorage.storage.local) {

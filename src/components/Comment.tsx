@@ -8,6 +8,8 @@ interface CommentProps {
 }
 
 const Comment: React.FC<CommentProps> = ({ comment, profiles }) => {
+    console.log(`Comment: Looking up DID ${comment.did} for comment ${comment._id}`);
+    console.log('Comment: Profiles available:', profiles);
     const profile = profiles[comment.did] || { handle: 'Unknown', profilePicture: '' };
 
     return (

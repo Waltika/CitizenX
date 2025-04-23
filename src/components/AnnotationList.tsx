@@ -23,9 +23,13 @@ const AnnotationList: React.FC<AnnotationListProps> = ({ annotations, profiles, 
         setCommentInputs((prev) => ({ ...prev, [annotationId]: '' }));
     };
 
+    console.log('AnnotationList: Profiles available:', profiles);
+    console.log('AnnotationList: Annotations:', annotations);
+
     return (
         <div style={{ marginTop: '1rem' }}>
             {annotations.map((annotation) => {
+                console.log(`AnnotationList: Looking up DID ${annotation.did} for annotation ${annotation._id}`);
                 const profile = profiles[annotation.did] || { handle: 'Unknown', profilePicture: '' };
                 return (
                     <div
