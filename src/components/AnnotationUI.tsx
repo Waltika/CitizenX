@@ -151,7 +151,7 @@ const AnnotationUI: React.FC<AnnotationUIProps> = ({ url }) => {
                                 />
                             )}
                             <p style={{ margin: '0', fontSize: '0.9rem', color: '#333', whiteSpace: 'nowrap' }}>
-                                {profile?.handle || 'Set your handle'}
+                                Connected: {profile?.handle || 'Set your handle'}
                             </p>
                         </div>
                         <div style={{ position: 'relative', flexShrink: 0 }}>
