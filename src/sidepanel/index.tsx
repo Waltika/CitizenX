@@ -2,13 +2,12 @@
 import React, { useState, useEffect } from 'react';
 import { createRoot } from 'react-dom/client';
 import AnnotationUI from '../components/AnnotationUI';
-import './index.css';
 
 const App: React.FC = () => {
     const [currentUrl, setCurrentUrl] = useState<string | null>(null);
-    const [isMinimized, setIsMinimized] = useState(false);
 
     useEffect(() => {
+        // Function to fetch the current tab's URL
         const fetchCurrentTabUrl = () => {
             chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
                 if (tabs[0]?.url) {
@@ -20,8 +19,10 @@ const App: React.FC = () => {
             });
         };
 
+        // Fetch the initial URL
         fetchCurrentTabUrl();
 
+        // Listen for tab updates (e.g., URL changes)
         const onTabUpdated = (tabId: number, changeInfo: chrome.tabs.TabChangeInfo, tab: chrome.tabs.Tab) => {
             if (changeInfo.url && tab.active) {
                 setCurrentUrl(changeInfo.url);
@@ -29,40 +30,31 @@ const App: React.FC = () => {
         };
         chrome.tabs.onUpdated.addListener(onTabUpdated);
 
+        // Listen for tab activation (e.g., switching tabs)
         const onTabActivated = () => {
             fetchCurrentTabUrl();
         };
         chrome.tabs.onActivated.addListener(onTabActivated);
 
+        // Cleanup listeners on unmount
         return () => {
             chrome.tabs.onUpdated.removeListener(onTabUpdated);
             chrome.tabs.onActivated.removeListener(onTabActivated);
         };
     }, []);
 
-    const toggleMinimize = () => {
-        setIsMinimized((prev) => !prev);
-    };
-
+    // Show a loading message until the URL is fetched
     if (currentUrl === null) {
         return <div>Loading...</div>;
     }
 
-    return (
-        <div className={`sidepanel-container ${isMinimized ? 'minimized' : ''}`}>
-            <button className="toggle-button" onClick={toggleMinimize}>
-                {isMinimized ? '▶' : '◀'}
-            </button>
-            <div className="sidepanel-content">
-                {!isMinimized && <AnnotationUI url={currentUrl} />}
-            </div>
-        </div>
-    );
+    return <AnnotationUI url={currentUrl} />;
 };
 
-const container = document.createElement('div');
-container.id = 'sidepanel-root';
-document.body.appendChild(container);
-
-const root = createRoot(container);
-root.render(<App />);
+const rootElement = document.getElementById('root');
+if (rootElement) {
+    const root = createRoot(rootElement);
+    root.render(<App />);
+} else {
+    console.error('Root element not found');
+}
