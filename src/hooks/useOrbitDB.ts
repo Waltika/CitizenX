@@ -58,7 +58,6 @@ export const useOrbitDB = (url: string): UseOrbitDBResult => {
                     ipfs.libp2p.addEventListener('peer:disconnect', (event) => {
                         console.log('Disconnected from peer:', event.detail.toString());
                     });
-                    // Add logging for peer discovery
                     ipfs.libp2p.addEventListener('peer:discovery', (event) => {
                         console.log('Discovered peer:', event.detail.id.toString());
                     });
@@ -73,15 +72,29 @@ export const useOrbitDB = (url: string): UseOrbitDBResult => {
                 const orbitdb = await createOrbitDB({ ipfs });
                 console.log('OrbitDB instance created:', orbitdb);
                 const database = await orbitdb.open('citizenx-annotations', { type: 'documents' });
-                // Wait for the database to be ready
-                await new Promise<void>((resolve) => {
-                    database.events.on('ready', () => {
-                        console.log('Database ready:', database);
-                        resolve();
-                    });
+
+                // Add event listeners to debug database status
+                database.events.on('ready', () => {
+                    console.log('Database ready:', database);
                 });
-                console.log('Database opened:', database);
-                setDb(database);
+                database.events.on('load.progress', (address, hash, entry, progress, total) => {
+                    console.log('Database load progress:', { address, hash, progress, total });
+                });
+                database.events.on('replicated', () => {
+                    console.log('Database replicated:', database);
+                });
+
+                // Set db immediately after opening, with a timeout to ensure readiness
+                const timeout = setTimeout(() => {
+                    console.log('Database open timeout reached, setting db:', database);
+                    setDb(database);
+                }, 5000); // 5-second timeout
+
+                database.events.on('ready', () => {
+                    clearTimeout(timeout);
+                    console.log('Database opened:', database);
+                    setDb(database);
+                });
             } catch (error) {
                 console.error('OrbitDB initialization failed:', error);
                 setError('Failed to initialize decentralized storage');
