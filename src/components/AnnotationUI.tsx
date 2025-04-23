@@ -28,10 +28,10 @@ const AnnotationUI: React.FC<AnnotationUIProps> = ({ url }) => {
     const settingsMenuRef = useRef<HTMLDivElement>(null);
 
     const isPopupUrl = url.startsWith('chrome-extension://');
-    const { db, error: dbError } = isPopupUrl ? { db: null, error: null } : useOrbitDB(url);
+    const { db, error: dbError, isReady } = isPopupUrl ? { db: null, error: null, isReady: true } : useOrbitDB(url);
     const { annotations, error: annotationsError, handleSaveAnnotation, handleDeleteAnnotation, handleSaveComment } = isPopupUrl
         ? { annotations: [], error: null, handleSaveAnnotation: async () => {}, handleDeleteAnnotation: async () => {}, handleSaveComment: async () => {} }
-        : useAnnotations(url, db, did);
+        : useAnnotations(url, db, did, isReady);
 
     const error = authError || dbError || annotationsError || profilesError;
 
@@ -56,8 +56,12 @@ const AnnotationUI: React.FC<AnnotationUIProps> = ({ url }) => {
     }, []);
 
     const onSave = async () => {
-        await handleSaveAnnotation(annotation);
-        setAnnotation('');
+        try {
+            await handleSaveAnnotation(annotation);
+            setAnnotation('');
+        } catch (err) {
+            console.error('Failed to save annotation in AnnotationUI:', err);
+        }
     };
 
     const handleExport = async () => {
@@ -515,20 +519,20 @@ const AnnotationUI: React.FC<AnnotationUIProps> = ({ url }) => {
             />
             <button
                 onClick={onSave}
-                disabled={!did || !db}
+                disabled={!did || !db || !isReady}
                 style={{
                     padding: '0.5rem 1rem',
-                    background: did && db ? '#2c7a7b' : '#d1d5db',
+                    background: did && db && isReady ? '#2c7a7b' : '#d1d5db',
                     color: '#fff',
                     border: 'none',
                     borderRadius: '5px',
-                    cursor: did && db ? 'pointer' : 'not-allowed',
+                    cursor: did && db && isReady ? 'pointer' : 'not-allowed',
                     marginBottom: '1rem',
                     width: '100%',
                     fontSize: '0.9rem',
                 }}
-                onMouseEnter={(e) => did && db && (e.currentTarget.style.backgroundColor = '#4a999a')}
-                onMouseLeave={(e) => did && db && (e.currentTarget.style.backgroundColor = '#2c7a7b')}
+                onMouseEnter={(e) => did && db && isReady && (e.currentTarget.style.backgroundColor = '#4a999a')}
+                onMouseLeave={(e) => did && db && isReady && (e.currentTarget.style.backgroundColor = '#2c7a7b')}
             >
                 Save
             </button>
@@ -536,10 +540,10 @@ const AnnotationUI: React.FC<AnnotationUIProps> = ({ url }) => {
                 annotations={annotations}
                 profiles={profiles}
                 onDelete={handleDeleteAnnotation}
-                onSaveComment={did && db ? handleSaveComment : undefined}
+                onSaveComment={did && db && isReady ? handleSaveComment : undefined}
             />
         </div>
     );
 };
 
-export default AnnotationUI;
+export default AnnotationUI; // Changed to default export

@@ -13,11 +13,13 @@ import { FaultTolerance } from '@libp2p/interface';
 interface UseOrbitDBResult {
     db: any;
     error: string | null;
+    isReady: boolean;
 }
 
 export const useOrbitDB = (url: string): UseOrbitDBResult => {
     const [db, setDb] = useState<any>(null);
     const [error, setError] = useState<string | null>(null);
+    const [isReady, setIsReady] = useState<boolean>(false);
 
     useEffect(() => {
         async function initOrbitDB() {
@@ -76,6 +78,7 @@ export const useOrbitDB = (url: string): UseOrbitDBResult => {
                 // Add event listeners to debug database status
                 database.events.on('ready', () => {
                     console.log('Database ready:', database);
+                    setIsReady(true);
                 });
                 database.events.on('load.progress', (address, hash, entry, progress, total) => {
                     console.log('Database load progress:', { address, hash, progress, total });
@@ -84,20 +87,23 @@ export const useOrbitDB = (url: string): UseOrbitDBResult => {
                     console.log('Database replicated:', database);
                 });
 
-                // Set db immediately after opening, with a timeout to ensure readiness
+                // Set db immediately after opening
+                console.log('Setting db immediately after open:', database);
+                setDb(database);
+
+                // Wait for the database to be ready
                 const timeout = setTimeout(() => {
-                    console.log('Database open timeout reached, setting db:', database);
-                    setDb(database);
-                }, 5000); // 5-second timeout
+                    console.log('Database open timeout reached, assuming ready:', database);
+                    setIsReady(true);
+                }, 5000);
 
                 database.events.on('ready', () => {
                     clearTimeout(timeout);
-                    console.log('Database opened:', database);
-                    setDb(database);
                 });
             } catch (error) {
                 console.error('OrbitDB initialization failed:', error);
                 setError('Failed to initialize decentralized storage');
+                setIsReady(true); // Allow fallback to localStorage even if initialization fails
             }
         }
         initOrbitDB();
@@ -109,5 +115,5 @@ export const useOrbitDB = (url: string): UseOrbitDBResult => {
         };
     }, [url]);
 
-    return { db, error };
+    return { db, error, isReady };
 };

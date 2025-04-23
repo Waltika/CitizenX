@@ -24,7 +24,9 @@ export const useAnnotations = (url: string, db: any, did: string | null): UseAnn
                 const pendingAnnotations = JSON.parse(pending);
                 const normalizedUrl = url.split('?')[0];
                 const urlPendingAnnotations = pendingAnnotations.filter((a: Annotation) => a.url === normalizedUrl);
-                setAnnotations((prev) => [...prev, ...urlPendingAnnotations]);
+                setAnnotations(urlPendingAnnotations);
+            } else {
+                setAnnotations([]);
             }
         };
         loadPendingAnnotations();
@@ -39,20 +41,32 @@ export const useAnnotations = (url: string, db: any, did: string | null): UseAnn
                 const urlAnnotations = allDocs
                     .filter((doc: any) => doc.value.url === normalizedUrl)
                     .map((doc: any) => doc.value);
-                setAnnotations(urlAnnotations);
 
-                // After loading from OrbitDB, try to publish any pending annotations
-                const pending = localStorage.getItem(LOCAL_STORAGE_KEY);
-                if (pending) {
-                    const pendingAnnotations = JSON.parse(pending);
-                    const urlPendingAnnotations = pendingAnnotations.filter((a: Annotation) => a.url === normalizedUrl);
+                // Merge OrbitDB annotations with localStorage annotations
+                const pending = localStorage.getItem(LOCAL_STORAGE_KEY) || '[]';
+                const pendingAnnotations = JSON.parse(pending);
+                const urlPendingAnnotations = pendingAnnotations.filter((a: Annotation) => a.url === normalizedUrl);
+
+                // Combine annotations, avoiding duplicates by _id
+                const combinedAnnotations = [
+                    ...urlAnnotations,
+                    ...urlPendingAnnotations.filter(
+                        (pending: Annotation) => !urlAnnotations.some((a: Annotation) => a._id === pending._id)
+                    ),
+                ];
+                setAnnotations(combinedAnnotations);
+
+                // Try to publish any pending annotations
+                if (pendingAnnotations.length > 0) {
                     for (const annotation of urlPendingAnnotations) {
                         try {
                             await db.put(annotation);
                             // Remove from pending if successfully published
                             const updatedPending = pendingAnnotations.filter((a: Annotation) => a._id !== annotation._id);
                             localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(updatedPending));
-                            setAnnotations((prev) => [...prev.filter((a) => a._id !== annotation._id), annotation]);
+                            setAnnotations((prev) =>
+                                prev.map((a) => (a._id === annotation._id ? annotation : a))
+                            );
                         } catch (err) {
                             console.warn('Failed to publish pending annotation:', err);
                         }
@@ -61,18 +75,41 @@ export const useAnnotations = (url: string, db: any, did: string | null): UseAnn
             } catch (err) {
                 console.error('Failed to load annotations:', err);
                 setError('Failed to load annotations');
+                // On error, ensure localStorage annotations are still displayed
+                const pending = localStorage.getItem(LOCAL_STORAGE_KEY) || '[]';
+                const pendingAnnotations = JSON.parse(pending);
+                const normalizedUrl = url.split('?')[0];
+                const urlPendingAnnotations = pendingAnnotations.filter((a: Annotation) => a.url === normalizedUrl);
+                setAnnotations(urlPendingAnnotations);
             }
         }
         initAnnotationsDB();
 
         if (db) {
             db.events.on('update', async () => {
-                const normalizedUrl = url.split('?')[0];
-                const allDocs = await db.all();
-                const urlAnnotations = allDocs
-                    .filter((doc: any) => doc.value.url === normalizedUrl)
-                    .map((doc: any) => doc.value);
-                setAnnotations(urlAnnotations);
+                try {
+                    const normalizedUrl = url.split('?')[0];
+                    const allDocs = await db.all();
+                    const urlAnnotations = allDocs
+                        .filter((doc: any) => doc.value.url === normalizedUrl)
+                        .map((doc: any) => doc.value);
+
+                    // Merge with localStorage annotations
+                    const pending = localStorage.getItem(LOCAL_STORAGE_KEY) || '[]';
+                    const pendingAnnotations = JSON.parse(pending);
+                    const urlPendingAnnotations = pendingAnnotations.filter((a: Annotation) => a.url === normalizedUrl);
+
+                    const combinedAnnotations = [
+                        ...urlAnnotations,
+                        ...urlPendingAnnotations.filter(
+                            (pending: Annotation) => !urlAnnotations.some((a: Annotation) => a._id === pending._id)
+                        ),
+                    ];
+                    setAnnotations(combinedAnnotations);
+                } catch (err) {
+                    console.error('Failed to update annotations:', err);
+                    setError('Failed to update annotations');
+                }
             });
         }
     }, [db, url]);
@@ -98,7 +135,6 @@ export const useAnnotations = (url: string, db: any, did: string | null): UseAnn
         } catch (err) {
             console.error('Failed to save annotation:', err);
             if (err.message.includes('NoPeersSubscribedToTopic')) {
-                // Save to localStorage as a fallback
                 const pending = localStorage.getItem(LOCAL_STORAGE_KEY) || '[]';
                 const pendingAnnotations = JSON.parse(pending);
                 pendingAnnotations.push(annotation);
@@ -154,7 +190,6 @@ export const useAnnotations = (url: string, db: any, did: string | null): UseAnn
         } catch (err) {
             console.error('Failed to save comment:', err);
             if (err.message.includes('NoPeersSubscribedToTopic')) {
-                // Update the annotation in localStorage
                 const pending = localStorage.getItem(LOCAL_STORAGE_KEY) || '[]';
                 let pendingAnnotations = JSON.parse(pending);
                 const annotationIndex = pendingAnnotations.findIndex((a: Annotation) => a._id === annotationId);
@@ -165,13 +200,11 @@ export const useAnnotations = (url: string, db: any, did: string | null): UseAnn
                     did,
                 };
                 if (annotationIndex !== -1) {
-                    // Update existing pending annotation
                     pendingAnnotations[annotationIndex].comments = [
                         ...(pendingAnnotations[annotationIndex].comments || []),
                         comment,
                     ];
                 } else {
-                    // Update the in-memory annotation and add to pending
                     const annotation = annotations.find((a) => a._id === annotationId);
                     if (annotation) {
                         const updatedAnnotation = {
