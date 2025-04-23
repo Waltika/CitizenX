@@ -45,12 +45,12 @@ async function buildChromeExtension() {
         },
         build: {
             outDir: tempSidepanelDir,
-            cssCodeSplit: false, // Ensure CSS is extracted into a separate file
+            cssCodeSplit: false,
             rollupOptions: {
                 input: resolve(process.cwd(), 'src/sidepanel/index.html'),
                 output: {
                     entryFileNames: 'index.js',
-                    assetFileNames: 'assets/[name].[ext]', // Remove hash for simplicity
+                    assetFileNames: 'assets/[name].[ext]',
                     format: 'iife',
                     inlineDynamicImports: false,
                     preserveModules: false,
@@ -129,7 +129,7 @@ async function buildActiveContent() {
                 output: {
                     entryFileNames: 'assets/index.js',
                     chunkFileNames: 'assets/[name].js',
-                    assetFileNames: 'assets/[name].[ext]', // Remove hash for simplicity
+                    assetFileNames: 'assets/[name].[ext]',
                 },
             },
             base: basePath,
@@ -141,6 +141,10 @@ async function buildActiveContent() {
     await mkdir(activeContentDir, { recursive: true });
     const indexHtmlPath = resolve(tempActiveContentDir, 'src/sidepanel/index.html');
     let indexHtmlContent = await readFile(indexHtmlPath, 'utf-8');
+
+    // Remove any existing CSS link tags to avoid duplicates
+    indexHtmlContent = indexHtmlContent.replace(/<link[^>]*href="[^"]*assets\/index\.css"[^>]*>/i, '');
+    // Update the JS path
     indexHtmlContent = indexHtmlContent.replace(
         '/assets/index.js',
         '/CitizenX/dist/active-content/assets/index.js'
@@ -157,7 +161,7 @@ async function buildActiveContent() {
                 resolve(assetsDir, cssFile),
                 resolve(activeContentDir, 'index.css')
             );
-            // Update index.html to include the CSS file
+            // Add the correct CSS link
             indexHtmlContent = indexHtmlContent.replace(
                 '</head>',
                 `<link rel="stylesheet" href="index.css"></head>`
