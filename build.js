@@ -140,7 +140,6 @@ async function main() {
     await Promise.all([
         copyStaticFiles(),
         buildChromeExtension(),
-        // Optionally build active-content if needed for deployment
         process.env.BUILD_ACTIVE_CONTENT === 'true' ? buildActiveContent() : Promise.resolve(),
     ]);
 }
