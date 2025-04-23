@@ -13,26 +13,31 @@ const useAuth = (): UseAuthResult => {
     const [walletAddress, setWalletAddress] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
 
-    // Function to check for window.ethereum with polling
-    const getEthereumProvider = async (maxAttempts = 10, interval = 500): Promise<any> => {
-        let attempts = 0;
-        while (attempts < maxAttempts) {
-            if (window.ethereum) {
-                return window.ethereum;
-            }
-            attempts++;
-            await new Promise(resolve => setTimeout(resolve, interval));
-        }
-        throw new Error('Please install MetaMask or another Ethereum wallet provider.');
+    // Helper function to send messages to the content script
+    const sendMessage = (message: any): Promise<any> => {
+        return new Promise((resolve, reject) => {
+            chrome.runtime.sendMessage(message, (response) => {
+                if (chrome.runtime.lastError) {
+                    reject(new Error(chrome.runtime.lastError.message));
+                } else if (response.error) {
+                    reject(new Error(response.error));
+                } else {
+                    resolve(response);
+                }
+            });
+        });
     };
 
     const connectWallet = async () => {
         try {
-            const ethereum = await getEthereumProvider();
-            const provider = new BrowserProvider(ethereum);
-            await provider.send('eth_requestAccounts', []);
-            const signer = await provider.getSigner();
-            const address = await signer.getAddress();
+            // Check if the Ethereum provider is available
+            const { hasEthereum } = await sendMessage({ type: 'CHECK_ETHEREUM_PROVIDER' });
+            if (!hasEthereum) {
+                throw new Error('Please install MetaMask or another Ethereum wallet provider.');
+            }
+
+            // Request wallet connection
+            const { walletAddress: address } = await sendMessage({ type: 'CONNECT_WALLET' });
             setWalletAddress(address);
             setError(null);
         } catch (err) {
@@ -49,11 +54,12 @@ const useAuth = (): UseAuthResult => {
     useEffect(() => {
         const checkWalletConnection = async () => {
             try {
-                const ethereum = await getEthereumProvider();
-                const provider = new BrowserProvider(ethereum);
-                const accounts = await provider.listAccounts();
-                if (accounts.length > 0) {
-                    setWalletAddress(accounts[0].address);
+                const { hasEthereum } = await sendMessage({ type: 'CHECK_ETHEREUM_PROVIDER' });
+                if (hasEthereum) {
+                    const { walletAddress: address } = await sendMessage({ type: 'CONNECT_WALLET' });
+                    if (address) {
+                        setWalletAddress(address);
+                    }
                 }
             } catch (err) {
                 console.error('Failed to check wallet connection:', err);
@@ -62,33 +68,27 @@ const useAuth = (): UseAuthResult => {
 
         checkWalletConnection();
 
-        // Listen for account changes
-        const handleAccountsChanged = (accounts: string[]) => {
-            if (accounts.length > 0) {
-                setWalletAddress(accounts[0]);
-            } else {
-                setWalletAddress(null);
+        // Subscribe to account changes
+        sendMessage({ type: 'SUBSCRIBE_ACCOUNTS_CHANGED' }).catch(err => {
+            console.error('Failed to subscribe to accounts changed:', err);
+        });
+
+        // Listen for account changes from the content script
+        const handleAccountsChanged = (message: any) => {
+            if (message.type === 'ACCOUNTS_CHANGED') {
+                const accounts = message.accounts;
+                if (accounts.length > 0) {
+                    setWalletAddress(accounts[0]);
+                } else {
+                    setWalletAddress(null);
+                }
             }
         };
 
-        if (window.ethereum) {
-            window.ethereum.on('accountsChanged', handleAccountsChanged);
-        } else {
-            // Poll for window.ethereum in case it appears later
-            const interval = setInterval(() => {
-                if (window.ethereum) {
-                    window.ethereum.on('accountsChanged', handleAccountsChanged);
-                    clearInterval(interval);
-                }
-            }, 500);
-
-            return () => clearInterval(interval);
-        }
+        chrome.runtime.onMessage.addListener(handleAccountsChanged);
 
         return () => {
-            if (window.ethereum) {
-                window.ethereum.removeListener('accountsChanged', handleAccountsChanged);
-            }
+            chrome.runtime.onMessage.removeListener(handleAccountsChanged);
         };
     }, []);
 
