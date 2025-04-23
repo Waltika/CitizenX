@@ -6,7 +6,7 @@
   "permissions": [
     "tabs",
     "storage",
-    "activeTab" // Added for content script to access the active tab
+    "activeTab"
   ],
   "action": {
     "default_icon": "icon.png"
@@ -19,7 +19,7 @@
   },
   "content_scripts": [
     {
-      "matches": ["<all_urls>"], ^
+      "matches": ["<all_urls>"],
       "js": ["content/walletConnector.js"]
     }
   ]
