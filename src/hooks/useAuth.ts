@@ -33,6 +33,15 @@ const useAuth = (): UseAuthResult => {
             if (result.did) {
                 setDid(result.did);
                 console.log('useAuth: Initial DID from storage:', result.did);
+                // Check for DID mismatch in localStorage profiles
+                const localProfilesRaw = localStorage.getItem('citizenx-user-profiles') || '[]';
+                console.log('useAuth: Checking localStorage profiles for DID mismatch:', localProfilesRaw);
+                const localProfiles = JSON.parse(localProfilesRaw);
+                const matchingProfile = localProfiles.find((p: UserProfile) => p._id === result.did);
+                if (!matchingProfile && localProfiles.length > 0) {
+                    console.log('useAuth: DID mismatch detected, clearing stale profiles');
+                    localStorage.setItem('citizenx-user-profiles', JSON.stringify([]));
+                }
             } else {
                 console.log('useAuth: No DID found in storage');
             }
