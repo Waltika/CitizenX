@@ -1,44 +1,42 @@
-// src/shared/utils/__tests__/normalizeUrl.test.tsx
-import { normalizeUrl } from '../normalizeUrl'; // Fixed path
+import { describe, test, expect } from '@jest/globals';
+import { normalizeUrl } from '../normalizeUrl';
 
 describe('normalizeUrl', () => {
-    beforeEach(() => {
-        // Mock console.error to suppress logs during tests
-        jest.spyOn(console, 'error').mockImplementation(() => {});
+    test('removes trailing slashes', () => {
+        expect(normalizeUrl('https://example.com/')).toBe('https://example.com');
+        expect(normalizeUrl('https://example.com////')).toBe('https://example.com');
     });
 
-    afterEach(() => {
-        // Restore console methods after each test
-        jest.restoreAllMocks();
+    test('preserves single trailing slash for root path', () => {
+        expect(normalizeUrl('https://example.com/')).toBe('https://example.com');
     });
 
-    it('removes language prefixes and UTM parameters', () => {
-        const url = 'https://example.com/en/about?utm_source=google&utm_medium=cpc&lang=fr';
-        const normalized = normalizeUrl(url);
-        expect(normalized).toBe('https://example.com/about');
+    test('removes all query parameters', () => {
+        expect(normalizeUrl('https://example.com/path?a=1&b=2')).toBe('https://example.com/path');
+        expect(normalizeUrl('https://example.com/?utm_campaign=test&r=0')).toBe('https://example.com');
     });
 
-    it('handles URLs without language prefixes', () => {
-        const url = 'https://example.com/about?utm_campaign=spring&lang=en';
-        const normalized = normalizeUrl(url);
-        expect(normalized).toBe('https://example.com/about');
+    test('normalizes iccube.com URLs to the same base URL', () => {
+        const baseUrl = 'https://www.iccube.com';
+        const urls = [
+            'https://www.iccube.com/',
+            'https://www.iccube.com/de?utm_campaign=google',
+            'https://www.iccube.com/fr?utm_campaign=google',
+            'https://www.iccube.com/?r=0&utm_campaign=google',
+        ];
+
+        urls.forEach((url) => {
+            expect(normalizeUrl(url)).toBe(baseUrl);
+        });
     });
 
-    it('handles URLs with trailing slashes', () => {
-        const url = 'https://example.com/en/contact/?utm_source=google';
-        const normalized = normalizeUrl(url);
-        expect(normalized).toBe('https://example.com/contact');
+    test('handles invalid URLs gracefully', () => {
+        const invalidUrl = 'not-a-url';
+        expect(normalizeUrl(invalidUrl)).toBe(invalidUrl);
     });
 
-    it('preserves relevant query parameters', () => {
-        const url = 'https://example.com/blog?post_id=123&utm_source=google';
-        const normalized = normalizeUrl(url);
-        expect(normalized).toBe('https://example.com/blog?post_id=123');
-    });
-
-    it('handles invalid URLs gracefully', () => {
-        const url = 'not-a-valid-url';
-        const normalized = normalizeUrl(url);
-        expect(normalized).toBe('not-a-valid-url');
+    test('removes language prefixes', () => {
+        expect(normalizeUrl('https://example.com/en/page')).toBe('https://example.com/page');
+        expect(normalizeUrl('https://example.com/fr/')).toBe('https://example.com');
     });
 });

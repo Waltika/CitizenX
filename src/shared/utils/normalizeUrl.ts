@@ -1,3 +1,4 @@
+// src/shared/utils/normalizeUrl.ts
 export const normalizeUrl = (url: string): string => {
     try {
         const urlObj = new URL(url);
@@ -12,17 +13,8 @@ export const normalizeUrl = (url: string): string => {
         // Remove trailing slashes
         pathname = pathname.replace(/\/+$/, '');
 
-        // Remove UTM parameters and other query parameters
-        const params = new URLSearchParams(urlObj.search);
+        // Remove all query parameters (previously filtered only specific params)
         const filteredParams = new URLSearchParams();
-        // Keep only parameters that are relevant (e.g., page IDs, if needed)
-        // For now, we'll remove all query parameters to simplify
-        // If you need to keep specific parameters, you can add them here
-        urlObj.searchParams.forEach((value, key) => {
-            if (!key.startsWith('utm_') && !['lang', 'locale'].includes(key)) {
-                filteredParams.set(key, value);
-            }
-        });
 
         // Reconstruct the normalized URL
         const normalizedUrl = `${urlObj.protocol}//${urlObj.host}${pathname}${filteredParams.toString() ? '?' + filteredParams.toString() : ''}`;
