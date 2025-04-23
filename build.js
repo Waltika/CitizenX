@@ -1,3 +1,4 @@
+// build.js
 import { build } from 'vite';
 import { resolve } from 'path';
 import { copyFile, mkdir, rm, rename, readFile, writeFile } from 'fs/promises';
@@ -57,22 +58,20 @@ async function buildChromeExtension() {
                     interop: 'compat',
                 },
             },
-            base: './', // Use relative paths for Chrome extension
+            base: './',
         },
     });
     await mkdir(resolve(chromeExtensionDir, 'sidepanel'), { recursive: true });
     await copyFile(resolve(tempSidepanelDir, 'index.js'), resolve(chromeExtensionDir, 'sidepanel/index.js'));
-    // Copy the transpiled index.html from the correct path
     const indexHtmlPath = resolve(tempSidepanelDir, 'src/sidepanel/index.html');
     let indexHtmlContent = await readFile(indexHtmlPath, 'utf-8');
-    // Ensure the script path is relative
     indexHtmlContent = indexHtmlContent.replace('src="/index.js"', 'src="index.js"');
     await writeFile(indexHtmlPath, indexHtmlContent);
     await copyFile(indexHtmlPath, resolve(chromeExtensionDir, 'sidepanel/index.html'));
     await rm(tempSidepanelDir, { recursive: true });
 
-    // Build content script
-    console.log('Building content script...');
+    // Build content script (index.tsx)
+    console.log('Building content script (index.tsx)...');
     const tempContentDir = resolve(process.cwd(), 'temp-content');
     if (existsSync(tempContentDir)) {
         await rm(tempContentDir, { recursive: true });
@@ -104,6 +103,13 @@ async function buildChromeExtension() {
     await mkdir(resolve(chromeExtensionDir, 'content'), { recursive: true });
     await copyFile(resolve(tempContentDir, 'index.js'), resolve(chromeExtensionDir, 'content/index.js'));
     await rm(tempContentDir, { recursive: true });
+
+    // Copy walletConnector.js (content script)
+    console.log('Copying walletConnector.js...');
+    await copyFile(
+        resolve(process.cwd(), 'src/content/walletConnector.js'),
+        resolve(chromeExtensionDir, 'content/walletConnector.js')
+    );
 }
 
 async function buildActiveContent() {
@@ -139,7 +145,6 @@ async function buildActiveContent() {
         },
     });
     await mkdir(activeContentDir, { recursive: true });
-    // Read index.html from the correct path, fix the script path, and write it back
     const indexHtmlPath = resolve(tempActiveContentDir, 'src/sidepanel/index.html');
     let indexHtmlContent = await readFile(indexHtmlPath, 'utf-8');
     indexHtmlContent = indexHtmlContent.replace(
@@ -147,7 +152,6 @@ async function buildActiveContent() {
         '/CitizenX/dist/active-content/assets/index.js'
     );
     await writeFile(indexHtmlPath, indexHtmlContent);
-    // Move index.html and the bundled index.js to the final location
     await rename(indexHtmlPath, resolve(activeContentDir, 'index.html'));
     await mkdir(resolve(activeContentDir, 'assets'), { recursive: true });
     await copyFile(

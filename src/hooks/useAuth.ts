@@ -13,15 +13,18 @@ const useAuth = (): UseAuthResult => {
     const [walletAddress, setWalletAddress] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
 
-    // Helper function to send messages to the content script
     const sendMessage = (message: any): Promise<any> => {
+        console.log('Side panel sending message:', message);
         return new Promise((resolve, reject) => {
             chrome.runtime.sendMessage(message, (response) => {
                 if (chrome.runtime.lastError) {
+                    console.error('Message sending error:', chrome.runtime.lastError.message);
                     reject(new Error(chrome.runtime.lastError.message));
                 } else if (response.error) {
+                    console.error('Content script response error:', response.error);
                     reject(new Error(response.error));
                 } else {
+                    console.log('Content script response:', response);
                     resolve(response);
                 }
             });
@@ -30,13 +33,11 @@ const useAuth = (): UseAuthResult => {
 
     const connectWallet = async () => {
         try {
-            // Check if the Ethereum provider is available
             const { hasEthereum } = await sendMessage({ type: 'CHECK_ETHEREUM_PROVIDER' });
             if (!hasEthereum) {
                 throw new Error('Please install MetaMask or another Ethereum wallet provider.');
             }
 
-            // Request wallet connection
             const { walletAddress: address } = await sendMessage({ type: 'CONNECT_WALLET' });
             setWalletAddress(address);
             setError(null);
@@ -68,12 +69,10 @@ const useAuth = (): UseAuthResult => {
 
         checkWalletConnection();
 
-        // Subscribe to account changes
         sendMessage({ type: 'SUBSCRIBE_ACCOUNTS_CHANGED' }).catch(err => {
             console.error('Failed to subscribe to accounts changed:', err);
         });
 
-        // Listen for account changes from the content script
         const handleAccountsChanged = (message: any) => {
             if (message.type === 'ACCOUNTS_CHANGED') {
                 const accounts = message.accounts;
