@@ -7,6 +7,7 @@ import { UserProfile } from '../shared/types/userProfile';
 interface UseAuthResult {
     did: string | null;
     profile: UserProfile | null;
+    loading: boolean; // Add loading state
     authenticate: () => Promise<void>;
     signOut: () => void;
     exportIdentity: (passphrase: string) => Promise<string>;
@@ -19,7 +20,7 @@ interface UseAuthResult {
 const useAuth = (): UseAuthResult => {
     const [did, setDid] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
-    const { profiles, createProfile, updateProfile, error: profilesError } = useUserProfiles(did);
+    const { profiles, loading, createProfile, updateProfile, error: profilesError } = useUserProfiles(did);
     const [profile, setProfile] = useState<UserProfile | null>(null);
 
     useEffect(() => {
@@ -37,11 +38,11 @@ const useAuth = (): UseAuthResult => {
     }, []);
 
     useEffect(() => {
-        if (did && profiles.size > 0) {
+        if (did && !loading && profiles.size > 0) {
             const userProfile = profiles.get(did);
             setProfile(userProfile || null);
         }
-    }, [did, profiles]);
+    }, [did, profiles, loading]);
 
     const authenticate = async () => {
         try {
@@ -141,7 +142,7 @@ const useAuth = (): UseAuthResult => {
         }
     };
 
-    return { did, profile, authenticate, signOut, exportIdentity, importIdentity, createProfile, updateProfile, error: error || profilesError };
+    return { did, profile, loading, authenticate, signOut, exportIdentity, importIdentity, createProfile, updateProfile, error: error || profilesError };
 };
 
 export default useAuth;

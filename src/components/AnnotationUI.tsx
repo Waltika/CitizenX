@@ -12,7 +12,7 @@ interface AnnotationUIProps {
 
 const AnnotationUI: React.FC<AnnotationUIProps> = ({ url }) => {
     const [annotation, setAnnotation] = useState('');
-    const { did, profile, authenticate, signOut, exportIdentity, importIdentity, createProfile, updateProfile, error: authError } = useAuth();
+    const { did, profile, loading, authenticate, signOut, exportIdentity, importIdentity, createProfile, updateProfile, error: authError } = useAuth();
     const { profiles, error: profilesError } = useUserProfiles(did);
     const [exportedIdentity, setExportedIdentity] = useState('');
     const [importData, setImportData] = useState('');
@@ -36,10 +36,11 @@ const AnnotationUI: React.FC<AnnotationUIProps> = ({ url }) => {
     const error = authError || dbError || annotationsError || profilesError;
 
     useEffect(() => {
-        if (did && !profile) {
+        // Only open the profile modal if loading is complete, did exists, and profile is null
+        if (!loading && did && !profile) {
             setIsProfileModalOpen(true);
         }
-    }, [did, profile]);
+    }, [did, profile, loading]);
 
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
@@ -135,9 +136,6 @@ const AnnotationUI: React.FC<AnnotationUIProps> = ({ url }) => {
 
     return (
         <div style={{ padding: '1rem', width: '100%', backgroundColor: '#f5f7fa', minHeight: '100vh', fontFamily: 'Arial, sans-serif' }}>
-            <h1 style={{ fontSize: '1.5rem', fontWeight: 'bold', margin: '0 0 1rem 0', color: '#333' }}>
-                CitizenX Annotations
-            </h1>
             {did ? (
                 <div style={{ marginBottom: '1rem', backgroundColor: '#fff', padding: '0.5rem', borderRadius: '5px', border: '1px solid #e5e7eb' }}>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap' }}>
@@ -278,7 +276,7 @@ const AnnotationUI: React.FC<AnnotationUIProps> = ({ url }) => {
                             placeholder="Paste your exported identity here..."
                             style={{
                                 width: '100%',
-                                height: '3.75rem', // Reduced height to scale better
+                                height: '3.75rem',
                                 marginBottom: '0.5rem',
                                 fontSize: '0.8rem',
                                 border: '1px solid #e5e7eb',

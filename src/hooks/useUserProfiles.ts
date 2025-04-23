@@ -15,11 +15,13 @@ interface UseUserProfilesResult {
     profiles: Map<string, UserProfile>;
     createProfile: (handle: string, profilePicture: string) => Promise<void>;
     updateProfile: (handle: string, profilePicture: string) => Promise<void>;
+    loading: boolean; // New loading state
     error: string | null;
 }
 
 export const useUserProfiles = (did: string | null): UseUserProfilesResult => {
     const [profiles, setProfiles] = useState<Map<string, UserProfile>>(new Map());
+    const [loading, setLoading] = useState(true); // Initialize as loading
     const [error, setError] = useState<string | null>(null);
     const [db, setDb] = useState<any>(null);
 
@@ -84,6 +86,7 @@ export const useUserProfiles = (did: string | null): UseUserProfilesResult => {
                 });
                 setProfiles(profilesMap);
                 console.log('Initial profiles loaded:', Array.from(profilesMap.entries()));
+                setLoading(false); // Loading complete
 
                 // Listen for updates from OrbitDB
                 userProfilesDb.events.on('update', async () => {
@@ -129,6 +132,7 @@ export const useUserProfiles = (did: string | null): UseUserProfilesResult => {
             } catch (err) {
                 console.error('Failed to initialize user profiles database:', err);
                 setError('Failed to initialize user profiles database');
+                setLoading(false); // Loading complete, even on error
             }
         }
         initUserProfilesDB();
@@ -174,6 +178,15 @@ export const useUserProfiles = (did: string | null): UseUserProfilesResult => {
                     const newProfiles = new Map(prev);
                     newProfiles.set(did, profile);
                     console.log('Profiles after local save:', Array.from(newProfiles.entries()));
+
+                    // Force a refresh by re-fetching local profiles
+                    const updatedLocalProfiles = JSON.parse(localStorage.getItem('citizenx-user-profiles') || '[]');
+                    updatedLocalProfiles.forEach((p: UserProfile) => {
+                        if (!newProfiles.has(p._id)) {
+                            newProfiles.set(p._id, p);
+                        }
+                    });
+                    console.log('Profiles after refresh:', Array.from(newProfiles.entries()));
                     return newProfiles;
                 });
             } else {
@@ -241,5 +254,5 @@ export const useUserProfiles = (did: string | null): UseUserProfilesResult => {
         }
     };
 
-    return { profiles, createProfile, updateProfile, error };
+    return { profiles, createProfile, updateProfile, loading, error };
 };
