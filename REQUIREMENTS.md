@@ -31,5 +31,7 @@ A decentralized Chrome extension for annotating websites in order to bring a kno
 
 ## Non Functional Requirements - Future Versions
 
+1. Add a pinning service - most probably our own but distributed among willing users and incentivize them in some crypto way
+
 
 
