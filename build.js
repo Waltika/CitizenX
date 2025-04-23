@@ -69,20 +69,6 @@ async function buildChromeExtension() {
     await writeFile(indexHtmlPath, indexHtmlContent);
     await copyFile(indexHtmlPath, resolve(chromeExtensionDir, 'sidepanel/index.html'));
 
-    // Copy loader.html
-    console.log('Copying loader.html...');
-    await copyFile(
-        resolve(process.cwd(), 'src/sidepanel/loader.html'),
-        resolve(chromeExtensionDir, 'sidepanel/loader.html')
-    );
-
-    // Copy loader.js
-    console.log('Copying loader.js...');
-    await copyFile(
-        resolve(process.cwd(), 'src/sidepanel/loader.js'),
-        resolve(chromeExtensionDir, 'sidepanel/loader.js')
-    );
-
     await rm(tempSidepanelDir, { recursive: true });
 
     // Copy background.js

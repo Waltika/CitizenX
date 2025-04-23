@@ -16,6 +16,19 @@ export const useAnnotations = (url: string, db: any, did: string | null): UseAnn
     const [error, setError] = useState<string | null>(null);
 
     console.log('Starting OrbitDB initialization for', url);
+
+    // Handle empty or invalid URLs
+    if (!url || url.trim() === '') {
+        console.warn('URL is empty or invalid, skipping OrbitDB initialization');
+        return {
+            annotations,
+            setAnnotations,
+            error: 'Waiting for URL...',
+            handleSaveAnnotation: async () => {},
+            handleDeleteAnnotation: async () => {}
+        };
+    }
+
     const normalizedUrl = normalizeUrl(url);
     console.log('Normalized URL:', normalizedUrl);
 
@@ -44,7 +57,7 @@ export const useAnnotations = (url: string, db: any, did: string | null): UseAnn
                         ? localAnnotations.filter((doc: Annotation) => {
                             try {
                                 const docNormalizedUrl = normalizeUrl(doc.url);
-                                return docNormalizedUrl === normalizedUrl && doc.walletAddress && doc.walletAddress === did;
+                                return docNormalizedUrl === normalizedUrl && doc.did && doc.did === did;
                             } catch (e) {
                                 console.warn('Skipping annotation with invalid URL:', doc.url, e);
                                 return false;
@@ -77,7 +90,7 @@ export const useAnnotations = (url: string, db: any, did: string | null): UseAnn
                                 ? updatedDocs.filter((doc: any) => {
                                     try {
                                         const docNormalizedUrl = normalizeUrl(doc.value.url);
-                                        return docNormalizedUrl === normalizedUrl && doc.value.walletAddress && doc.value.walletAddress === did;
+                                        return docNormalizedUrl === normalizedUrl && doc.value.did && doc.value.did === did;
                                     } catch (e) {
                                         console.warn('Skipping OrbitDB doc with invalid URL:', doc.value.url, e);
                                         return false;
@@ -106,7 +119,7 @@ export const useAnnotations = (url: string, db: any, did: string | null): UseAnn
                                 ? updatedDocs.filter((doc: any) => {
                                     try {
                                         const docNormalizedUrl = normalizeUrl(doc.value.url);
-                                        return docNormalizedUrl === normalizedUrl && doc.value.walletAddress && doc.value.walletAddress === did;
+                                        return docNormalizedUrl === normalizedUrl && doc.value.did && doc.value.did === did;
                                     } catch (e) {
                                         console.warn('Skipping OrbitDB doc with invalid URL:', doc.value.url, e);
                                         return false;
@@ -124,7 +137,7 @@ export const useAnnotations = (url: string, db: any, did: string | null): UseAnn
                             ? updatedDocs.filter((doc: any) => {
                                 try {
                                     const docNormalizedUrl = normalizeUrl(doc.value.url);
-                                    return docNormalizedUrl === normalizedUrl && doc.value.walletAddress && doc.value.walletAddress === did;
+                                    return docNormalizedUrl === normalizedUrl && doc.value.did && doc.value.did === did;
                                 } catch (e) {
                                     console.warn('Skipping OrbitDB doc with invalid URL:', doc.value.url, e);
                                     return false;
@@ -159,7 +172,7 @@ export const useAnnotations = (url: string, db: any, did: string | null): UseAnn
                     ? localAnnotations.filter((doc: Annotation) => {
                         try {
                             const docNormalizedUrl = normalizeUrl(doc.url);
-                            return docNormalizedUrl === normalizedUrl && doc.walletAddress && doc.walletAddress === did;
+                            return docNormalizedUrl === normalizedUrl && doc.did && doc.did === did;
                         } catch (e) {
                             console.warn('Skipping annotation with invalid URL:', doc.url, e);
                             return false;
@@ -184,7 +197,7 @@ export const useAnnotations = (url: string, db: any, did: string | null): UseAnn
                 url: normalizedUrl,
                 text: text.trim(),
                 timestamp: Date.now(),
-                walletAddress: did, // Use did instead of walletAddress
+                did,
             };
             try {
                 await db.put(doc);
@@ -194,7 +207,7 @@ export const useAnnotations = (url: string, db: any, did: string | null): UseAnn
                 const filteredDocs = docs.filter((d: any) => {
                     try {
                         const docNormalizedUrl = normalizeUrl(d.value.url);
-                        return docNormalizedUrl === normalizedUrl && d.value.walletAddress && d.value.walletAddress === did;
+                        return docNormalizedUrl === normalizedUrl && d.value.did && d.value.did === did;
                     } catch (e) {
                         console.warn('Skipping OrbitDB doc with invalid URL:', d.value.url, e);
                         return false;
@@ -211,7 +224,7 @@ export const useAnnotations = (url: string, db: any, did: string | null): UseAnn
                     const filteredLocalAnnotations = localAnnotations.filter((d: Annotation) => {
                         try {
                             const docNormalizedUrl = normalizeUrl(d.url);
-                            return docNormalizedUrl === normalizedUrl && d.walletAddress && d.walletAddress === did;
+                            return docNormalizedUrl === normalizedUrl && d.did && d.did === did;
                         } catch (e) {
                             console.warn('Skipping annotation with invalid URL:', d.url, e);
                             return false;
@@ -229,7 +242,7 @@ export const useAnnotations = (url: string, db: any, did: string | null): UseAnn
                                 ? updatedDocs.filter((d: any) => {
                                     try {
                                         const docNormalizedUrl = normalizeUrl(d.value.url);
-                                        return docNormalizedUrl === normalizedUrl && d.value.walletAddress && d.value.walletAddress === did;
+                                        return docNormalizedUrl === normalizedUrl && d.value.did && d.value.did === did;
                                     } catch (e) {
                                         console.warn('Skipping OrbitDB doc with invalid URL:', d.value.url, e);
                                         return false;
@@ -252,7 +265,7 @@ export const useAnnotations = (url: string, db: any, did: string | null): UseAnn
                 url: normalizedUrl,
                 text: text.trim(),
                 timestamp: Date.now(),
-                walletAddress: did!, // Use did instead of walletAddress
+                did,
             };
             const localAnnotations = JSON.parse(localStorage.getItem('citizenx-annotations') || '[]');
             localAnnotations.push(doc);
@@ -260,7 +273,7 @@ export const useAnnotations = (url: string, db: any, did: string | null): UseAnn
             const filteredLocalAnnotations = localAnnotations.filter((d: Annotation) => {
                 try {
                     const docNormalizedUrl = normalizeUrl(d.url);
-                    return docNormalizedUrl === normalizedUrl && d.walletAddress && d.walletAddress === did;
+                    return docNormalizedUrl === normalizedUrl && d.did && d.did === did;
                 } catch (e) {
                     console.warn('Skipping annotation with invalid URL:', d.url, e);
                     return false;
@@ -280,7 +293,7 @@ export const useAnnotations = (url: string, db: any, did: string | null): UseAnn
                     ? docs.filter((d: any) => {
                         try {
                             const docNormalizedUrl = normalizeUrl(d.value.url);
-                            return docNormalizedUrl === normalizedUrl && d.value.walletAddress && d.value.walletAddress === did;
+                            return docNormalizedUrl === normalizedUrl && d.value.did && d.value.did === did;
                         } catch (e) {
                             console.warn('Skipping OrbitDB doc with invalid URL:', d.value.url, e);
                             return false;
@@ -300,7 +313,7 @@ export const useAnnotations = (url: string, db: any, did: string | null): UseAnn
                 ? updatedAnnotations.filter((d: Annotation) => {
                     try {
                         const docNormalizedUrl = normalizeUrl(d.url);
-                        return docNormalizedUrl === normalizedUrl && d.walletAddress && d.walletAddress === did;
+                        return docNormalizedUrl === normalizedUrl && d.did && d.did === did;
                     } catch (e) {
                         console.warn('Skipping annotation with invalid URL:', d.url, e);
                         return false;

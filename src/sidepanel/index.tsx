@@ -4,7 +4,7 @@ import { createRoot } from 'react-dom/client';
 import AnnotationUI from '../components/AnnotationUI';
 
 const App: React.FC = () => {
-    const [currentUrl, setCurrentUrl] = useState<string>('');
+    const [currentUrl, setCurrentUrl] = useState<string | null>(null);
 
     useEffect(() => {
         // Function to fetch the current tab's URL
@@ -42,6 +42,11 @@ const App: React.FC = () => {
             chrome.tabs.onActivated.removeListener(onTabActivated);
         };
     }, []);
+
+    // Show a loading message until the URL is fetched
+    if (currentUrl === null) {
+        return <div>Loading...</div>;
+    }
 
     return <AnnotationUI url={currentUrl} />;
 };
