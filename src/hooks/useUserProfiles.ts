@@ -45,6 +45,8 @@ export const useUserProfiles = (did: string | null): UseUserProfilesResult => {
                                     '/dns4/relay.libp2p.io/tcp/443/wss/p2p/12D3KooWAdNWhqW6zSMv1tW2aLKNvEfR7f2DubkXq56Y2uLmsdN',
                                     '/dns4/relay.ipfs.io/tcp/443/wss/p2p/12D3KooWAdNWhqW6zSMv1tW2aLKNvEfR7f2DubkXq56Y2uLmsdN',
                                     '/dns4/relay.ipfs.io/tcp/443/wss/p2p/12D3KooWAdNWhqW6zSMv1tW2aLKNvEfR7f2DubkXq56Y2uLmsdN',
+                                    '/dns4/go-ipfs-bootstrap-1.ipfs.dwebops.pub/tcp/443/wss/p2p/QmNnooDu7bfjPFoTZYxMNLWUQJyrVwtbZguyWvRmga5yW',
+                                    '/dns4/go-ipfs-bootstrap-2.ipfs.dwebops.pub/tcp/443/wss/p2p/QmNnooDu7bfjPFoTZYxMNLWUQJyrVwtbZguyWvRmga5yX',
                                 ],
                             }),
                         ],
@@ -66,23 +68,61 @@ export const useUserProfiles = (did: string | null): UseUserProfilesResult => {
                 console.log('User profiles database opened:', userProfilesDb);
                 setDb(userProfilesDb);
 
-                // Fetch initial profiles
+                // Fetch initial profiles from OrbitDB
                 const allDocs = await userProfilesDb.all();
                 const profilesMap = new Map<string, UserProfile>();
                 allDocs.forEach((doc: any) => {
                     profilesMap.set(doc.value._id, doc.value);
                 });
+
+                // Merge with locally stored profiles
+                const localProfiles = JSON.parse(localStorage.getItem('citizenx-user-profiles') || '[]');
+                localProfiles.forEach((profile: UserProfile) => {
+                    if (!profilesMap.has(profile._id)) {
+                        profilesMap.set(profile._id, profile);
+                    }
+                });
                 setProfiles(profilesMap);
 
-                // Listen for updates
+                // Listen for updates from OrbitDB
                 userProfilesDb.events.on('update', async () => {
                     const updatedDocs = await userProfilesDb.all();
                     const updatedProfilesMap = new Map<string, UserProfile>();
                     updatedDocs.forEach((doc: any) => {
                         updatedProfilesMap.set(doc.value._id, doc.value);
                     });
+
+                    // Merge with locally stored profiles that haven't been synced
+                    const localProfiles = JSON.parse(localStorage.getItem('citizenx-user-profiles') || '[]');
+                    localProfiles.forEach((profile: UserProfile) => {
+                        if (!updatedProfilesMap.has(profile._id)) {
+                            updatedProfilesMap.set(profile._id, profile);
+                        }
+                    });
                     setProfiles(updatedProfilesMap);
                     console.log('User profiles updated:', updatedProfilesMap);
+                });
+
+                // Sync local profiles to OrbitDB when peers connect
+                userProfilesDb.events.on('peer', async () => {
+                    console.log('Peer connected, syncing local profiles to OrbitDB');
+                    const localProfiles = JSON.parse(localStorage.getItem('citizenx-user-profiles') || '[]');
+                    for (const localProfile of localProfiles) {
+                        try {
+                            await userProfilesDb.put(localProfile);
+                            console.log('Synced local profile to OrbitDB:', localProfile);
+                        } catch (syncError) {
+                            console.error('Failed to sync local profile:', syncError);
+                        }
+                    }
+                    // Clear local storage after syncing
+                    localStorage.setItem('citizenx-user-profiles', JSON.stringify([]));
+                    const updatedDocs = await userProfilesDb.all();
+                    const updatedProfilesMap = new Map<string, UserProfile>();
+                    updatedDocs.forEach((doc: any) => {
+                        updatedProfilesMap.set(doc.value._id, doc.value);
+                    });
+                    setProfiles(updatedProfilesMap);
                 });
             } catch (err) {
                 console.error('Failed to initialize user profiles database:', err);
@@ -93,33 +133,106 @@ export const useUserProfiles = (did: string | null): UseUserProfilesResult => {
     }, []);
 
     const createProfile = async (handle: string, profilePicture: string) => {
-        if (!db || !did) {
-            throw new Error('Database not initialized or user not authenticated');
+        if (!did) {
+            throw new Error('User not authenticated');
         }
         const profile: UserProfile = {
             _id: did,
             handle,
             profilePicture,
         };
-        await db.put(profile);
-        console.log('User profile created:', profile);
+        try {
+            if (!db) {
+                throw new Error('Database not initialized');
+            }
+            await db.put(profile);
+            console.log('User profile created:', profile);
+
+            // Update profiles state
+            setProfiles((prev) => {
+                const newProfiles = new Map(prev);
+                newProfiles.set(did, profile);
+                return newProfiles;
+            });
+        } catch (err: any) {
+            if (err.message.includes('NoPeersSubscribedToTopic')) {
+                console.warn('No peers subscribed, saving profile to localStorage:', profile);
+                const localProfiles = JSON.parse(localStorage.getItem('citizenx-user-profiles') || '[]');
+                const existingIndex = localProfiles.findIndex((p: UserProfile) => p._id === did);
+                if (existingIndex !== -1) {
+                    localProfiles[existingIndex] = profile;
+                } else {
+                    localProfiles.push(profile);
+                }
+                localStorage.setItem('citizenx-user-profiles', JSON.stringify(localProfiles));
+
+                // Update profiles state to reflect local storage
+                setProfiles((prev) => {
+                    const newProfiles = new Map(prev);
+                    newProfiles.set(did, profile);
+                    return newProfiles;
+                });
+            } else {
+                console.error('Failed to create user profile:', err);
+                throw err;
+            }
+        }
     };
 
     const updateProfile = async (handle: string, profilePicture: string) => {
-        if (!db || !did) {
-            throw new Error('Database not initialized or user not authenticated');
+        if (!did) {
+            throw new Error('User not authenticated');
         }
-        const existingProfile = await db.get(did);
-        if (!existingProfile) {
-            throw new Error('User profile not found');
+        try {
+            if (!db) {
+                throw new Error('Database not initialized');
+            }
+            const existingProfile = await db.get(did);
+            if (!existingProfile) {
+                throw new Error('User profile not found');
+            }
+            const updatedProfile: UserProfile = {
+                ...existingProfile,
+                handle,
+                profilePicture,
+            };
+            await db.put(updatedProfile);
+            console.log('User profile updated:', updatedProfile);
+
+            // Update profiles state
+            setProfiles((prev) => {
+                const newProfiles = new Map(prev);
+                newProfiles.set(did, updatedProfile);
+                return newProfiles;
+            });
+        } catch (err: any) {
+            if (err.message.includes('NoPeersSubscribedToTopic')) {
+                console.warn('No peers subscribed, updating profile in localStorage:', { did, handle, profilePicture });
+                const localProfiles = JSON.parse(localStorage.getItem('citizenx-user-profiles') || '[]');
+                const existingIndex = localProfiles.findIndex((p: UserProfile) => p._id === did);
+                const updatedProfile: UserProfile = {
+                    _id: did,
+                    handle,
+                    profilePicture,
+                };
+                if (existingIndex !== -1) {
+                    localProfiles[existingIndex] = updatedProfile;
+                } else {
+                    localProfiles.push(updatedProfile);
+                }
+                localStorage.setItem('citizenx-user-profiles', JSON.stringify(localProfiles));
+
+                // Update profiles state to reflect local storage
+                setProfiles((prev) => {
+                    const newProfiles = new Map(prev);
+                    newProfiles.set(did, updatedProfile);
+                    return newProfiles;
+                });
+            } else {
+                console.error('Failed to update user profile:', err);
+                throw err;
+            }
         }
-        const updatedProfile: UserProfile = {
-            ...existingProfile,
-            handle,
-            profilePicture,
-        };
-        await db.put(updatedProfile);
-        console.log('User profile updated:', updatedProfile);
     };
 
     return { profiles, createProfile, updateProfile, error };
