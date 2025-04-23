@@ -58,6 +58,10 @@ export const useOrbitDB = (url: string): UseOrbitDBResult => {
                     ipfs.libp2p.addEventListener('peer:disconnect', (event) => {
                         console.log('Disconnected from peer:', event.detail.toString());
                     });
+                    // Add logging for peer discovery
+                    ipfs.libp2p.addEventListener('peer:discovery', (event) => {
+                        console.log('Discovered peer:', event.detail.id.toString());
+                    });
                 } catch (heliaError) {
                     console.error('Failed to initialize Helia:', heliaError);
                     throw new Error('IPFS initialization failed');
@@ -69,6 +73,7 @@ export const useOrbitDB = (url: string): UseOrbitDBResult => {
                 const orbitdb = await createOrbitDB({ ipfs });
                 console.log('OrbitDB instance created:', orbitdb);
                 const db = await orbitdb.open('citizenx-annotations', { type: 'documents' });
+                await db.load();
                 console.log('Database opened:', db);
                 setDb(db);
             } catch (error) {
@@ -77,6 +82,12 @@ export const useOrbitDB = (url: string): UseOrbitDBResult => {
             }
         }
         initOrbitDB();
+
+        return () => {
+            if (db) {
+                db.close();
+            }
+        };
     }, [url]);
 
     return { db, error };
