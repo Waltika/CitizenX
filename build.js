@@ -70,45 +70,16 @@ async function buildChromeExtension() {
     await copyFile(indexHtmlPath, resolve(chromeExtensionDir, 'sidepanel/index.html'));
     await rm(tempSidepanelDir, { recursive: true });
 
-    // Build content script (index.tsx)
-    console.log('Building content script (index.tsx)...');
-    const tempContentDir = resolve(process.cwd(), 'temp-content');
-    if (existsSync(tempContentDir)) {
-        await rm(tempContentDir, { recursive: true });
-    }
-    await build({
-        configFile: false,
-        plugins: [(await import('@vitejs/plugin-react')).default()],
-        resolve: {
-            alias: {
-                'events': 'events',
-            },
-        },
-        build: {
-            outDir: tempContentDir,
-            rollupOptions: {
-                input: resolve(process.cwd(), 'src/content/index.tsx'),
-                output: {
-                    entryFileNames: 'index.js',
-                    format: 'iife',
-                    inlineDynamicImports: false,
-                    preserveModules: false,
-                    manualChunks: () => undefined,
-                    compact: true,
-                    interop: 'compat',
-                },
-            },
-        },
-    });
-    await mkdir(resolve(chromeExtensionDir, 'content'), { recursive: true });
-    await copyFile(resolve(tempContentDir, 'index.js'), resolve(chromeExtensionDir, 'content/index.js'));
-    await rm(tempContentDir, { recursive: true });
-
-    // Copy walletConnector.js (content script)
-    console.log('Copying walletConnector.js...');
+    // Copy popup.html and popup.js
+    console.log('Copying popup.html...');
     await copyFile(
-        resolve(process.cwd(), 'src/content/walletConnector.js'),
-        resolve(chromeExtensionDir, 'content/walletConnector.js')
+        resolve(process.cwd(), 'src/popup.html'),
+        resolve(chromeExtensionDir, 'popup.html')
+    );
+    console.log('Copying popup.js...');
+    await copyFile(
+        resolve(process.cwd(), 'src/popup.js'),
+        resolve(chromeExtensionDir, 'popup.js')
     );
 
     // Copy background.js
