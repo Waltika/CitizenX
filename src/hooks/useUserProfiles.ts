@@ -53,11 +53,10 @@ export const useUserProfiles = (did: string | null): UseUserProfilesResult => {
                         },
                     },
                 });
-                console.log('IPFS initialized for user profiles:', ipfs.isOnline() ? 'e2e' : 'offline');
+                console.log('IPFS initialized for user profiles:', ipfs);
 
                 const orbitdb = await createOrbitDB({ ipfs });
                 const database = await orbitdb.open('citizenx-profiles', { type: 'documents' });
-                await database.load();
                 console.log('User profiles database opened:', database);
 
                 setDb(database);
@@ -68,9 +67,12 @@ export const useUserProfiles = (did: string | null): UseUserProfilesResult => {
                 const parsedLocalProfiles = localProfiles ? JSON.parse(localProfiles) : [];
                 console.log('useUserProfiles: Parsed localStorage profiles:', parsedLocalProfiles);
 
-                // Load profiles from OrbitDB
-                const allDocs = await database.all();
-                const orbitdbProfiles = allDocs.map((doc: any) => doc.value);
+                // Load profiles from OrbitDB using async iterator
+                const orbitdbProfiles: Profile[] = [];
+                const allDocsIterator = await database.all();
+                for await (const doc of allDocsIterator) {
+                    orbitdbProfiles.push(doc.value);
+                }
                 console.log('useUserProfiles: OrbitDB profiles:', orbitdbProfiles);
 
                 // Merge profiles, prioritizing OrbitDB over localStorage
@@ -104,8 +106,11 @@ export const useUserProfiles = (did: string | null): UseUserProfilesResult => {
         if (!db) return;
 
         db.events.on('update', async () => {
-            const allDocs = await db.all();
-            const orbitdbProfiles = allDocs.map((doc: any) => doc.value);
+            const allDocsIterator = await db.all();
+            const orbitdbProfiles: Profile[] = [];
+            for await (const doc of allDocsIterator) {
+                orbitdbProfiles.push(doc.value);
+            }
             console.log('useUserProfiles: Updated OrbitDB profiles:', orbitdbProfiles);
 
             const localProfiles = localStorage.getItem('citizenx-profiles');
