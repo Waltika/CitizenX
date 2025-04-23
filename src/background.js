@@ -1,10 +1,12 @@
 // src/background.js
 console.log('CitizenX background script loaded');
 
-// Store tab IDs where the content script is ready
+if (!chrome.scripting) {
+    console.error('chrome.scripting API is not available');
+}
+
 const readyTabs = new Set();
 
-// Inject the content script into the active tab
 const injectContentScript = (tabId) => {
     console.log('Attempting to inject content script into tab ID:', tabId);
     return new Promise((resolve, reject) => {
@@ -16,7 +18,7 @@ const injectContentScript = (tabId) => {
         chrome.scripting.executeScript({
             target: { tabId },
             files: ['content/walletConnector.js'],
-            world: 'MAIN' // Explicitly inject into the MAIN world
+            world: 'MAIN'
         }, (results) => {
             if (chrome.runtime.lastError) {
                 console.error('Failed to inject content script:', chrome.runtime.lastError.message);
@@ -29,20 +31,24 @@ const injectContentScript = (tabId) => {
     });
 };
 
-// Wait for the content script to signal it's ready
-const waitForContentScriptReady = (tabId, timeout = 5000) => {
+const waitForContentScriptReady = (tabId, timeout = 10000) => {
+    console.log('Waiting for content script to be ready in tab ID:', tabId);
     return new Promise((resolve, reject) => {
         if (readyTabs.has(tabId)) {
+            console.log('Content script already ready in tab ID:', tabId);
             resolve();
             return;
         }
 
         const timeoutId = setTimeout(() => {
+            console.error('Timeout waiting for content script in tab ID:', tabId);
             reject(new Error('Content script not ready within timeout period'));
         }, timeout);
 
         const handler = (message, sender, sendResponse) => {
+            console.log('Background script received message:', message, 'from tab:', sender.tab?.id);
             if (message.type === 'CONTENT_SCRIPT_READY' && sender.tab?.id === tabId) {
+                console.log('Received CONTENT_SCRIPT_READY from tab ID:', tabId);
                 clearTimeout(timeoutId);
                 readyTabs.add(tabId);
                 chrome.runtime.onMessage.removeListener(handler);

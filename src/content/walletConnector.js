@@ -1,7 +1,6 @@
 // src/content/walletConnector.js
 console.log('CitizenX wallet connector content script loaded');
 
-// Poll for window.ethereum to handle timing issues
 const getEthereumProvider = (maxAttempts = 10, interval = 500) => {
     return new Promise((resolve, reject) => {
         let attempts = 0;
@@ -21,8 +20,14 @@ const getEthereumProvider = (maxAttempts = 10, interval = 500) => {
     });
 };
 
-// Signal that the content script is ready
-chrome.runtime.sendMessage({ type: 'CONTENT_SCRIPT_READY' });
+console.log('Sending CONTENT_SCRIPT_READY message');
+chrome.runtime.sendMessage({ type: 'CONTENT_SCRIPT_READY' }, (response) => {
+    if (chrome.runtime.lastError) {
+        console.error('Failed to send CONTENT_SCRIPT_READY message:', chrome.runtime.lastError.message);
+    } else {
+        console.log('CONTENT_SCRIPT_READY message sent successfully');
+    }
+});
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     console.log('Content script received message:', message);
