@@ -10,6 +10,7 @@ import { bootstrap } from '@libp2p/bootstrap';
 import { identify } from '@libp2p/identify';
 import { FaultTolerance } from '@libp2p/interface';
 import { generateKeyPair, exportKeyPair, importKeyPair } from '../utils/crypto';
+import {bootstrapNodes} from "..//config/boostrap";
 
 interface Profile {
     _id: string; // DID
@@ -47,13 +48,7 @@ export default function useAuth(): UseAuthResult {
                         transportManager: { faultTolerance: FaultTolerance.NO_FATAL },
                         peerDiscovery: [
                             bootstrap({
-                                list: [
-                                    '/dns4/bootstrap.libp2p.io/tcp/443/wss/p2p/12D3KooWQL1aS4qD3yCjmV7gNmx4F5gP7pNXG1qimV5DXe7tXUn',
-                                    '/dns4/bootstrap.libp2p.io/tcp/443/wss/p2p/12D3KooWAtfLqN4QmgjrZ9eZ9r4L1B7bH7d9eW8fA4n4bBAyKSm',
-                                    '/dns4/relay.libp2p.io/tcp/443/wss/p2p/12D3KooWAdNWhqW6zSMv1tW2aLKNvEfR7f2DubkXq56Y2uLmsdN',
-                                    '/dns4/relay.ipfs.io/tcp/443/wss/p2p/12D3KooWAdNWhqW6zSMv1tW2aLKNvEfR7f2DubkXq56Y2uLmsdN',
-                                    '/dns4/relay.ipfs.io/tcp/443/wss/p2p/12D3KooWAdNWhqW6zSMv1tW2aLKNvEfR7f2DubkXq56Y2uLmsdN',
-                                ],
+                                list: bootstrapNodes,
                             }),
                         ],
                         services: {
