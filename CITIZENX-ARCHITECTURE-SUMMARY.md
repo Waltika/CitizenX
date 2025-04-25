@@ -91,7 +91,6 @@ As of April 23, 2025, the core functionality of creating, storing, and displayin
   - `src/sidepanel/index.tsx`: Main entry point for the side panel UI.
 - **Build Config**:
   - `vite.config.ts`: Vite configuration for building the side panel.
-  - `build.js`: Custom build script for the extension.
 - **Storage**:
   - `localStorage`: `citizenx-profiles`, `citizenx-annotations`
   - `chrome.storage.local`: DID and private key

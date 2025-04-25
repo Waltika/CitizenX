@@ -2,10 +2,9 @@
   "manifest_version": 3,
   "name": "CitizenX",
   "version": "1.0.0",
-  "description": "A Chrome extension for decentralized web annotations using OrbitDB",
+  "description": "A Chrome extension for decentralized web annotations using OrbitDB. Permissions: 'storage' to save user data, 'sidePanel' for the UI, 'tabs' to track page history.",
   "permissions": [
     "sidePanel",
-    "activeTab",
     "storage",
     "tabs"
   ],
@@ -18,9 +17,7 @@
     "128": "icons/icon128.png"
   },
   "side_panel": {
-    "default_path": "sidepanel/index.html"
+    "default_path": "index.html"
   },
-  "background": {
-    "service_worker": "background.js"
-  }
+  "privacy_policy": "https://yourwebsite.com/privacy-policy"
 }

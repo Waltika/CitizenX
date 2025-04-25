@@ -4,7 +4,7 @@
   "type": "module",
   "description": "Decentralized web annotation Chrome extension",
   "scripts": {
-    "build": "node build.js",
+    "build": "vite build",
     "test": "jest",
     "test:watch": "jest --watch",
     "diagnostic": "node scripts/libp2p-diagnostic.js"

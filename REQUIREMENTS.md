@@ -20,6 +20,8 @@ A decentralized Chrome extension for annotating websites in order to bring a kno
 4. We want to ensure as much as possible zero loss of data in case of network issues or other failures.
 5. We want the Chrome extension to be minimal in terms of content, with all code bundled locally to comply with Chrome Web Store policies (updated from serving content from a `github.io` page, which is not allowed).
 6. We want to secure the JWT tokens and other access technologies against hacking.
+7. Add privacy policy to manifest.json once we have a website:   "privacy_policy": "https://yourwebsite.com/privacy-policy"
+
 
 ## Requirements - Future Versions
 1. We want a crypto/ledger-based ownership structure for the project.
