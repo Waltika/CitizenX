@@ -1,279 +1,237 @@
 // src/hooks/useAnnotations.ts
 import { useState, useEffect } from 'react';
-import { Annotation, Comment } from '../shared/types/annotation';
+import { normalizeUrl } from '../shared/utils/normalizeUrl';
+import { useOrbitDB } from './useOrbitDB';
+import { Annotation } from '../shared/types/annotation';
+
+interface UseAnnotationsProps {
+    url: string;
+    db: any;
+    did: string | null;
+    isReady: boolean;
+}
 
 interface UseAnnotationsResult {
     annotations: Annotation[];
-    error: string | null;
+    loading: boolean;
     handleSaveAnnotation: (content: string) => Promise<void>;
     handleDeleteAnnotation: (id: string) => Promise<void>;
     handleSaveComment: (annotationId: string, content: string) => Promise<void>;
 }
 
-const LOCAL_STORAGE_KEY = 'citizenx-pending-annotations';
-
-export const useAnnotations = (url: string, db: any, did: string | null, isDbReady: boolean): UseAnnotationsResult => {
-    const [annotations, setAnnotations] = useState<Annotation[]>([]);
-    const [error, setError] = useState<string | null>(null);
-
-    // Load pending annotations from localStorage on mount
-    useEffect(() => {
-        const loadPendingAnnotations = () => {
-            const pending = localStorage.getItem(LOCAL_STORAGE_KEY);
-            if (pending) {
-                const pendingAnnotations = JSON.parse(pending);
-                const normalizedUrl = url.split('?')[0];
-                const urlPendingAnnotations = pendingAnnotations
-                    .filter((a: Annotation) => a.url === normalizedUrl)
-                    .map((a: Annotation) => ({
-                        ...a,
-                        source: 'local', // Tag as local
-                        comments: (a.comments || []).map((c: Comment) => ({ ...c, source: 'local' })),
-                    }));
-                setAnnotations(urlPendingAnnotations);
-            } else {
-                setAnnotations([]);
-            }
-        };
-        loadPendingAnnotations();
-    }, [url]);
+export function useAnnotations({ url, db, did, isReady }: UseAnnotationsProps): UseAnnotationsResult {
+    const [allEntries, setAllEntries] = useState<Annotation[]>([]);
+    const [loading, setLoading] = useState(true);
+    const normalizedUrl = normalizeUrl(url) || ''; // Fallback to empty string
 
     useEffect(() => {
-        async function initAnnotationsDB() {
-            if (!db || !isDbReady) return;
-            try {
-                const normalizedUrl = url.split('?')[0];
-                const allDocs = await db.all();
-                const urlAnnotations = allDocs
-                    .filter((doc: any) => doc.value.url === normalizedUrl)
-                    .map((doc: any) => ({
-                        ...doc.value,
-                        source: 'orbitdb', // Tag as orbitdb
-                        comments: (doc.value.comments || []).map((c: Comment) => ({ ...c, source: 'orbitdb' })),
-                    }));
+        if (!isReady) return; // Wait for database to initialize
 
-                // Merge OrbitDB annotations with localStorage annotations
-                const pending = localStorage.getItem(LOCAL_STORAGE_KEY) || '[]';
-                const pendingAnnotations = JSON.parse(pending);
-                const urlPendingAnnotations = pendingAnnotations
-                    .filter((a: Annotation) => a.url === normalizedUrl)
-                    .map((a: Annotation) => ({
-                        ...a,
-                        source: 'local',
-                        comments: (a.comments || []).map((c: Comment) => ({ ...c, source: 'local' })),
-                    }));
-
-                const combinedAnnotations = [
-                    ...urlAnnotations,
-                    ...urlPendingAnnotations.filter(
-                        (pending: Annotation) => !urlAnnotations.some((a: Annotation) => a._id === pending._id)
-                    ),
-                ];
-                setAnnotations(combinedAnnotations);
-
-                // Try to publish any pending annotations
-                if (pendingAnnotations.length > 0) {
-                    for (const annotation of urlPendingAnnotations) {
-                        try {
-                            // Remove the source field before saving to OrbitDB
-                            const { source: _source, comments, ...annotationToSave } = annotation;
-                            annotationToSave.comments = comments.map(({ source: _commentSource, ...comment }: Comment) => comment);
-                            await db.put(annotationToSave);
-                            const updatedPending = pendingAnnotations.filter((a: Annotation) => a._id !== annotation._id);
-                            localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(updatedPending));
-                            // Update the source to orbitdb after successful save
-                            setAnnotations((prev) =>
-                                prev.map((a) =>
-                                    a._id === annotation._id
-                                        ? { ...a, source: 'orbitdb', comments: a.comments.map((c) => ({ ...c, source: 'orbitdb' })) }
-                                        : a
-                                )
-                            );
-                        } catch (err) {
-                            console.warn('Failed to publish pending annotation:', err);
-                        }
-                    }
-                }
-            } catch (err) {
-                console.error('Failed to load annotations:', err);
-                setError('Failed to load annotations');
-                const pending = localStorage.getItem(LOCAL_STORAGE_KEY) || '[]';
-                const pendingAnnotations = JSON.parse(pending);
-                const normalizedUrl = url.split('?')[0];
-                const urlPendingAnnotations = pendingAnnotations
-                    .filter((a: Annotation) => a.url === normalizedUrl)
-                    .map((a: Annotation) => ({
-                        ...a,
-                        source: 'local',
-                        comments: (a.comments || []).map((c: Comment) => ({ ...c, source: 'local' })),
-                    }));
-                setAnnotations(urlPendingAnnotations);
-            }
+        console.log('useAnnotations: Normalized URL:', normalizedUrl);
+        if (!normalizedUrl || normalizedUrl.startsWith('chrome://')) {
+            console.warn('useAnnotations: Invalid URL for annotations, skipping database fetch:', normalizedUrl);
+            setAllEntries([]);
+            setLoading(false);
+            return;
         }
-        initAnnotationsDB();
 
-        if (db && isDbReady) {
-            db.events.on('update', async () => {
+        // Load entries from localStorage as a fallback
+        const localEntries = localStorage.getItem('citizenx-annotations');
+        const parsedEntries: Annotation[] = localEntries ? JSON.parse(localEntries) : [];
+        console.log('useAnnotations: Parsed localStorage entries:', parsedEntries);
+        const filteredEntries = parsedEntries.filter((entry) => entry.url === normalizedUrl);
+        setAllEntries(filteredEntries);
+
+        // Fetch entries from OrbitDB if the database is ready
+        if (db) {
+            (async () => {
                 try {
-                    const normalizedUrl = url.split('?')[0];
-                    const allDocs = await db.all();
-                    const urlAnnotations = allDocs
-                        .filter((doc: any) => doc.value.url === normalizedUrl)
-                        .map((doc: any) => ({
-                            ...doc.value,
-                            source: 'orbitdb',
-                            comments: (doc.value.comments || []).map((c: Comment) => ({ ...c, source: 'orbitdb' })),
-                        }));
+                    const orbitdbEntries: Annotation[] = [];
+                    for await (const doc of db.iterator()) {
+                        orbitdbEntries.push(doc);
+                    }
+                    console.log('useAnnotations: OrbitDB entries:', orbitdbEntries);
+                    const updatedEntries = [...parsedEntries, ...orbitdbEntries];
+                    const uniqueEntries = Array.from(new Map(updatedEntries.map((entry) => [entry._id, entry])).values());
+                    setAllEntries(uniqueEntries.filter((entry) => entry.url === normalizedUrl));
+                    localStorage.setItem('citizenx-annotations', JSON.stringify(uniqueEntries));
+                    console.log('useAnnotations: Updated localStorage entries:', uniqueEntries);
 
-                    const pending = localStorage.getItem(LOCAL_STORAGE_KEY) || '[]';
-                    const pendingAnnotations = JSON.parse(pending);
-                    const urlPendingAnnotations = pendingAnnotations
-                        .filter((a: Annotation) => a.url === normalizedUrl)
-                        .map((a: Annotation) => ({
-                            ...a,
-                            source: 'local',
-                            comments: (a.comments || []).map((c: Comment) => ({ ...c, source: 'local' })),
-                        }));
-
-                    const combinedAnnotations = [
-                        ...urlAnnotations,
-                        ...urlPendingAnnotations.filter(
-                            (pending: Annotation) => !urlAnnotations.some((a: Annotation) => a._id === pending._id)
-                        ),
-                    ];
-                    setAnnotations(combinedAnnotations);
+                    // Sync pending operations from background.js
+                    chrome.runtime.sendMessage({ action: 'syncPending' }, async (response: { pending?: { annotations: any[] } }) => {
+                        if (response.pending) {
+                            console.log('useAnnotations: Syncing pending operations:', response.pending);
+                            const { annotations: pendingEntries } = response.pending;
+                            for (const operation of pendingEntries) {
+                                if (operation.action === 'putAnnotation') {
+                                    try {
+                                        await db.put(operation.data);
+                                        console.log('useAnnotations: Applied pending entry:', operation.data);
+                                    } catch (err) {
+                                        console.error('useAnnotations: Failed to apply pending entry:', err);
+                                    }
+                                }
+                            }
+                            // Refresh entries after syncing
+                            const syncedEntries: Annotation[] = [];
+                            for await (const doc of db.iterator()) {
+                                syncedEntries.push(doc);
+                            }
+                            console.log('useAnnotations: Entries after syncing:', syncedEntries);
+                            const finalEntries = [...uniqueEntries, ...syncedEntries];
+                            const finalUniqueEntries = Array.from(new Map(finalEntries.map((entry) => [entry._id, entry])).values());
+                            setAllEntries(finalUniqueEntries.filter((entry) => entry.url === normalizedUrl));
+                            localStorage.setItem('citizenx-annotations', JSON.stringify(finalUniqueEntries));
+                            console.log('useAnnotations: Final entries in localStorage after sync:', finalUniqueEntries);
+                        } else {
+                            console.log('useAnnotations: No pending operations to sync');
+                        }
+                    });
                 } catch (err) {
-                    console.error('Failed to update annotations:', err);
-                    setError('Failed to update annotations');
+                    console.error('useAnnotations: Failed to fetch entries from OrbitDB:', err);
+                }
+            })();
+        }
+
+        setLoading(false);
+    }, [normalizedUrl, db, isReady]);
+
+    // Separate useEffect for polling localStorage
+    useEffect(() => {
+        if (!normalizedUrl || normalizedUrl.startsWith('chrome://')) return;
+
+        const interval = setInterval(() => {
+            console.log('useAnnotations: Polling localStorage for updates...');
+            const updatedLocalEntries = localStorage.getItem('citizenx-annotations');
+            const parsedUpdatedEntries: Annotation[] = updatedLocalEntries ? JSON.parse(updatedLocalEntries) : [];
+            if (JSON.stringify(parsedUpdatedEntries) !== JSON.stringify(allEntries)) {
+                console.log('useAnnotations: LocalStorage entries updated:', parsedUpdatedEntries);
+                setAllEntries(parsedUpdatedEntries.filter((entry) => entry.url === normalizedUrl));
+            }
+        }, 10000); // Poll every 10 seconds
+
+        return () => clearInterval(interval);
+    }, [normalizedUrl, allEntries]);
+
+    // Heartbeat to keep background.js informed of side panel activity
+    useEffect(() => {
+        const heartbeatInterval = setInterval(() => {
+            chrome.runtime.sendMessage({ action: 'heartbeat' }, (response: any) => {
+                if (chrome.runtime.lastError) {
+                    console.error('Heartbeat failed:', chrome.runtime.lastError);
                 }
             });
-        }
-    }, [db, url, isDbReady]);
+        }, 4000);
 
-    const handleSaveAnnotation = async (content: string) => {
-        if (!did) {
-            throw new Error('User not authenticated');
+        return () => clearInterval(heartbeatInterval);
+    }, []);
+
+    const addEntry = async (entry: Annotation) => {
+        if (!normalizedUrl || normalizedUrl.startsWith('chrome://')) {
+            console.warn('useAnnotations: Invalid URL for annotations, cannot save entry:', normalizedUrl);
+            return;
         }
-        if (!db || !isDbReady) {
-            throw new Error('Database not initialized');
+
+        if (!db || !isReady) {
+            // Database is not initialized; cache the operation
+            console.log('useAnnotations: Database not ready, caching entry:', entry);
+            return new Promise<void>((resolve, reject) => {
+                chrome.runtime.sendMessage({ action: 'putAnnotation', annotation: entry }, (response: any) => {
+                    if (response.success) {
+                        const updatedEntries = [...allEntries, entry];
+                        setAllEntries(updatedEntries);
+                        localStorage.setItem('citizenx-annotations', JSON.stringify(updatedEntries));
+                        console.log('useAnnotations: Cached entry, updated entries:', updatedEntries);
+                        resolve();
+                    } else {
+                        console.error('useAnnotations: Failed to cache entry:', response.error);
+                        reject(new Error(response.error));
+                    }
+                });
+            });
         }
-        const annotation: Annotation = {
-            _id: `${did}-${Date.now()}`,
-            url: url.split('?')[0],
-            text: content,
-            timestamp: Date.now(),
-            did,
-            comments: [],
-            source: 'local', // Initially saved to local
-        };
+
+        // Database is open; save directly to OrbitDB
+        console.log('useAnnotations: Saving entry to OrbitDB:', entry);
         try {
-            await db.put(annotation);
-            setAnnotations((prev) => [...prev, { ...annotation, source: 'orbitdb' }]);
+            await db.put(entry);
+            const updatedEntries = [...allEntries, entry];
+            setAllEntries(updatedEntries);
+            localStorage.setItem('citizenx-annotations', JSON.stringify(updatedEntries));
+            console.log('useAnnotations: Saved entry to OrbitDB, updated entries:', updatedEntries);
         } catch (err) {
-            console.error('Failed to save annotation:', err);
-            if (err.message.includes('NoPeersSubscribedToTopic')) {
-                const pending = localStorage.getItem(LOCAL_STORAGE_KEY) || '[]';
-                const pendingAnnotations = JSON.parse(pending);
-                pendingAnnotations.push(annotation);
-                localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(pendingAnnotations));
-                setAnnotations((prev) => [...prev, annotation]);
-                setError('No peers available, annotation saved locally. It will sync when peers are available.');
-            } else {
-                setError('Failed to save annotation');
-                throw err;
-            }
+            console.error('useAnnotations: Failed to save entry to OrbitDB:', err);
+            // Fallback to caching if OrbitDB fails
+            await chrome.runtime.sendMessage({ action: 'putAnnotation', annotation: entry });
+            const updatedEntries = [...allEntries, entry];
+            setAllEntries(updatedEntries);
+            localStorage.setItem('citizenx-annotations', JSON.stringify(updatedEntries));
+            console.log('useAnnotations: OrbitDB save failed, cached entry:', updatedEntries);
         }
     };
 
+    const handleSaveAnnotation = async (content: string) => {
+        if (!did) {
+            console.warn('useAnnotations: User not authenticated, cannot save annotation');
+            return;
+        }
+        const timestamp = Date.now();
+        const annotation: Annotation = {
+            _id: `${did}-${timestamp}`,
+            url: normalizedUrl,
+            text: content,
+            did,
+            timestamp,
+            source: db && isReady ? 'orbitdb' : 'local',
+            comments: [],
+        };
+        await addEntry(annotation);
+    };
+
     const handleDeleteAnnotation = async (id: string) => {
-        if (!db || !isDbReady) {
-            throw new Error('Database not initialized');
-        }
-        try {
-            await db.del(id);
-            setAnnotations((prev) => prev.filter((annotation) => annotation._id !== id));
-        } catch (err) {
-            console.error('Failed to delete annotation:', err);
-            setError('Failed to delete annotation');
-        }
+        // Note: Deletion is not fully implemented; update local state only
+        const updatedEntries = allEntries.filter((entry) => entry._id !== id);
+        setAllEntries(updatedEntries);
+        localStorage.setItem('citizenx-annotations', JSON.stringify(updatedEntries));
     };
 
     const handleSaveComment = async (annotationId: string, content: string) => {
         if (!did) {
-            throw new Error('User not authenticated');
+            console.warn('useAnnotations: User not authenticated, cannot save comment');
+            return;
         }
-        if (!db || !isDbReady) {
-            throw new Error('Database not initialized');
-        }
-        try {
-            const annotation = annotations.find((a) => a._id === annotationId);
-            if (!annotation) {
-                throw new Error('Annotation not found');
+        const timestamp = Date.now();
+        const comment: Annotation = {
+            _id: `${did}-${timestamp}`,
+            url: normalizedUrl,
+            text: content,
+            did,
+            timestamp,
+            source: db && isReady ? 'orbitdb' : 'local',
+            comments: [],
+            annotationId,
+        };
+        await addEntry(comment);
+
+        // Update the parent annotation to include the comment
+        const updatedEntries = allEntries.map((entry) => {
+            if (entry._id === annotationId) {
+                return { ...entry, comments: [...(entry.comments || []), comment] };
             }
-            const comment: Comment = {
-                _id: `${did}-${Date.now()}`,
-                text: content,
-                timestamp: Date.now(),
-                did,
-                source: 'local', // Initially saved to local
-            };
-            const updatedAnnotation: Annotation = {
-                ...annotation,
-                comments: [...(annotation.comments || []), comment],
-            };
-            const { source: _source, comments, ...annotationToSave } = updatedAnnotation;
-            annotationToSave.comments = comments.map(({ source: _commentSource, ...c }: Comment) => c);
-            await db.put(annotationToSave);
-            setAnnotations((prev) =>
-                prev.map((a) =>
-                    a._id === annotationId
-                        ? { ...updatedAnnotation, source: 'orbitdb', comments: updatedAnnotation.comments.map((c) => ({ ...c, source: 'orbitdb' })) }
-                        : a
-                )
-            );
-        } catch (err) {
-            console.error('Failed to save comment:', err);
-            if (err.message.includes('NoPeersSubscribedToTopic')) {
-                const pending = localStorage.getItem(LOCAL_STORAGE_KEY) || '[]';
-                let pendingAnnotations = JSON.parse(pending);
-                const annotationIndex = pendingAnnotations.findIndex((a: Annotation) => a._id === annotationId);
-                const comment: Comment = {
-                    _id: `${did}-${Date.now()}`,
-                    text: content,
-                    timestamp: Date.now(),
-                    did,
-                    source: 'local',
-                };
-                if (annotationIndex !== -1) {
-                    pendingAnnotations[annotationIndex].comments = [
-                        ...(pendingAnnotations[annotationIndex].comments || []),
-                        comment,
-                    ];
-                } else {
-                    const annotation = annotations.find((a) => a._id === annotationId);
-                    if (annotation) {
-                        const updatedAnnotation = {
-                            ...annotation,
-                            comments: [...(annotation.comments || []), comment],
-                        };
-                        pendingAnnotations.push(updatedAnnotation);
-                    }
-                }
-                localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(pendingAnnotations));
-                setAnnotations((prev) =>
-                    prev.map((a) =>
-                        a._id === annotationId
-                            ? { ...a, comments: [...(a.comments || []), comment] }
-                            : a
-                    )
-                );
-                setError('No peers available, comment saved locally. It will sync when peers are available.');
-            } else {
-                setError('Failed to save comment');
-                throw err;
-            }
-        }
+            return entry;
+        });
+        setAllEntries(updatedEntries);
+        localStorage.setItem('citizenx-annotations', JSON.stringify(updatedEntries));
     };
 
-    return { annotations, error, handleSaveAnnotation, handleDeleteAnnotation, handleSaveComment };
-};
+    // Filter top-level annotations (those without annotationId) for the result
+    const annotations = allEntries.filter((entry) => !entry.annotationId);
+
+    return {
+        annotations,
+        loading,
+        handleSaveAnnotation,
+        handleDeleteAnnotation,
+        handleSaveComment,
+    };
+}

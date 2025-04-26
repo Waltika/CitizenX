@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useOrbitDB } from '../hooks/useOrbitDB';
 import { useAnnotations } from '../hooks/useAnnotations';
 import { useUserProfiles } from '../hooks/useUserProfiles';
-import useAuth from '../hooks/useAuth';
+import { useAuth } from '../hooks/useAuth';
 import { useIdentityExportImport } from '../hooks/useIdentityExportImport';
 import { useProfileModal } from '../hooks/useProfileModal';
 import { AnnotationList } from './AnnotationList';
@@ -13,12 +13,12 @@ interface AnnotationUIProps {
     url: string;
 }
 
-const AnnotationUI: React.FC<AnnotationUIProps> = ({ url }) => {
+export const AnnotationUI: React.FC<AnnotationUIProps> = ({ url }) => {
     const [annotation, setAnnotation] = useState('');
     const [isSettingsMenuOpen, setIsSettingsMenuOpen] = useState(false);
     const settingsMenuRef = useRef<HTMLDivElement>(null);
 
-    const { did, profile, loading, authenticate, signOut, exportIdentity, importIdentity, createProfile, updateProfile, error: authError } = useAuth();
+    const { did, profile, loading: authLoading, authenticate, signOut, exportIdentity, importIdentity, createProfile, updateProfile, error: authError } = useAuth();
     const { profiles, error: profilesError } = useUserProfiles(did);
 
     const {
@@ -51,17 +51,17 @@ const AnnotationUI: React.FC<AnnotationUIProps> = ({ url }) => {
     const { db, error: dbError, isReady } = isPopupUrl ? { db: null, error: null, isReady: true } : useOrbitDB(url);
     const { annotations, error: annotationsError, handleSaveAnnotation, handleDeleteAnnotation, handleSaveComment } = isPopupUrl
         ? { annotations: [], error: null, handleSaveAnnotation: async () => {}, handleDeleteAnnotation: async () => {}, handleSaveComment: async () => {} }
-        : useAnnotations(url, db, did, isReady);
+        : useAnnotations({ url, db, did, isReady });
 
     const error = authError || dbError || annotationsError || profilesError;
 
     useEffect(() => {
-        console.log('AnnotationUI: Checking profile modal conditions - loading:', loading, 'did:', did, 'profile:', profile);
-        if (!loading && did && !profile) {
+        console.log('AnnotationUI: Checking profile modal conditions - loading:', authLoading, 'did:', did, 'profile:', profile);
+        if (!authLoading && did && !profile) {
             console.log('AnnotationUI: Opening Update Profile modal');
             setIsProfileModalOpen(true);
         }
-    }, [did, profile, loading, setIsProfileModalOpen]);
+    }, [did, profile, authLoading, setIsProfileModalOpen]);
 
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
@@ -93,6 +93,10 @@ const AnnotationUI: React.FC<AnnotationUIProps> = ({ url }) => {
         setIsExportModalOpen(true);
         setPassphrase('');
     };
+
+    if (authLoading) {
+        return <div style={{ padding: '1rem' }}>Loading authentication...</div>;
+    }
 
     return (
         <div className="annotation-ui-container">
@@ -268,19 +272,23 @@ const AnnotationUI: React.FC<AnnotationUIProps> = ({ url }) => {
                 </div>
             )}
             {error && <p className="error-text">{error}</p>}
-            <textarea
-                value={annotation}
-                onChange={(e) => setAnnotation(e.target.value)}
-                placeholder="Enter annotation..."
-                className="annotation-textarea"
-            />
-            <button
-                onClick={onSave}
-                disabled={!did || !db || !isReady}
-                className="annotation-save-button"
-            >
-                Save
-            </button>
+            {did && (
+                <>
+          <textarea
+              value={annotation}
+              onChange={(e) => setAnnotation(e.target.value)}
+              placeholder="Enter annotation..."
+              className="annotation-textarea"
+          />
+                    <button
+                        onClick={onSave}
+                        disabled={!did || !db || !isReady}
+                        className="annotation-save-button"
+                    >
+                        Save
+                    </button>
+                </>
+            )}
             <AnnotationList
                 annotations={annotations}
                 profiles={profiles}
@@ -290,5 +298,3 @@ const AnnotationUI: React.FC<AnnotationUIProps> = ({ url }) => {
         </div>
     );
 };
-
-export default AnnotationUI;

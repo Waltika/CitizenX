@@ -1,27 +1,18 @@
 // src/shared/utils/normalizeUrl.ts
-export const normalizeUrl = (url: string): string => {
-    try {
-        const urlObj = new URL(url);
-
-        // Remove language prefixes (e.g., /en/, /fr/) from the pathname
-        let pathname = urlObj.pathname.replace(/^\/[a-z]{2}(\/|$)/, '/');
-        // Ensure pathname starts with a slash
-        if (!pathname.startsWith('/')) {
-            pathname = '/' + pathname;
-        }
-
-        // Remove trailing slashes
-        pathname = pathname.replace(/\/+$/, '');
-
-        // Remove all query parameters (previously filtered only specific params)
-        const filteredParams = new URLSearchParams();
-
-        // Reconstruct the normalized URL
-        const normalizedUrl = `${urlObj.protocol}//${urlObj.host}${pathname}${filteredParams.toString() ? '?' + filteredParams.toString() : ''}`;
-        return normalizedUrl;
-    } catch (error) {
-        console.error('Failed to normalize URL:', error);
-        // Fallback to the original URL if normalization fails
-        return url;
+export function normalizeUrl(url: string | undefined): string | undefined {
+    if (!url) {
+        console.warn('normalizeUrl: URL is undefined or empty');
+        return undefined;
     }
-};
+
+    try {
+        const parsedUrl = new URL(url);
+        const normalized = parsedUrl.hostname + parsedUrl.pathname;
+        console.log('normalizeUrl: Normalized URL:', normalized);
+        return normalized;
+    } catch (err) {
+        console.error('Failed to normalize URL:', err);
+        // Fallback for URLs that cannot be parsed (e.g., chrome:// URLs)
+        return url; // Return the original URL as a fallback
+    }
+}

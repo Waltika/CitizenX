@@ -1,7 +1,7 @@
 // src/sidepanel/index.tsx
 import React, { useState, useEffect } from 'react';
 import { createRoot } from 'react-dom/client';
-import AnnotationUI from '../components/AnnotationUI';
+import { AnnotationUI } from '../components/AnnotationUI';
 
 const App: React.FC = () => {
     const [url, setUrl] = useState<string | null>(null);

@@ -1,16 +1,7 @@
 // src/hooks/useAuth.ts
 import { useState, useEffect } from 'react';
-import { createOrbitDB } from '@orbitdb/core';
-import { createHelia } from 'helia';
-import { webSockets } from '@libp2p/websockets';
-import { webRTC } from '@libp2p/webrtc';
-import { circuitRelayTransport } from '@libp2p/circuit-relay-v2';
-import { gossipsub } from '@chainsafe/libp2p-gossipsub';
-import { bootstrap } from '@libp2p/bootstrap';
-import { identify } from '@libp2p/identify';
-import { FaultTolerance } from '@libp2p/interface';
 import { generateKeyPair, exportKeyPair, importKeyPair } from '../utils/crypto';
-import {bootstrapNodes} from "..//config/boostrap";
+import { useOrbitDB } from './useOrbitDB';
 
 interface Profile {
     _id: string; // DID
@@ -23,7 +14,7 @@ interface UseAuthResult {
     profile: Profile | null;
     loading: boolean;
     authenticate: () => Promise<void>;
-    signOut: () => void;
+    signOut: () => Promise<void>;
     exportIdentity: (passphrase: string) => Promise<string>;
     importIdentity: (identityData: string, passphrase: string) => Promise<void>;
     createProfile: (handle: string, profilePicture: string) => Promise<void>;
@@ -31,132 +22,161 @@ interface UseAuthResult {
     error: string | null;
 }
 
-export default function useAuth(): UseAuthResult {
+export function useAuth(): UseAuthResult {
     const [did, setDid] = useState<string | null>(null);
     const [profile, setProfile] = useState<Profile | null>(null);
     const [profiles, setProfiles] = useState<Profile[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
-    const [db, setDb] = useState<any>(null);
+    const { db, isReady, error: dbError } = useOrbitDB();
 
     useEffect(() => {
-        async function init() {
+        const loadDidAndProfiles = async () => {
             try {
-                const ipfs = await createHelia({
-                    libp2p: {
-                        transports: [webSockets(), webRTC(), circuitRelayTransport()],
-                        transportManager: { faultTolerance: FaultTolerance.NO_FATAL },
-                        peerDiscovery: [
-                            bootstrap({
-                                list: bootstrapNodes,
-                            }),
-                        ],
-                        services: {
-                            identify: identify(),
-                            pubsub: gossipsub(),
-                        },
-                    },
-                });
-
-                const orbitdb = await createOrbitDB({ ipfs });
-                const database = await orbitdb.open('citizenx-profiles', { type: 'documents' });
-                console.log('User profiles database opened:', database);
-                setDb(database);
-
-                // Load profiles from localStorage as a fallback
-                const localProfiles = localStorage.getItem('citizenx-profiles');
-                console.log('useAuth: Raw localStorage profiles:', localProfiles);
-                const parsedProfiles = localProfiles ? JSON.parse(localProfiles) : [];
-                console.log('useAuth: Parsed localStorage profiles:', parsedProfiles);
-                setProfiles(parsedProfiles);
-                console.log('useAuth: Initial profiles loaded:', parsedProfiles);
-
                 // Load DID and private key from chrome.storage.local
-                chrome.storage.local.get(['did', 'privateKey'], async (result) => {
-                    if (result.did && result.privateKey) {
-                        console.log('useAuth: Initial DID from storage:', result.did);
-                        setDid(result.did);
-
-                        // Check if localStorage profiles match the DID
-                        console.log('useAuth: Checking localStorage profiles for DID mismatch:', parsedProfiles);
-                        const userProfile = parsedProfiles.find((p: Profile) => p._id === result.did);
-                        if (userProfile) {
-                            console.log('useAuth: Comparing DID', result.did, 'with profile _id', userProfile._id);
-                            console.log('useAuth: Setting initial profile from localStorage:', userProfile);
-                            setProfile(userProfile);
-                        }
-                    }
-                    console.log('useAuth: Finished loading DID and profile');
-                    setLoading(false);
+                const result = await new Promise<{ did?: string; privateKey?: string }>((resolve) => {
+                    chrome.storage.local.get(['did', 'privateKey'], (res) => resolve(res));
                 });
+                console.log('useAuth: Loading DID from chrome.storage.local:', result);
+                if (result.did && result.privateKey) {
+                    console.log('useAuth: DID loaded:', result.did);
+                    setDid(result.did);
 
-                // Load profiles from OrbitDB
-                const orbitdbProfiles: Profile[] = [];
-                try {
-                    const allDocsIterator = await database.all();
-                    for await (const doc of allDocsIterator) {
-                        orbitdbProfiles.push(doc.value);
+                    // Load profiles from localStorage as a fallback
+                    const localProfiles = localStorage.getItem('citizenx-profiles');
+                    const parsedProfiles: Profile[] = localProfiles ? JSON.parse(localProfiles) : [];
+                    console.log('useAuth: Profiles from localStorage:', parsedProfiles);
+                    const userProfile = parsedProfiles.find((p: Profile) => p._id === result.did);
+                    if (userProfile) {
+                        console.log('useAuth: Found user profile in localStorage:', userProfile);
+                        setProfile(userProfile);
+                    } else {
+                        console.log('useAuth: No user profile found in localStorage for DID:', result.did);
                     }
-                } catch (err) {
-                    console.error('useAuth: Failed to iterate over database.all():', err);
-                    const allDocs = await database.get('');
-                    orbitdbProfiles.push(...allDocs.map((doc: any) => doc.value));
+                    setProfiles(parsedProfiles);
+                } else {
+                    console.log('useAuth: No DID found in chrome.storage.local');
                 }
-                const updatedProfiles = [...parsedProfiles, ...orbitdbProfiles];
-                const uniqueProfiles = Array.from(new Map(updatedProfiles.map((p: Profile) => [p._id, p])).values());
-                setProfiles(uniqueProfiles);
+
+                // Wait for database to be ready before proceeding
+                if (!isReady) {
+                    console.log('useAuth: Database not ready yet, waiting...');
+                    return;
+                }
+
+                // Fetch profiles from OrbitDB if the database is ready
+                if (db) {
+                    try {
+                        console.log('useAuth: Fetching profiles from OrbitDB');
+                        const orbitdbProfiles: Profile[] = [];
+                        for await (const doc of db.iterator()) {
+                            orbitdbProfiles.push(doc);
+                        }
+                        console.log('useAuth: Profiles from OrbitDB:', orbitdbProfiles);
+                        const updatedProfiles = [...profiles, ...orbitdbProfiles];
+                        const uniqueProfiles = Array.from(new Map(updatedProfiles.map((p: Profile) => [p._id, p])).values());
+                        setProfiles(uniqueProfiles);
+                        localStorage.setItem('citizenx-profiles', JSON.stringify(uniqueProfiles));
+                        console.log('useAuth: Updated profiles in localStorage:', uniqueProfiles);
+
+                        if (did) {
+                            const userProfile = uniqueProfiles.find((p: Profile) => p._id === did);
+                            if (userProfile) {
+                                console.log('useAuth: Found user profile in OrbitDB:', userProfile);
+                                setProfile(userProfile);
+                            } else {
+                                console.log('useAuth: No user profile found in OrbitDB for DID:', did);
+                            }
+                        }
+
+                        // Sync pending operations from background.js
+                        chrome.runtime.sendMessage({ action: 'syncPending' }, async (response: { pending?: { profiles: any[] } }) => {
+                            if (response.pending) {
+                                console.log('useAuth: Syncing pending operations:', response.pending);
+                                const { profiles: pendingProfiles } = response.pending;
+                                for (const operation of pendingProfiles) {
+                                    if (operation.action === 'putProfile') {
+                                        try {
+                                            await db.put(operation.data);
+                                            console.log('useAuth: Applied pending profile:', operation.data);
+                                        } catch (err) {
+                                            console.error('useAuth: Failed to apply pending profile:', err);
+                                        }
+                                    }
+                                }
+                                // Refresh profiles after syncing
+                                const syncedProfiles: Profile[] = [];
+                                for await (const doc of db.iterator()) {
+                                    syncedProfiles.push(doc);
+                                }
+                                console.log('useAuth: Profiles after syncing:', syncedProfiles);
+                                const finalProfiles = [...profiles, ...syncedProfiles];
+                                const finalUniqueProfiles = Array.from(new Map(finalProfiles.map((p: Profile) => [p._id, p])).values());
+                                setProfiles(finalUniqueProfiles);
+                                localStorage.setItem('citizenx-profiles', JSON.stringify(finalUniqueProfiles));
+                                console.log('useAuth: Final profiles in localStorage after sync:', finalUniqueProfiles);
+                                if (did) {
+                                    const userProfile = finalUniqueProfiles.find((p: Profile) => p._id === did);
+                                    if (userProfile) {
+                                        console.log('useAuth: Found user profile after sync:', userProfile);
+                                        setProfile(userProfile);
+                                    }
+                                }
+                            } else {
+                                console.log('useAuth: No pending operations to sync');
+                            }
+                        });
+                    } catch (err) {
+                        console.error('useAuth: Failed to fetch profiles from OrbitDB:', err);
+                        setError('Failed to load profiles from database');
+                    }
+                }
             } catch (err) {
-                console.error('Failed to initialize auth:', err);
-                setError('Failed to initialize authentication');
+                console.error('useAuth: Failed to load DID or profiles:', err);
+                setError('Failed to load user data');
+            } finally {
                 setLoading(false);
             }
-        }
-
-        init();
-
-        return () => {
-            if (db) {
-                db.close();
-            }
         };
-    }, []);
+
+        loadDidAndProfiles();
+    }, [did, db, isReady]);
 
     useEffect(() => {
-        if (!db) return;
+        if (dbError) {
+            setError('Failed to load profiles');
+        }
+    }, [dbError]);
 
-        db.events.on('update', async () => {
-            const orbitdbProfiles: Profile[] = [];
-            try {
-                const allDocsIterator = await db.all();
-                for await (const doc of allDocsIterator) {
-                    orbitdbProfiles.push(doc.value);
+    // Heartbeat to keep background.js informed of side panel activity
+    useEffect(() => {
+        const heartbeatInterval = setInterval(() => {
+            chrome.runtime.sendMessage({ action: 'heartbeat' }, (response: any) => {
+                if (chrome.runtime.lastError) {
+                    console.error('Heartbeat failed:', chrome.runtime.lastError);
                 }
-            } catch (err) {
-                console.error('useAuth: Failed to iterate over database.all() in update:', err);
-                const allDocs = await db.get('');
-                orbitdbProfiles.push(...allDocs.map((doc: any) => doc.value));
-            }
-            const updatedProfiles = [...profiles, ...orbitdbProfiles];
-            const uniqueProfiles = Array.from(new Map(updatedProfiles.map((p: Profile) => [p._id, p])).values());
-            setProfiles(uniqueProfiles);
-            localStorage.setItem('citizenx-profiles', JSON.stringify(uniqueProfiles));
-            console.log('Profiles after refresh:', uniqueProfiles);
+            });
+        }, 4000);
 
-            if (did) {
-                const userProfile = uniqueProfiles.find((p: Profile) => p._id === did);
-                console.log('useAuth: Profile for DID', did, ':', userProfile);
-                setProfile(userProfile || null);
-            }
-        });
-    }, [db, did]);
+        return () => clearInterval(heartbeatInterval);
+    }, []);
 
     const authenticate = async () => {
         try {
             setLoading(true);
             const { did: newDid, privateKey } = await generateKeyPair();
-            await chrome.storage.local.set({ did: newDid, privateKey });
-            console.log('useAuth: Key pair stored in chrome.storage.local');
-            console.log('useAuth: New authenticated DID:', newDid);
+            console.log('useAuth: Generated new DID:', newDid);
+            await new Promise<void>((resolve, reject) => {
+                chrome.storage.local.set({ did: newDid, privateKey }, () => {
+                    if (chrome.runtime.lastError) {
+                        console.error('useAuth: Failed to save DID to chrome.storage.local:', chrome.runtime.lastError);
+                        reject(chrome.runtime.lastError);
+                    } else {
+                        console.log('useAuth: Saved DID to chrome.storage.local');
+                        resolve();
+                    }
+                });
+            });
             setDid(newDid);
             setLoading(false);
         } catch (err) {
@@ -167,21 +187,33 @@ export default function useAuth(): UseAuthResult {
     };
 
     const signOut = async () => {
+        console.log('useAuth: Signing out, DID:', did);
         const localProfiles = localStorage.getItem('citizenx-profiles');
-        let updatedProfiles = localProfiles ? JSON.parse(localProfiles) : [];
+        let updatedProfiles: Profile[] = localProfiles ? JSON.parse(localProfiles) : [];
         updatedProfiles = updatedProfiles.filter((p: Profile) => p._id !== did);
-        console.log('useAuth: Updated profiles after sign-out:', updatedProfiles);
         localStorage.setItem('citizenx-profiles', JSON.stringify(updatedProfiles));
+        console.log('useAuth: Updated profiles after sign out:', updatedProfiles);
         setProfiles(updatedProfiles);
         setProfile(null);
-        console.log('useAuth: Cleared DID and private key from chrome.storage.local');
-        await chrome.storage.local.remove(['did', 'privateKey']);
+        await new Promise<void>((resolve, reject) => {
+            chrome.storage.local.remove(['did', 'privateKey'], () => {
+                if (chrome.runtime.lastError) {
+                    console.error('useAuth: Failed to remove DID from chrome.storage.local:', chrome.runtime.lastError);
+                    reject(chrome.runtime.lastError);
+                } else {
+                    console.log('useAuth: Removed DID from chrome.storage.local');
+                    resolve();
+                }
+            });
+        });
         setDid(null);
-        console.log('useAuth: Loading profiles, loading:', loading, 'profiles:', updatedProfiles);
     };
 
     const exportIdentity = async (passphrase: string): Promise<string> => {
-        const result = await chrome.storage.local.get(['did', 'privateKey']);
+        const result = await new Promise<{ did?: string; privateKey?: string }>((resolve) => {
+            chrome.storage.local.get(['did', 'privateKey'], (res) => resolve(res));
+        });
+        console.log('useAuth: Exporting identity:', result);
         if (!result.did || !result.privateKey) {
             throw new Error('No identity found to export');
         }
@@ -191,68 +223,135 @@ export default function useAuth(): UseAuthResult {
 
     const importIdentity = async (identityData: string, passphrase: string) => {
         const { did: importedDid, privateKey } = await importKeyPair(identityData, passphrase);
-        await chrome.storage.local.set({ did: importedDid, privateKey });
+        console.log('useAuth: Imported DID:', importedDid);
+        await new Promise<void>((resolve, reject) => {
+            chrome.storage.local.set({ did: importedDid, privateKey }, () => {
+                if (chrome.runtime.lastError) {
+                    console.error('useAuth: Failed to save imported DID to chrome.storage.local:', chrome.runtime.lastError);
+                    reject(chrome.runtime.lastError);
+                } else {
+                    console.log('useAuth: Saved imported DID to chrome.storage.local');
+                    resolve();
+                }
+            });
+        });
         setDid(importedDid);
 
         const localProfiles = localStorage.getItem('citizenx-profiles');
-        const parsedProfiles = localProfiles ? JSON.parse(localProfiles) : [];
+        const parsedProfiles: Profile[] = localProfiles ? JSON.parse(localProfiles) : [];
         const userProfile = parsedProfiles.find((p: Profile) => p._id === importedDid);
         if (userProfile) {
+            console.log('useAuth: Found user profile after import:', userProfile);
             setProfile(userProfile);
         }
     };
 
+    const saveProfile = async (profile: Profile) => {
+        if (!db || !isReady) {
+            // Database is not initialized; cache the operation
+            console.log('useAuth: Database not ready, caching profile operation');
+            return new Promise<void>((resolve, reject) => {
+                chrome.runtime.sendMessage({ action: 'putProfile', profile }, (response: any) => {
+                    if (response.success) {
+                        const updatedProfiles = [...profiles, profile];
+                        setProfiles(updatedProfiles);
+                        localStorage.setItem('citizenx-profiles', JSON.stringify(updatedProfiles));
+                        console.log('useAuth: Cached profile operation, updated profiles:', updatedProfiles);
+                        setProfile(profile);
+                        resolve();
+                    } else {
+                        console.error('useAuth: Failed to cache profile operation:', response.error);
+                        reject(new Error(response.error));
+                    }
+                });
+            });
+        }
+
+        // Database is open; save directly to OrbitDB
+        console.log('useAuth: Saving profile to OrbitDB');
+        try {
+            await db.put(profile);
+            const updatedProfiles = [...profiles, profile];
+            setProfiles(updatedProfiles);
+            localStorage.setItem('citizenx-profiles', JSON.stringify(updatedProfiles));
+            console.log('useAuth: Saved profile to OrbitDB, updated profiles:', updatedProfiles);
+            setProfile(profile);
+        } catch (err) {
+            console.error('useAuth: Failed to save profile to OrbitDB:', err);
+            // Fallback to caching if OrbitDB fails
+            await chrome.runtime.sendMessage({ action: 'putProfile', profile });
+            const updatedProfiles = [...profiles, profile];
+            setProfiles(updatedProfiles);
+            localStorage.setItem('citizenx-profiles', JSON.stringify(updatedProfiles));
+            console.log('useAuth: OrbitDB save failed, cached profile:', updatedProfiles);
+            setProfile(profile);
+        }
+    };
+
     const createProfile = async (handle: string, profilePicture: string) => {
-        if (!did || !db) {
-            throw new Error('User not authenticated or database not initialized');
+        if (!did) {
+            throw new Error('User not authenticated');
         }
         const profile: Profile = {
             _id: did,
             handle,
             profilePicture,
         };
-        try {
-            await db.put(profile);
-            setProfile(profile);
-            const updatedProfiles = [...profiles, profile];
-            setProfiles(updatedProfiles);
-            localStorage.setItem('citizenx-profiles', JSON.stringify(updatedProfiles));
-            console.log('Profiles after local save:', updatedProfiles);
-        } catch (err) {
-            console.log('No peers subscribed, saving profile to localStorage:', profile);
-            const updatedProfiles = [...profiles, profile];
-            setProfiles(updatedProfiles);
-            localStorage.setItem('citizenx-profiles', JSON.stringify(updatedProfiles));
-            console.log('Profiles after local save:', updatedProfiles);
-            setProfile(profile);
-        }
+        console.log('useAuth: Creating profile:', profile);
+        await saveProfile(profile);
     };
 
     const updateProfile = async (handle: string, profilePicture: string) => {
-        if (!did || !db) {
-            throw new Error('User not authenticated or database not initialized');
+        if (!did) {
+            throw new Error('User not authenticated');
         }
         const updatedProfile: Profile = {
             _id: did,
             handle,
             profilePicture,
         };
+        console.log('useAuth: Updating profile:', updatedProfile);
+
+        if (!db || !isReady) {
+            // Database is not initialized; cache the operation
+            console.log('useAuth: Database not ready, caching profile update');
+            return new Promise<void>((resolve, reject) => {
+                chrome.runtime.sendMessage({ action: 'putProfile', profile: updatedProfile }, (response: any) => {
+                    if (response.success) {
+                        const updatedProfiles = profiles.map((p: Profile) => (p._id === did ? updatedProfile : p));
+                        setProfiles(updatedProfiles);
+                        localStorage.setItem('citizenx-profiles', JSON.stringify(updatedProfiles));
+                        console.log('useAuth: Cached profile update, updated profiles:', updatedProfiles);
+                        setProfile(updatedProfile);
+                        resolve();
+                    } else {
+                        console.error('useAuth: Failed to cache profile update:', response.error);
+                        reject(new Error(response.error));
+                    }
+                });
+            });
+        }
+
+        // Database is open; save directly to OrbitDB
+        console.log('useAuth: Saving updated profile to OrbitDB');
         try {
             await db.put(updatedProfile);
+            const updatedProfiles = profiles.map((p: Profile) => (p._id === did ? updatedProfile : p));
+            setProfiles(updatedProfiles);
+            localStorage.setItem('citizenx-profiles', JSON.stringify(updatedProfiles));
+            console.log('useAuth: Saved updated profile to OrbitDB, updated profiles:', updatedProfiles);
             setProfile(updatedProfile);
-            const updatedProfiles = profiles.map((p) => (p._id === did ? updatedProfile : p));
-            setProfiles(updatedProfiles);
-            localStorage.setItem('citizenx-profiles', JSON.stringify(updatedProfiles));
         } catch (err) {
-            console.log('No peers subscribed, saving profile to localStorage:', updatedProfile);
-            const updatedProfiles = profiles.map((p) => (p._id === did ? updatedProfile : p));
+            console.error('useAuth: Failed to save updated profile to OrbitDB:', err);
+            // Fallback to caching if OrbitDB fails
+            await chrome.runtime.sendMessage({ action: 'putProfile', profile: updatedProfile });
+            const updatedProfiles = profiles.map((p: Profile) => (p._id === did ? updatedProfile : p));
             setProfiles(updatedProfiles);
             localStorage.setItem('citizenx-profiles', JSON.stringify(updatedProfiles));
+            console.log('useAuth: OrbitDB save failed, cached updated profile:', updatedProfiles);
             setProfile(updatedProfile);
         }
     };
-
-    console.log('useAuth: Loading profiles, loading:', loading, 'profiles:', profiles);
 
     return {
         did,
