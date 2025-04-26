@@ -27,7 +27,7 @@ A decentralized Chrome extension for annotating websites in order to bring a kno
 2. We want a crypto-based system for paying contributors, users (if there is profit), and any other connected systems as needed.
 3. We want a system allowing users to share annotations on social platforms, messages, and emails for growth hacking.
 4. We want to enrich annotations with structured data, allowing complex reasoning on them.
-5. Use a WYSIWYG editor for annotations (but not comments).
+5. We want to use a WYSIWYG editor for annotations (but not comments).
 6. We want an AI-powered feature to extract structured information from annotations and comments, defined in a JSON format shared between users. Users can create their own extraction schemas, suggest schemas to the community, and the community can vote to adopt schemas if there’s sufficient interest.
 
 ## Non Functional Requirements - Future Versions
