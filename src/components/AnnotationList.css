@@ -1,0 +1,110 @@
+/* src/components/AnnotationList.css */
+
+/* Container for the entire annotation list */
+.annotation-list-container {
+    margin-top: 1rem;
+}
+
+/* Individual annotation item */
+.annotation-item {
+    background: #fff;
+    padding: 0.5rem;
+    margin-bottom: 0.5rem;
+    border-radius: 5px;
+    border: 1px solid #e5e7eb;
+}
+
+/* Header section of an annotation (profile picture, user info, source icon) */
+.annotation-header {
+    display: flex;
+    align-items: center;
+    margin-bottom: 0.5rem;
+    gap: 0.5rem;
+}
+
+/* Profile picture in the header */
+.annotation-profile-picture {
+    width: 1.5rem;
+    height: 1.5rem;
+    border-radius: 50%;
+}
+
+/* User info (handle and timestamp) */
+.annotation-user-info {
+    margin: 0;
+    font-size: 0.8rem;
+    color: #666;
+}
+
+/* Source icon (OrbitDB or Local Storage) */
+.annotation-source-icon {
+    width: 1rem;
+    height: 1rem;
+}
+
+/* Annotation text */
+.annotation-text {
+    margin: 0 0 0.5rem 0;
+    font-size: 0.9rem;
+    color: #333;
+}
+
+/* Delete button */
+.delete-button {
+    padding: 0.25rem 0.5rem;
+    background: #f97316;
+    color: #fff;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 0.8rem;
+}
+
+.delete-button:hover {
+    background-color: #fb923c;
+}
+
+/* Comments container */
+.comments-container {
+    margin-top: 0.5rem;
+    padding-left: 1rem;
+    border-left: 2px solid #e5e7eb;
+}
+
+/* Comment input section */
+.comment-input-section {
+    margin-top: 0.5rem;
+}
+
+/* Comment textarea */
+.comment-textarea {
+    width: 100%;
+    height: 2.5rem;
+    margin-bottom: 0.5rem;
+    font-size: 0.8rem;
+    border: 1px solid #e5e7eb;
+    border-radius: 5px;
+    padding: 0.5rem;
+    color: #333;
+    background-color: #fff;
+}
+
+/* Add Comment button */
+.add-comment-button {
+    padding: 0.25rem 0.5rem;
+    background: #2c7a7b;
+    color: #fff;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 0.8rem;
+}
+
+.add-comment-button:hover {
+    background-color: #4a999a;
+}
+
+.add-comment-button:disabled {
+    background: #d1d5db;
+    cursor: not-allowed;
+}

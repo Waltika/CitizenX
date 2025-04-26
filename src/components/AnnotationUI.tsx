@@ -4,7 +4,7 @@ import { useOrbitDB } from '../hooks/useOrbitDB';
 import { useAnnotations } from '../hooks/useAnnotations';
 import { useUserProfiles } from '../hooks/useUserProfiles';
 import useAuth from '../hooks/useAuth';
-import AnnotationList from './AnnotationList';
+import { AnnotationList } from './AnnotationList';
 import './AnnotationUI.css'; // Import the CSS file
 
 interface AnnotationUIProps {
