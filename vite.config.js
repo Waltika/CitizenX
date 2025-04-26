@@ -41,6 +41,13 @@ function postBuildPlugin() {
             } catch (error) {
                 console.error('Failed to copy manifest.json:', error);
             }
+            // Copy background.js
+            try {
+                await copyFile(resolve(process.cwd(), 'src/background.js'), resolve(outDir, 'background.js'));
+                console.log('Copied background.js');
+            } catch (error) {
+                console.error('Failed to copy background.js:', error);
+            }
             // Move index.html from dist/src/sidepanel/index.html to dist/index.html
             const srcIndexPath = resolve(outDir, 'src/sidepanel/index.html');
             const destIndexPath = resolve(outDir, 'index.html');

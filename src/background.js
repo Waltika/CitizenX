@@ -1,17 +1,10 @@
 // src/background.js
-console.log('CitizenX background script loaded');
 
+// Handle messages from the side panel
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-    if (message.type === 'GET_TAB_URL') {
-        chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-            if (tabs.length === 0) {
-                console.error('No active tab found');
-                sendResponse({ url: '' });
-                return;
-            }
-            const tabUrl = tabs[0].url || '';
-            sendResponse({ url: tabUrl });
-        });
-        return true; // Indicate that sendResponse will be called asynchronously
+    if (message.action === 'test') {
+        console.log('Background.js received test message');
+        sendResponse({ success: true });
     }
+    return true; // Keep the message channel open for async responses
 });
