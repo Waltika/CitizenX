@@ -4,57 +4,57 @@ import { createRoot } from 'react-dom/client';
 import AnnotationUI from '../components/AnnotationUI';
 
 const App: React.FC = () => {
-    const [currentUrl, setCurrentUrl] = useState<string | null>(null);
+    const [url, setUrl] = useState<string | null>(null);
+    const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
-        // Function to fetch the current tab's URL
-        const fetchCurrentTabUrl = () => {
-            chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-                if (tabs[0]?.url) {
-                    setCurrentUrl(tabs[0].url);
+        // Fetch the current tab's URL with a timeout
+        const fetchUrl = async () => {
+            try {
+                const response = await new Promise<{ url?: string; error?: string }>((resolve, reject) => {
+                    const timeout = setTimeout(() => {
+                        reject(new Error('Timeout: No response from background script'));
+                    }, 5000); // 5-second timeout
+
+                    chrome.runtime.sendMessage({ action: 'getCurrentTabUrl' }, (res: { url?: string; error?: string }) => {
+                        clearTimeout(timeout);
+                        resolve(res);
+                    });
+                });
+
+                if (response && response.url) {
+                    console.log('index.tsx: Fetched current tab URL:', response.url);
+                    setUrl(response.url);
                 } else {
-                    console.error('Failed to get current tab URL');
-                    setCurrentUrl('');
+                    console.error('index.tsx: No URL received from background script:', response?.error || 'Unknown error');
+                    setError('No URL received');
+                    setUrl(''); // Fallback to empty string
                 }
-            });
-        };
-
-        // Fetch the initial URL
-        fetchCurrentTabUrl();
-
-        // Listen for tab updates (e.g., URL changes)
-        const onTabUpdated = (tabId: number, changeInfo: chrome.tabs.TabChangeInfo, tab: chrome.tabs.Tab) => {
-            if (changeInfo.url && tab.active) {
-                setCurrentUrl(changeInfo.url);
+            } catch (err) {
+                console.error('index.tsx: Failed to get current tab URL:', err);
+                setError('Failed to get current tab URL');
+                setUrl(''); // Fallback to empty string
             }
         };
-        chrome.tabs.onUpdated.addListener(onTabUpdated);
 
-        // Listen for tab activation (e.g., switching tabs)
-        const onTabActivated = () => {
-            fetchCurrentTabUrl();
-        };
-        chrome.tabs.onActivated.addListener(onTabActivated);
-
-        // Cleanup listeners on unmount
-        return () => {
-            chrome.tabs.onUpdated.removeListener(onTabUpdated);
-            chrome.tabs.onActivated.removeListener(onTabActivated);
-        };
+        fetchUrl();
     }, []);
 
-    // Show a loading message until the URL is fetched
-    if (currentUrl === null) {
-        return <div>Loading...</div>;
+    if (error) {
+        return <div style={{ padding: '1rem', color: '#e11d48' }}>{error}</div>;
     }
 
-    return <AnnotationUI url={currentUrl} />;
+    if (url === null) {
+        return <div style={{ padding: '1rem' }}>Loading...</div>;
+    }
+
+    return <AnnotationUI url={url} />;
 };
 
-const rootElement = document.getElementById('root');
-if (rootElement) {
-    const root = createRoot(rootElement);
-    root.render(<App />);
-} else {
-    console.error('Root element not found');
+// Render the app
+const container = document.getElementById('root');
+if (!container) {
+    throw new Error('Root container not found');
 }
+const root = createRoot(container);
+root.render(<App />);

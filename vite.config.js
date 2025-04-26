@@ -41,13 +41,6 @@ function postBuildPlugin() {
             } catch (error) {
                 console.error('Failed to copy manifest.json:', error);
             }
-            // Copy background.js
-            try {
-                await copyFile(resolve(process.cwd(), 'src/background.js'), resolve(outDir, 'background.js'));
-                console.log('Copied background.js');
-            } catch (error) {
-                console.error('Failed to copy background.js:', error);
-            }
             // Move index.html from dist/src/sidepanel/index.html to dist/index.html
             const srcIndexPath = resolve(outDir, 'src/sidepanel/index.html');
             const destIndexPath = resolve(outDir, 'index.html');
@@ -68,7 +61,7 @@ function postBuildPlugin() {
 export default defineConfig({
     plugins: [
         react(),
-        postBuildPlugin() // Add the custom plugin
+        postBuildPlugin()
     ],
     resolve: {
         alias: {
@@ -82,9 +75,16 @@ export default defineConfig({
             input: {
                 // Side panel content, temporarily output to dist/src/sidepanel/index.html
                 sidepanel: resolve(process.cwd(), 'src/sidepanel/index.html'),
+                // Background script
+                background: resolve(process.cwd(), 'src/background.ts'),
             },
             output: {
-                entryFileNames: 'sidepanel.js',
+                entryFileNames: function (chunkInfo) {
+                    if (chunkInfo.name === 'background') {
+                        return 'background.js';
+                    }
+                    return 'sidepanel.js';
+                },
                 chunkFileNames: 'assets/[name].js',
                 assetFileNames: 'assets/[name].[ext]',
             },
