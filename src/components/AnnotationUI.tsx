@@ -4,8 +4,10 @@ import { useOrbitDB } from '../hooks/useOrbitDB';
 import { useAnnotations } from '../hooks/useAnnotations';
 import { useUserProfiles } from '../hooks/useUserProfiles';
 import useAuth from '../hooks/useAuth';
+import { useIdentityExportImport } from '../hooks/useIdentityExportImport';
+import { useProfileModal } from '../hooks/useProfileModal';
 import { AnnotationList } from './AnnotationList';
-import './AnnotationUI.css'; // Import the CSS file
+import './AnnotationUI.css';
 
 interface AnnotationUIProps {
     url: string;
@@ -13,20 +15,37 @@ interface AnnotationUIProps {
 
 const AnnotationUI: React.FC<AnnotationUIProps> = ({ url }) => {
     const [annotation, setAnnotation] = useState('');
-    const { did, profile, loading, authenticate, signOut, exportIdentity, importIdentity, createProfile, updateProfile, error: authError } = useAuth();
-    const { profiles, error: profilesError } = useUserProfiles(did);
-    const [exportedIdentity, setExportedIdentity] = useState('');
-    const [importData, setImportData] = useState('');
-    const [passphrase, setPassphrase] = useState('');
-    const [importPassphrase, setImportPassphrase] = useState('');
-    const [importError, setImportError] = useState('');
-    const [exportError, setExportError] = useState('');
-    const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
-    const [isExportModalOpen, setIsExportModalOpen] = useState(false);
-    const [newHandle, setNewHandle] = useState('');
-    const [newProfilePicture, setNewProfilePicture] = useState('');
     const [isSettingsMenuOpen, setIsSettingsMenuOpen] = useState(false);
     const settingsMenuRef = useRef<HTMLDivElement>(null);
+
+    const { did, profile, loading, authenticate, signOut, exportIdentity, importIdentity, createProfile, updateProfile, error: authError } = useAuth();
+    const { profiles, error: profilesError } = useUserProfiles(did);
+
+    const {
+        exportedIdentity,
+        importData,
+        setImportData,
+        passphrase,
+        setPassphrase,
+        importPassphrase,
+        setImportPassphrase,
+        importError,
+        exportError,
+        handleExport,
+        handleImport,
+    } = useIdentityExportImport({ exportIdentity, importIdentity });
+
+    const {
+        isProfileModalOpen,
+        setIsProfileModalOpen,
+        newHandle,
+        setNewHandle,
+        newProfilePicture,
+        handleProfileSubmit,
+        handleFileChange,
+    } = useProfileModal({ profile, createProfile, updateProfile });
+
+    const [isExportModalOpen, setIsExportModalOpen] = useState(false);
 
     const isPopupUrl = url.startsWith('chrome-extension://');
     const { db, error: dbError, isReady } = isPopupUrl ? { db: null, error: null, isReady: true } : useOrbitDB(url);
@@ -42,7 +61,7 @@ const AnnotationUI: React.FC<AnnotationUIProps> = ({ url }) => {
             console.log('AnnotationUI: Opening Update Profile modal');
             setIsProfileModalOpen(true);
         }
-    }, [did, profile, loading]);
+    }, [did, profile, loading, setIsProfileModalOpen]);
 
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
@@ -65,69 +84,6 @@ const AnnotationUI: React.FC<AnnotationUIProps> = ({ url }) => {
         }
     };
 
-    const handleExport = async () => {
-        try {
-            if (!passphrase) {
-                setExportError('Please enter a passphrase to export your identity');
-                return;
-            }
-            const identityData = await exportIdentity(passphrase);
-            setExportedIdentity(identityData);
-            setExportError('');
-        } catch (err) {
-            setExportError((err as Error).message);
-        }
-    };
-
-    const handleImport = async () => {
-        try {
-            if (!importData || !importPassphrase) {
-                setImportError('Please enter the identity data and passphrase');
-                return;
-            }
-            await importIdentity(importData, importPassphrase);
-            setImportData('');
-            setImportPassphrase('');
-            setImportError('');
-            setExportedIdentity('');
-        } catch (err) {
-            setImportError((err as Error).message);
-        }
-    };
-
-    const handleProfileSubmit = async () => {
-        try {
-            if (!newHandle || !newProfilePicture) {
-                setExportError('Please provide a handle and profile picture');
-                return;
-            }
-            if (profile) {
-                await updateProfile(newHandle, newProfilePicture);
-            } else {
-                await createProfile(newHandle, newProfilePicture);
-            }
-            setIsProfileModalOpen(false);
-            setNewHandle('');
-            setNewProfilePicture('');
-            setIsSettingsMenuOpen(false);
-        } catch (err) {
-            setExportError((err as Error).message);
-        }
-    };
-
-    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        if (file) {
-            const reader = new FileReader();
-            reader.onload = (event) => {
-                if (event.target?.result) {
-                    setNewProfilePicture(event.target.result as string);
-                }
-            };
-            reader.readAsDataURL(file);
-        }
-    };
-
     const toggleSettingsMenu = () => {
         setIsSettingsMenuOpen((prev) => !prev);
     };
@@ -136,8 +92,6 @@ const AnnotationUI: React.FC<AnnotationUIProps> = ({ url }) => {
         setIsSettingsMenuOpen(false);
         setIsExportModalOpen(true);
         setPassphrase('');
-        setExportedIdentity('');
-        setExportError('');
     };
 
     return (
