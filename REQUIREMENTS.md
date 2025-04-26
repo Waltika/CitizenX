@@ -22,42 +22,42 @@ A decentralized Chrome extension for annotating websites in order to bring a kno
 6. We want to secure the JWT tokens and other access technologies against hacking.
 7. Add privacy policy to manifest.json once we have a website:   "privacy_policy": "https://yourwebsite.com/privacy-policy"
 
-
 ## Requirements - Future Versions
 1. We want a crypto/ledger-based ownership structure for the project.
 2. We want a crypto-based system for paying contributors, users (if there is profit), and any other connected systems as needed.
 3. We want a system allowing users to share annotations on social platforms, messages, and emails for growth hacking.
 4. We want to enrich annotations with structured data, allowing complex reasoning on them.
 5. Use a WYSIWYG editor for annotations (but not comments).
+6. We want an AI-powered feature to extract structured information from annotations and comments, defined in a JSON format shared between users. Users can create their own extraction schemas, suggest schemas to the community, and the community can vote to adopt schemas if there’s sufficient interest.
 
 ## Non Functional Requirements - Future Versions
 1. Add a pinning service—most probably our own but distributed among willing users, incentivizing them in a crypto-based way.
 2. Restructure the OrbitDB organization so that not every user replicates all annotations from the whole world, but only those from pages they visited (or visit now) and pages they annotated.
 3. Ensure compliance with Chrome Manifest V3 requirements:
-    - Use `background.service_worker` instead of persistent background pages, adapting to the service worker lifecycle (e.g., stateless design, persistence via `chrome.storage`).
-    - Avoid `eval`, `new Function`, and other dynamic code execution methods.
-    - Define a strict Content Security Policy (CSP) in `manifest.json` (e.g., `script-src 'self'; object-src 'self'`), prohibiting inline scripts and external code fetching.
-    - Use the `action` API for toolbar interactions (replacing `browserAction` and `pageAction`).
+   - Use `background.service_worker` instead of persistent background pages, adapting to the service worker lifecycle (e.g., stateless design, persistence via `chrome.storage`).
+   - Avoid `eval`, `new Function`, and other dynamic code execution methods.
+   - Define a strict Content Security Policy (CSP) in `manifest.json` (e.g., `script-src 'self'; object-src 'self'`), prohibiting inline scripts and external code fetching.
+   - Use the `action` API for toolbar interactions (replacing `browserAction` and `pageAction`).
 4. Minimize permissions to reduce user friction and comply with Chrome Web Store policies:
-    - Use specific `host_permissions` where possible, avoiding broad permissions like `<all_urls>` unless necessary.
-    - Implement optional permissions (`optional_host_permissions`) to allow users to grant access to specific domains on-demand.
-    - Provide clear justifications for all permissions in the Chrome Web Store listing.
+   - Use specific `host_permissions` where possible, avoiding broad permissions like `<all_urls>` unless necessary.
+   - Implement optional permissions (`optional_host_permissions`) to allow users to grant access to specific domains on-demand.
+   - Provide clear justifications for all permissions in the Chrome Web Store listing.
 5. Optimize performance to avoid degrading the browser experience:
-    - Design service workers to handle termination after 30 seconds (or up to 5 minutes for certain APIs), using `chrome.storage` for state persistence.
-    - Optimize content scripts by using `run_at: "document_idle"` and limiting DOM manipulation.
-    - Keep the extension bundle size under 100 MB (compressed) and 200 MB (uncompressed), leveraging tree-shaking with Vite.
+   - Design service workers to handle termination after 30 seconds (or up to 5 minutes for certain APIs), using `chrome.storage` for state persistence.
+   - Optimize content scripts by using `run_at: "document_idle"` and limiting DOM manipulation.
+   - Keep the extension bundle size under 100 MB (compressed) and 200 MB (uncompressed), leveraging tree-shaking with Vite.
 6. Enhance security to protect users and comply with Chrome policies:
-    - Use HTTPS for all network requests (e.g., fetching data from `github.io`).
-    - Sanitize user input (e.g., annotations, comments) to prevent XSS attacks, using a library like DOMPurify.
-    - Avoid broad permissions that could lead to security concerns or user distrust.
+   - Use HTTPS for all network requests (e.g., fetching data from `github.io`).
+   - Sanitize user input (e.g., annotations, comments) to prevent XSS attacks, using a library like DOMPurify.
+   - Avoid broad permissions that could lead to security concerns or user distrust.
 7. Ensure a good user experience to avoid user frustration and Chrome Web Store flags:
-    - Use non-intrusive UI elements (e.g., side panel, `chrome.notifications`) instead of popups or alerts.
-    - Support internationalization (i18n) using Chrome’s `i18n` API if targeting a global audience.
-    - Ensure accessibility (a11y) in the UI (e.g., ARIA attributes, keyboard navigation).
+   - Use non-intrusive UI elements (e.g., side panel, `chrome.notifications`) instead of popups or alerts.
+   - Support internationalization (i18n) using Chrome’s `i18n` API if targeting a global audience.
+   - Ensure accessibility (a11y) in the UI (e.g., ARIA attributes, keyboard navigation).
 8. Prepare for Chrome Web Store review process:
-    - Avoid obfuscated or unreadable code, providing source maps if minification is used.
-    - Clearly document data sharing (e.g., via OrbitDB) in the privacy policy and obtain user consent if necessary.
-    - Ensure the extension provides meaningful functionality and avoids unexpected behavior (e.g., no ads, no unauthorized tracking).
+   - Avoid obfuscated or unreadable code, providing source maps if minification is used.
+   - Clearly document data sharing (e.g., via OrbitDB) in the privacy policy and obtain user consent if necessary.
+   - Ensure the extension provides meaningful functionality and avoids unexpected behavior (e.g., no ads, no unauthorized tracking).
 9. Manage storage limits for scalability:
-    - Request the `unlimitedStorage` permission if large data storage is needed (e.g., for annotations in `localStorage`).
-    - Offload data to OrbitDB for peer-to-peer storage, ensuring data is pinned to prevent loss.
+   - Request the `unlimitedStorage` permission if large data storage is needed (e.g., for annotations in `localStorage`).
+   - Offload data to OrbitDB for peer-to-peer storage, ensuring data is pinned to prevent loss.
