@@ -1,8 +1,9 @@
 // src/components/AnnotationList.tsx
 import React from 'react';
 import { Annotation } from '../shared/types/annotation';
+import { useCommentInput } from '../hooks/useCommentInput';
 import Comment from './Comment';
-import './AnnotationList.css'; // Import the CSS file
+import './AnnotationList.css';
 
 interface AnnotationListProps {
     annotations: Annotation[];
@@ -12,17 +13,7 @@ interface AnnotationListProps {
 }
 
 export const AnnotationList: React.FC<AnnotationListProps> = ({ annotations, profiles, onDelete, onSaveComment }) => {
-    const [commentInputs, setCommentInputs] = React.useState<{ [key: string]: string }>({});
-
-    const handleCommentChange = (annotationId: string, value: string) => {
-        setCommentInputs((prev) => ({ ...prev, [annotationId]: value }));
-    };
-
-    const handleSaveComment = async (annotationId: string) => {
-        if (!onSaveComment || !commentInputs[annotationId]) return;
-        await onSaveComment(annotationId, commentInputs[annotationId]);
-        setCommentInputs((prev) => ({ ...prev, [annotationId]: '' }));
-    };
+    const { commentInputs, handleCommentChange, handleSaveComment } = useCommentInput({ onSaveComment });
 
     console.log('AnnotationList: Profiles available:', profiles);
     console.log('AnnotationList: Annotations:', annotations);
