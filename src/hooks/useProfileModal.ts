@@ -14,26 +14,26 @@ interface UseProfileModalResult {
   setNewHandle: React.Dispatch<React.SetStateAction<string>>;
   newProfilePicture: string;
   setNewProfilePicture: React.Dispatch<React.SetStateAction<string>>;
-  exportError: string;
-  setExportError: React.Dispatch<React.SetStateAction<string>>;
+  profileError: string;
+  setProfileError: React.Dispatch<React.SetStateAction<string>>;
   handleProfileSubmit: () => Promise<void>;
   handleFileChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
 }
 
 export function useProfileModal({
-  profile,
-  createProfile,
-  updateProfile,
-}: UseProfileModalProps): UseProfileModalResult {
+                                  profile,
+                                  createProfile,
+                                  updateProfile,
+                                }: UseProfileModalProps): UseProfileModalResult {
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const [newHandle, setNewHandle] = useState('');
   const [newProfilePicture, setNewProfilePicture] = useState('');
-  const [exportError, setExportError] = useState('');
+  const [profileError, setProfileError] = useState('');
 
   const handleProfileSubmit = async () => {
     try {
       if (!newHandle || !newProfilePicture) {
-        setExportError('Please provide a handle and profile picture');
+        setProfileError('Please provide a handle and profile picture');
         return;
       }
       if (profile) {
@@ -45,7 +45,7 @@ export function useProfileModal({
       setNewHandle('');
       setNewProfilePicture('');
     } catch (err) {
-      setExportError((err as Error).message);
+      setProfileError((err as Error).message);
     }
   };
 
@@ -56,6 +56,7 @@ export function useProfileModal({
       reader.onload = (event) => {
         if (event.target?.result) {
           setNewProfilePicture(event.target.result as string);
+          console.log('useProfileModal: Loaded profile picture');
         }
       };
       reader.readAsDataURL(file);
@@ -69,8 +70,8 @@ export function useProfileModal({
     setNewHandle,
     newProfilePicture,
     setNewProfilePicture,
-    exportError,
-    setExportError,
+    profileError,
+    setProfileError,
     handleProfileSubmit,
     handleFileChange,
   };
