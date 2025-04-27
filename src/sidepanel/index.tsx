@@ -27,8 +27,8 @@ const App: React.FC = () => {
                 const normalizedUrl = normalizeUrl(response.url);
                 if (normalizedUrl) {
                     setUrl(normalizedUrl);
-                    // Check if the URL is a popup URL (e.g., chrome:// URLs)
-                    setIsPopupUrl(response.url.startsWith('chrome://') || response.url.startsWith('chrome-extension://'));
+                    // Only treat chrome-extension:// URLs as popup URLs
+                    setIsPopupUrl(response.url.startsWith('chrome-extension://'));
                 } else {
                     setError('Failed to normalize URL');
                     setUrl('');
