@@ -10,12 +10,16 @@ interface AnnotationUIProps {
 }
 
 export const AnnotationUI: React.FC<AnnotationUIProps> = ({ url, isPopupUrl }) => {
-    const { did, profile, loading: profileLoading, error: profileError, createProfile, updateProfile } = useUserProfile();
+    const { did, profile, loading: profileLoading, error: profileError, authenticate, signOut, exportIdentity, importIdentity, createProfile, updateProfile } = useUserProfile();
     const { annotations, profiles, error: annotationsError, handleSaveAnnotation, handleDeleteAnnotation, handleSaveComment } = useAnnotations({ url, did });
     const [annotationText, setAnnotationText] = useState('');
     const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
     const [profileHandle, setProfileHandle] = useState('');
     const [profilePicture, setProfilePicture] = useState<string | undefined>(undefined);
+    const [isSettingsOpen, setIsSettingsOpen] = useState(false); // State for settings menu
+    const [importIdentityData, setImportIdentityData] = useState('');
+    const [isExportModalOpen, setIsExportModalOpen] = useState(false);
+    const [exportedIdentity, setExportedIdentity] = useState('');
 
     useEffect(() => {
         if (!profileLoading && did && !profile) {
@@ -46,7 +50,37 @@ export const AnnotationUI: React.FC<AnnotationUIProps> = ({ url, isPopupUrl }) =
         }
     };
 
-    // Debug log to track renders
+    const handleAuthenticate = async () => {
+        await authenticate();
+        setIsSettingsOpen(false);
+    };
+
+    const handleSignOut = async () => {
+        await signOut();
+        setIsSettingsOpen(false);
+    };
+
+    const handleExportIdentity = async () => {
+        try {
+            const identity = await exportIdentity();
+            setExportedIdentity(identity);
+            setIsExportModalOpen(true);
+            setIsSettingsOpen(false);
+        } catch (err) {
+            console.error('Failed to export identity:', err);
+        }
+    };
+
+    const handleImportIdentity = async () => {
+        try {
+            await importIdentity(importIdentityData);
+            setImportIdentityData('');
+            setIsSettingsOpen(false);
+        } catch (err) {
+            console.error('Failed to import identity:', err);
+        }
+    };
+
     console.log('AnnotationUI: Rendering with annotations:', annotations, 'profiles:', profiles);
 
     return (
@@ -65,6 +99,56 @@ export const AnnotationUI: React.FC<AnnotationUIProps> = ({ url, isPopupUrl }) =
                             <p className="connected-text">Not connected</p>
                         )}
                     </div>
+                    <div className="settings-menu-container">
+                        <button
+                            className="settings-button"
+                            onClick={() => setIsSettingsOpen(!isSettingsOpen)}
+                        >
+                            ⚙️
+                        </button>
+                        {isSettingsOpen && (
+                            <div className="settings-menu">
+                                {!did ? (
+                                    <>
+                                        <button
+                                            className="settings-menu-button"
+                                            onClick={handleAuthenticate}
+                                        >
+                                            Authenticate
+                                        </button>
+                                        <textarea
+                                            className="import-textarea"
+                                            value={importIdentityData}
+                                            onChange={(e) => setImportIdentityData(e.target.value)}
+                                            placeholder="Paste identity to import..."
+                                        />
+                                        <button
+                                            className="settings-menu-button"
+                                            onClick={handleImportIdentity}
+                                            disabled={!importIdentityData.trim()}
+                                        >
+                                            Import Identity
+                                        </button>
+                                    </>
+                                ) : (
+                                    <>
+                                        <button
+                                            className="settings-menu-button"
+                                            onClick={handleExportIdentity}
+                                        >
+                                            Export Identity
+                                        </button>
+                                        <button
+                                            className="settings-menu-button sign-out-button"
+                                            onClick={handleSignOut}
+                                        >
+                                            Sign Out
+                                        </button>
+                                    </>
+                                )}
+                            </div>
+                        )}
+                    </div>
                 </div>
             </div>
             {!isPopupUrl && (
@@ -74,11 +158,12 @@ export const AnnotationUI: React.FC<AnnotationUIProps> = ({ url, isPopupUrl }) =
                         onChange={(e) => setAnnotationText(e.target.value)}
                         placeholder="Enter annotation..."
                         className="annotation-textarea"
+                        disabled={!did} // Disable if not authenticated
                     />
                     <button
                         onClick={handleSave}
                         className="annotation-save-button"
-                        disabled={!annotationText.trim()}
+                        disabled={!annotationText.trim() || !did}
                     >
                         Save
                     </button>
@@ -88,7 +173,7 @@ export const AnnotationUI: React.FC<AnnotationUIProps> = ({ url, isPopupUrl }) =
                 annotations={annotations}
                 profiles={profiles}
                 onDelete={handleDeleteAnnotation}
-                onSaveComment={isPopupUrl ? undefined : handleSaveComment}
+                onSaveComment={isPopupUrl || !did ? undefined : handleSaveComment}
             />
             {isProfileModalOpen && (
                 <div className="profile-modal">
@@ -120,6 +205,28 @@ export const AnnotationUI: React.FC<AnnotationUIProps> = ({ url, isPopupUrl }) =
                         <button onClick={handleProfileSave} className="profile-modal-save-button">Save Profile</button>
                         <button onClick={() => setIsProfileModalOpen(false)} className="profile-modal-cancel-button">Cancel</button>
                     </div>
+                </div>
+            )}
+            {isExportModalOpen && (
+                <div className="export-modal">
+                    <h2 className="export-modal-title">Export Identity</h2>
+                    <textarea
+                        className="export-modal-textarea"
+                        value={exportedIdentity}
+                        readOnly
+                    />
+                    <button
+                        className="export-modal-button"
+                        onClick={() => navigator.clipboard.writeText(exportedIdentity)}
+                    >
+                        Copy to Clipboard
+                    </button>
+                    <button
+                        className="export-modal-close-button"
+                        onClick={() => setIsExportModalOpen(false)}
+                    >
+                        Close
+                    </button>
                 </div>
             )}
         </div>

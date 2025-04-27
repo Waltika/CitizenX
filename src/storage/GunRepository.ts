@@ -1,25 +1,41 @@
 import Gun from 'gun';
-import { Annotation, Comment, Profile } from '../types';
+import 'gun/lib/webrtc';
+import { Annotation, Comment } from '../shared/types/annotation';
+import { Profile } from '../shared/types/userProfile';
+
+type AnnotationUpdateCallback = (annotations: Annotation[]) => void;
 
 interface GunRepositoryOptions {
     peers?: string[];
     radisk?: boolean;
 }
 
+interface KnownPeer {
+    url: string;
+    timestamp: number;
+}
+
 export class GunRepository {
     private gun: any;
     private options: GunRepositoryOptions;
+    private annotationCallbacks: Map<string, AnnotationUpdateCallback[]> = new Map();
 
     constructor(options: GunRepositoryOptions = {}) {
+        // Start with an initial list of peers (can be empty)
         this.options = {
-            peers: options.peers || ['http://localhost:8765/gun'],
-            radisk: options.radisk ?? false,
+            peers: options.peers || [],
+            radisk: options.radisk ?? true,
         };
         this.gun = Gun({
             peers: this.options.peers,
             radisk: this.options.radisk,
             localStorage: false,
+            file: 'gun-data',
+            webrtc: true,
         });
+
+        // Dynamically discover peers from the knownPeers node
+        this.discoverPeers();
     }
 
     async initialize(): Promise<void> {
@@ -29,6 +45,61 @@ export class GunRepository {
                 console.log('GunRepository: Connected to peer:', peer);
                 resolve();
             });
+        });
+    }
+
+    // Fetch and update the list of known peers
+    private discoverPeers(): void {
+        // Initial fetch of known peers
+        this.fetchKnownPeers().then((peers) => {
+            if (peers.length > 0) {
+                console.log('GunRepository: Discovered initial peers:', peers);
+                this.gun.opt({ peers }); // Update the Gun instance's peers list
+            }
+        });
+
+        // Listen for real-time updates to the knownPeers node
+        this.gun.get('knownPeers').map().on((peer: KnownPeer, id: string) => {
+            if (peer && peer.url && peer.timestamp) {
+                // Check if the peer is still alive (e.g., timestamp within the last 10 minutes)
+                const now = Date.now();
+                const age = now - peer.timestamp;
+                if (age > 10 * 60 * 1000) { // 10 minutes
+                    console.log('GunRepository: Removing expired peer:', peer.url);
+                    this.gun.get('knownPeers').get(id).put(null); // Remove expired peer
+                    return;
+                }
+
+                // Fetch the current list of peers and update
+                this.fetchKnownPeers().then((peers) => {
+                    console.log('GunRepository: Updated peers list:', peers);
+                    this.gun.opt({ peers });
+                });
+            } else {
+                // Peer was removed
+                this.fetchKnownPeers().then((peers) => {
+                    console.log('GunRepository: Updated peers list after removal:', peers);
+                    this.gun.opt({ peers });
+                });
+            }
+        });
+    }
+
+    // Fetch the current list of known peers
+    private async fetchKnownPeers(): Promise<string[]> {
+        return new Promise((resolve) => {
+            const peers: string[] = [];
+            this.gun.get('knownPeers').map().once((peer: KnownPeer) => {
+                if (peer && peer.url && peer.timestamp) {
+                    // Only include peers that are still alive (timestamp within the last 10 minutes)
+                    const now = Date.now();
+                    const age = now - peer.timestamp;
+                    if (age <= 10 * 60 * 1000) { // 10 minutes
+                        peers.push(peer.url);
+                    }
+                }
+            });
+            setTimeout(() => resolve(peers), 200);
         });
     }
 
@@ -108,11 +179,11 @@ export class GunRepository {
         return null;
     }
 
-    async getAnnotations(url: string): Promise<Annotation[]> {
-        return new Promise((resolve) => {
-            const annotations: Annotation[] = [];
-            const annotationNode = this.gun.get('annotations').get(url);
+    async getAnnotations(url: string, callback?: AnnotationUpdateCallback): Promise<Annotation[]> {
+        const annotations: Annotation[] = [];
+        const annotationNode = this.gun.get('annotations').get(url);
 
+        await new Promise<void>((resolve) => {
             annotationNode.map().once(async (annotation: any) => {
                 if (annotation) {
                     const comments: Comment[] = await new Promise((resolveComments) => {
@@ -143,10 +214,61 @@ export class GunRepository {
             });
 
             setTimeout(() => {
-                console.log('GunRepository: All annotations loaded for URL:', url, annotations);
-                resolve(annotations);
+                console.log('GunRepository: Initial annotations loaded for URL:', url, annotations);
+                resolve();
             }, 200);
         });
+
+        if (callback) {
+            if (!this.annotationCallbacks.has(url)) {
+                this.annotationCallbacks.set(url, []);
+            }
+            this.annotationCallbacks.get(url)!.push(callback);
+
+            annotationNode.map().on(async (annotation: any, key: string) => {
+                if (annotation) {
+                    const comments: Comment[] = await new Promise((resolveComments) => {
+                        const commentList: Comment[] = [];
+                        annotationNode.get(annotation.id).get('comments').map().once((comment: any) => {
+                            if (comment) {
+                                commentList.push({
+                                    id: comment.id,
+                                    content: comment.content,
+                                    author: comment.author,
+                                    timestamp: comment.timestamp,
+                                });
+                            }
+                        });
+                        setTimeout(() => resolveComments(commentList), 100);
+                    });
+
+                    const updatedAnnotations = annotations.filter(a => a.id !== annotation.id);
+                    updatedAnnotations.push({
+                        id: annotation.id,
+                        url: annotation.url,
+                        content: annotation.content,
+                        author: annotation.author,
+                        timestamp: annotation.timestamp,
+                        comments,
+                    });
+
+                    annotations.splice(0, annotations.length, ...updatedAnnotations);
+                    console.log('GunRepository: Real-time update for URL:', url, annotations);
+
+                    const callbacks = this.annotationCallbacks.get(url) || [];
+                    callbacks.forEach(cb => cb([...annotations]));
+                } else {
+                    const updatedAnnotations = annotations.filter(a => a.id !== key);
+                    annotations.splice(0, annotations.length, ...updatedAnnotations);
+                    console.log('GunRepository: Real-time deletion for URL:', url, annotations);
+
+                    const callbacks = this.annotationCallbacks.get(url) || [];
+                    callbacks.forEach(cb => cb([...annotations]));
+                }
+            });
+        }
+
+        return [...annotations];
     }
 
     async saveAnnotation(annotation: Annotation): Promise<void> {
