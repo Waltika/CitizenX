@@ -1,237 +1,233 @@
-// src/hooks/useAnnotations.ts
-import { useState, useEffect } from 'react';
-import { normalizeUrl } from '../shared/utils/normalizeUrl';
-import { useOrbitDB } from './useOrbitDB';
-import { Annotation } from '../shared/types/annotation';
+import { useState, useEffect, useCallback } from 'react';
+import { useStorage } from './useStorage';
+import { useUserProfile } from './useUserProfiles';
+import { Annotation, Comment } from '../shared/types/annotation'; // Import from annotation.ts
+import { Profile } from '../shared/types/userProfile'; // Import from userProfile.ts
 
 interface UseAnnotationsProps {
     url: string;
-    db: any;
     did: string | null;
-    isReady: boolean;
 }
 
-interface UseAnnotationsResult {
+interface UseAnnotationsReturn {
     annotations: Annotation[];
-    loading: boolean;
+    profiles: Record<string, Profile>;
+    error: string | null;
     handleSaveAnnotation: (content: string) => Promise<void>;
     handleDeleteAnnotation: (id: string) => Promise<void>;
     handleSaveComment: (annotationId: string, content: string) => Promise<void>;
 }
 
-export function useAnnotations({ url, db, did, isReady }: UseAnnotationsProps): UseAnnotationsResult {
-    const [allEntries, setAllEntries] = useState<Annotation[]>([]);
-    const [loading, setLoading] = useState(true);
-    const normalizedUrl = normalizeUrl(url) || ''; // Fallback to empty string
+export const useAnnotations = ({ url, did }: UseAnnotationsProps): UseAnnotationsReturn => {
+    const { storage, error: storageError, isLoading: storageLoading } = useStorage();
+    const { profile: userProfile } = useUserProfile();
+    const [annotations, setAnnotations] = useState<Annotation[]>([]);
+    const [profiles, setProfiles] = useState<Record<string, Profile>>({});
+    const [error, setError] = useState<string | null>(null);
 
-    useEffect(() => {
-        if (!isReady) return; // Wait for database to initialize
+    const loadProfiles = async (dids: Set<string>) => {
+        const profilesMap: Record<string, Profile> = {};
+        const maxRetries = 3;
+        const retryDelay = 1000;
 
-        console.log('useAnnotations: Normalized URL:', normalizedUrl);
-        if (!normalizedUrl || normalizedUrl.startsWith('chrome://')) {
-            console.warn('useAnnotations: Invalid URL for annotations, skipping database fetch:', normalizedUrl);
-            setAllEntries([]);
-            setLoading(false);
-            return;
+        if (did && userProfile && dids.has(did)) {
+            profilesMap[did] = userProfile;
+            console.log('useAnnotations: Using userProfile for DID:', did, userProfile);
         }
 
-        // Load entries from localStorage as a fallback
-        const localEntries = localStorage.getItem('citizenx-annotations');
-        const parsedEntries: Annotation[] = localEntries ? JSON.parse(localEntries) : [];
-        console.log('useAnnotations: Parsed localStorage entries:', parsedEntries);
-        const filteredEntries = parsedEntries.filter((entry) => entry.url === normalizedUrl);
-        setAllEntries(filteredEntries);
+        for (const authorDid of dids) {
+            if (profilesMap[authorDid]) continue;
 
-        // Fetch entries from OrbitDB if the database is ready
-        if (db) {
-            (async () => {
-                try {
-                    const orbitdbEntries: Annotation[] = [];
-                    for await (const doc of db.iterator()) {
-                        orbitdbEntries.push(doc);
+            let profile: Profile | null = null;
+            for (let attempt = 1; attempt <= maxRetries; attempt++) {
+                profile = await storage!.getProfile(authorDid);
+                if (profile) {
+                    profilesMap[authorDid] = profile;
+                    console.log('useAnnotations: Loaded profile for DID:', authorDid, profile);
+                    break;
+                } else {
+                    console.warn('useAnnotations: Failed to load profile for DID on attempt', attempt, authorDid);
+                    if (attempt < maxRetries) {
+                        console.log(`useAnnotations: Retrying profile load for DID: ${authorDid}, attempt ${attempt}/${maxRetries}`);
+                        await new Promise((resolve) => setTimeout(resolve, retryDelay));
                     }
-                    console.log('useAnnotations: OrbitDB entries:', orbitdbEntries);
-                    const updatedEntries = [...parsedEntries, ...orbitdbEntries];
-                    const uniqueEntries = Array.from(new Map(updatedEntries.map((entry) => [entry._id, entry])).values());
-                    setAllEntries(uniqueEntries.filter((entry) => entry.url === normalizedUrl));
-                    localStorage.setItem('citizenx-annotations', JSON.stringify(uniqueEntries));
-                    console.log('useAnnotations: Updated localStorage entries:', uniqueEntries);
-
-                    // Sync pending operations from background.js
-                    chrome.runtime.sendMessage({ action: 'syncPending' }, async (response: { pending?: { annotations: any[] } }) => {
-                        if (response.pending) {
-                            console.log('useAnnotations: Syncing pending operations:', response.pending);
-                            const { annotations: pendingEntries } = response.pending;
-                            for (const operation of pendingEntries) {
-                                if (operation.action === 'putAnnotation') {
-                                    try {
-                                        await db.put(operation.data);
-                                        console.log('useAnnotations: Applied pending entry:', operation.data);
-                                    } catch (err) {
-                                        console.error('useAnnotations: Failed to apply pending entry:', err);
-                                    }
-                                }
-                            }
-                            // Refresh entries after syncing
-                            const syncedEntries: Annotation[] = [];
-                            for await (const doc of db.iterator()) {
-                                syncedEntries.push(doc);
-                            }
-                            console.log('useAnnotations: Entries after syncing:', syncedEntries);
-                            const finalEntries = [...uniqueEntries, ...syncedEntries];
-                            const finalUniqueEntries = Array.from(new Map(finalEntries.map((entry) => [entry._id, entry])).values());
-                            setAllEntries(finalUniqueEntries.filter((entry) => entry.url === normalizedUrl));
-                            localStorage.setItem('citizenx-annotations', JSON.stringify(finalUniqueEntries));
-                            console.log('useAnnotations: Final entries in localStorage after sync:', finalUniqueEntries);
-                        } else {
-                            console.log('useAnnotations: No pending operations to sync');
-                        }
-                    });
-                } catch (err) {
-                    console.error('useAnnotations: Failed to fetch entries from OrbitDB:', err);
                 }
-            })();
-        }
-
-        setLoading(false);
-    }, [normalizedUrl, db, isReady]);
-
-    // Separate useEffect for polling localStorage
-    useEffect(() => {
-        if (!normalizedUrl || normalizedUrl.startsWith('chrome://')) return;
-
-        const interval = setInterval(() => {
-            console.log('useAnnotations: Polling localStorage for updates...');
-            const updatedLocalEntries = localStorage.getItem('citizenx-annotations');
-            const parsedUpdatedEntries: Annotation[] = updatedLocalEntries ? JSON.parse(updatedLocalEntries) : [];
-            if (JSON.stringify(parsedUpdatedEntries) !== JSON.stringify(allEntries)) {
-                console.log('useAnnotations: LocalStorage entries updated:', parsedUpdatedEntries);
-                setAllEntries(parsedUpdatedEntries.filter((entry) => entry.url === normalizedUrl));
             }
-        }, 10000); // Poll every 10 seconds
+            if (!profile) {
+                console.error('useAnnotations: Failed to load profile for DID after retries:', authorDid);
+            }
+        }
+        return profilesMap;
+    };
 
-        return () => clearInterval(interval);
-    }, [normalizedUrl, allEntries]);
-
-    // Heartbeat to keep background.js informed of side panel activity
-    useEffect(() => {
-        const heartbeatInterval = setInterval(() => {
-            chrome.runtime.sendMessage({ action: 'heartbeat' }, (response: any) => {
-                if (chrome.runtime.lastError) {
-                    console.error('Heartbeat failed:', chrome.runtime.lastError);
-                }
-            });
-        }, 4000);
-
-        return () => clearInterval(heartbeatInterval);
-    }, []);
-
-    const addEntry = async (entry: Annotation) => {
-        if (!normalizedUrl || normalizedUrl.startsWith('chrome://')) {
-            console.warn('useAnnotations: Invalid URL for annotations, cannot save entry:', normalizedUrl);
+    const loadAnnotations = useCallback(async () => {
+        if (storageLoading) {
+            console.log('useAnnotations: Waiting for storage to initialize');
             return;
         }
 
-        if (!db || !isReady) {
-            // Database is not initialized; cache the operation
-            console.log('useAnnotations: Database not ready, caching entry:', entry);
-            return new Promise<void>((resolve, reject) => {
-                chrome.runtime.sendMessage({ action: 'putAnnotation', annotation: entry }, (response: any) => {
-                    if (response.success) {
-                        const updatedEntries = [...allEntries, entry];
-                        setAllEntries(updatedEntries);
-                        localStorage.setItem('citizenx-annotations', JSON.stringify(updatedEntries));
-                        console.log('useAnnotations: Cached entry, updated entries:', updatedEntries);
-                        resolve();
-                    } else {
-                        console.error('useAnnotations: Failed to cache entry:', response.error);
-                        reject(new Error(response.error));
-                    }
+        if (!storage || !did) {
+            setAnnotations([]);
+            setProfiles({});
+            setError(storage ? 'Not authenticated' : 'Storage not initialized');
+            console.log('useAnnotations: Not authenticated or storage not initialized', { storage: !!storage, did });
+            return;
+        }
+
+        try {
+            console.log('useAnnotations: Loading annotations for URL:', url);
+            const loadedAnnotations = await storage.getAnnotations(url);
+            console.log('useAnnotations: Loaded annotations:', loadedAnnotations);
+
+            const dids = new Set<string>();
+            loadedAnnotations.forEach((annotation) => {
+                if (annotation.author) dids.add(annotation.author);
+                annotation.comments?.forEach((comment) => {
+                    if (comment.author) dids.add(comment.author);
                 });
             });
-        }
 
-        // Database is open; save directly to OrbitDB
-        console.log('useAnnotations: Saving entry to OrbitDB:', entry);
-        try {
-            await db.put(entry);
-            const updatedEntries = [...allEntries, entry];
-            setAllEntries(updatedEntries);
-            localStorage.setItem('citizenx-annotations', JSON.stringify(updatedEntries));
-            console.log('useAnnotations: Saved entry to OrbitDB, updated entries:', updatedEntries);
+            const profilesMap = await loadProfiles(dids);
+            setAnnotations([...loadedAnnotations]);
+            setProfiles(profilesMap);
+            setError(null);
+            console.log('useAnnotations: Profiles loaded:', profilesMap);
+            console.log('useAnnotations: Annotations state updated:', loadedAnnotations);
         } catch (err) {
-            console.error('useAnnotations: Failed to save entry to OrbitDB:', err);
-            // Fallback to caching if OrbitDB fails
-            await chrome.runtime.sendMessage({ action: 'putAnnotation', annotation: entry });
-            const updatedEntries = [...allEntries, entry];
-            setAllEntries(updatedEntries);
-            localStorage.setItem('citizenx-annotations', JSON.stringify(updatedEntries));
-            console.log('useAnnotations: OrbitDB save failed, cached entry:', updatedEntries);
+            console.error('useAnnotations: Failed to load annotations:', err);
+            setError('Failed to load annotations');
+            setAnnotations([]);
+            setProfiles({});
         }
-    };
+    }, [url, storage, storageLoading, did, userProfile]);
 
-    const handleSaveAnnotation = async (content: string) => {
-        if (!did) {
-            console.warn('useAnnotations: User not authenticated, cannot save annotation');
-            return;
-        }
-        const timestamp = Date.now();
-        const annotation: Annotation = {
-            _id: `${did}-${timestamp}`,
-            url: normalizedUrl,
-            text: content,
-            did,
-            timestamp,
-            source: db && isReady ? 'orbitdb' : 'local',
-            comments: [],
-        };
-        await addEntry(annotation);
-    };
+    useEffect(() => {
+        console.log('useAnnotations: useEffect triggered with dependencies:', { url, storage, storageLoading, did, userProfile });
+        loadAnnotations();
+    }, [loadAnnotations]);
 
-    const handleDeleteAnnotation = async (id: string) => {
-        // Note: Deletion is not fully implemented; update local state only
-        const updatedEntries = allEntries.filter((entry) => entry._id !== id);
-        setAllEntries(updatedEntries);
-        localStorage.setItem('citizenx-annotations', JSON.stringify(updatedEntries));
-    };
-
-    const handleSaveComment = async (annotationId: string, content: string) => {
-        if (!did) {
-            console.warn('useAnnotations: User not authenticated, cannot save comment');
-            return;
-        }
-        const timestamp = Date.now();
-        const comment: Annotation = {
-            _id: `${did}-${timestamp}`,
-            url: normalizedUrl,
-            text: content,
-            did,
-            timestamp,
-            source: db && isReady ? 'orbitdb' : 'local',
-            comments: [],
-            annotationId,
-        };
-        await addEntry(comment);
-
-        // Update the parent annotation to include the comment
-        const updatedEntries = allEntries.map((entry) => {
-            if (entry._id === annotationId) {
-                return { ...entry, comments: [...(entry.comments || []), comment] };
+    const handleSaveAnnotation = useCallback(
+        async (content: string) => {
+            if (storageLoading) {
+                setError('Storage is still initializing');
+                return;
             }
-            return entry;
-        });
-        setAllEntries(updatedEntries);
-        localStorage.setItem('citizenx-annotations', JSON.stringify(updatedEntries));
-    };
 
-    // Filter top-level annotations (those without annotationId) for the result
-    const annotations = allEntries.filter((entry) => !entry.annotationId);
+            if (!storage || !did) {
+                setError(storage ? 'Not authenticated' : 'Storage not initialized');
+                return;
+            }
+
+            try {
+                const annotation: Annotation = {
+                    id: `${did}-${Date.now()}`,
+                    url,
+                    content,
+                    author: did,
+                    timestamp: Date.now(),
+                    comments: [],
+                };
+
+                console.log('useAnnotations: Saving annotation to storage:', annotation);
+                await storage.saveAnnotation(annotation);
+                setAnnotations((prev) => {
+                    const updatedAnnotations = [...prev, annotation];
+                    console.log('useAnnotations: Annotations state updated after save:', updatedAnnotations);
+                    return updatedAnnotations;
+                });
+
+                const newDids = new Set<string>([did]);
+                const newProfiles = await loadProfiles(newDids);
+                setProfiles((prev) => ({ ...prev, ...newProfiles }));
+                setError(null);
+            } catch (err) {
+                console.error('useAnnotations: Failed to save annotation:', err);
+                setError('Failed to save annotation');
+            }
+        },
+        [storageLoading, storage, did, url]
+    );
+
+    const handleDeleteAnnotation = useCallback(
+        async (id: string) => {
+            if (storageLoading) {
+                setError('Storage is still initializing');
+                return;
+            }
+
+            if (!storage || !did) {
+                setError(storage ? 'Not authenticated' : 'Storage not initialized');
+                return;
+            }
+
+            try {
+                console.log('useAnnotations: Deleting annotation:', id);
+                await storage.deleteAnnotation(url, id);
+                setAnnotations((prev) => {
+                    const updatedAnnotations = prev.filter((annotation) => annotation.id !== id);
+                    console.log('useAnnotations: Annotations state updated after delete:', updatedAnnotations);
+                    return updatedAnnotations;
+                });
+                setError(null);
+            } catch (err) {
+                console.error('useAnnotations: Failed to delete annotation:', err);
+                setError('Failed to delete annotation');
+            }
+        },
+        [storageLoading, storage, did, url]
+    );
+
+    const handleSaveComment = useCallback(
+        async (annotationId: string, content: string) => {
+            if (storageLoading) {
+                setError('Storage is still initializing');
+                return;
+            }
+
+            if (!storage || !did) {
+                setError(storage ? 'Not authenticated' : 'Storage not initialized');
+                return;
+            }
+
+            try {
+                const comment: Comment = {
+                    id: `${did}-${Date.now()}`,
+                    content,
+                    author: did,
+                    timestamp: Date.now(),
+                };
+
+                console.log('useAnnotations: Saving comment to storage:', comment);
+                await storage.saveComment(url, annotationId, comment);
+
+                setAnnotations((prev) => {
+                    const updatedAnnotations = prev.map((annotation) =>
+                        annotation.id === annotationId
+                            ? { ...annotation, comments: [...(annotation.comments || []), comment] }
+                            : annotation
+                    );
+                    console.log('useAnnotations: Annotations state updated after comment save:', updatedAnnotations);
+                    return updatedAnnotations;
+                });
+
+                const newDids = new Set<string>([did]);
+                const newProfiles = await loadProfiles(newDids);
+                setProfiles((prev) => ({ ...prev, ...newProfiles }));
+                setError(null);
+            } catch (err) {
+                console.error('useAnnotations: Failed to save comment:', err);
+                setError('Failed to save comment');
+            }
+        },
+        [storageLoading, storage, did, url]
+    );
 
     return {
         annotations,
-        loading,
+        profiles,
+        error: error || storageError,
         handleSaveAnnotation,
         handleDeleteAnnotation,
         handleSaveComment,
     };
-}
+};

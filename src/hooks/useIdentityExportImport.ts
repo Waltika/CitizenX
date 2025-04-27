@@ -1,83 +1,58 @@
-// src/hooks/useIdentityExportImport.ts
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 
 interface UseIdentityExportImportProps {
-  exportIdentity: (passphrase: string) => Promise<string>;
-  importIdentity: (identityData: string, passphrase: string) => Promise<void>;
+  exportIdentity: () => Promise<string>;
+  importIdentity: (data: string) => Promise<void>;
 }
 
-interface UseIdentityExportImportResult {
+interface UseIdentityExportImportReturn {
   exportedIdentity: string;
-  setExportedIdentity: React.Dispatch<React.SetStateAction<string>>;
   importData: string;
-  setImportData: React.Dispatch<React.SetStateAction<string>>;
-  passphrase: string;
-  setPassphrase: React.Dispatch<React.SetStateAction<string>>;
-  importPassphrase: string;
-  setImportPassphrase: React.Dispatch<React.SetStateAction<string>>;
-  importError: string;
-  setImportError: React.Dispatch<React.SetStateAction<string>>;
-  exportError: string;
-  setExportError: React.Dispatch<React.SetStateAction<string>>;
+  setImportData: (data: string) => void;
+  importError: string | null;
+  exportError: string | null;
   handleExport: () => Promise<void>;
   handleImport: () => Promise<void>;
 }
 
-export function useIdentityExportImport({
-  exportIdentity,
-  importIdentity,
-}: UseIdentityExportImportProps): UseIdentityExportImportResult {
-  const [exportedIdentity, setExportedIdentity] = useState('');
-  const [importData, setImportData] = useState('');
-  const [passphrase, setPassphrase] = useState('');
-  const [importPassphrase, setImportPassphrase] = useState('');
-  const [importError, setImportError] = useState('');
-  const [exportError, setExportError] = useState('');
+export const useIdentityExportImport = ({
+                                          exportIdentity,
+                                          importIdentity,
+                                        }: UseIdentityExportImportProps): UseIdentityExportImportReturn => {
+  const [exportedIdentity, setExportedIdentity] = useState<string>('');
+  const [importData, setImportData] = useState<string>('');
+  const [importError, setImportError] = useState<string | null>(null);
+  const [exportError, setExportError] = useState<string | null>(null);
 
-  const handleExport = async () => {
+  const handleExport = useCallback(async () => {
     try {
-      if (!passphrase) {
-        setExportError('Please enter a passphrase to export your identity');
-        return;
-      }
-      const identityData = await exportIdentity(passphrase);
-      setExportedIdentity(identityData);
-      setExportError('');
-    } catch (err) {
-      setExportError((err as Error).message);
+      setExportError(null);
+      const data = await exportIdentity();
+      setExportedIdentity(data);
+    } catch (err: any) {
+      console.error('useIdentityExportImport: Export failed:', err);
+      setExportError(err.message || 'Failed to export identity');
     }
-  };
+  }, [exportIdentity]);
 
-  const handleImport = async () => {
+  const handleImport = useCallback(async () => {
     try {
-      if (!importData || !importPassphrase) {
-        setImportError('Please enter the identity data and passphrase');
-        return;
-      }
-      await importIdentity(importData, importPassphrase);
+      setImportError(null);
+      await importIdentity(importData);
       setImportData('');
-      setImportPassphrase('');
-      setImportError('');
-      setExportedIdentity('');
-    } catch (err) {
-      setImportError((err as Error).message);
+    } catch (err: any) {
+      console.error('useIdentityExportImport: Import failed:', err);
+      setImportError(err.message || 'Failed to import identity');
     }
-  };
+  }, [importIdentity, importData]);
 
   return {
     exportedIdentity,
-    setExportedIdentity,
     importData,
     setImportData,
-    passphrase,
-    setPassphrase,
-    importPassphrase,
-    setImportPassphrase,
     importError,
-    setImportError,
     exportError,
-    setExportError,
     handleExport,
     handleImport,
   };
-}
+};

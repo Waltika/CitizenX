@@ -1,67 +1,84 @@
-// src/components/AnnotationList.tsx
-import React from 'react';
-import { Annotation } from '../storage/StorageRepository';
-import { useCommentInput } from '../hooks/useCommentInput';
-import Comment from './Comment';
+import React, { useState } from 'react';
+import { Annotation, Profile } from '../types';
 import './AnnotationList.css';
 
 interface AnnotationListProps {
     annotations: Annotation[];
-    profiles: { [did: string]: { handle: string; profilePicture: string } };
-    onDelete: (id: string) => void;
+    profiles: Record<string, Profile>;
+    onDelete: (id: string) => Promise<void>;
     onSaveComment?: (annotationId: string, content: string) => Promise<void>;
 }
 
 export const AnnotationList: React.FC<AnnotationListProps> = ({ annotations, profiles, onDelete, onSaveComment }) => {
-    const { commentInputs, handleCommentChange, handleSaveComment } = useCommentInput({ onSaveComment });
+    const [commentInputs, setCommentInputs] = useState<Record<string, string>>({});
 
-    console.log('AnnotationList: Profiles available:', profiles);
-    console.log('AnnotationList: Annotations:', annotations);
+    const handleCommentChange = (annotationId: string, value: string) => {
+        setCommentInputs((prev) => ({ ...prev, [annotationId]: value }));
+    };
+
+    const handleSaveComment = async (annotationId: string) => {
+        const content = commentInputs[annotationId] || '';
+        if (content.trim() && onSaveComment) {
+            console.log('AnnotationList: Saving comment for annotation:', annotationId, content);
+            await onSaveComment(annotationId, content);
+            setCommentInputs((prev) => ({ ...prev, [annotationId]: '' }));
+        } else {
+            console.warn('AnnotationList: Cannot save comment - empty content or onSaveComment not provided', { content, onSaveComment: !!onSaveComment });
+        }
+    };
 
     return (
-        <div className="annotation-list-container">
+        <div className="annotation-list">
             {annotations.map((annotation) => {
-                console.log(`AnnotationList: Looking up DID ${annotation.did} for annotation ${annotation._id}`);
-                const profile = profiles[annotation.did] || { handle: 'Unknown', profilePicture: '' };
+                const authorProfile = profiles[annotation.author] || null;
+                const authorHandle = authorProfile ? authorProfile.handle : 'Unknown';
+                console.log('AnnotationList: Rendering annotation:', annotation, 'Author handle:', authorHandle);
+
                 return (
-                    <div key={annotation._id} className="annotation-item">
+                    <div key={annotation.id} className="annotation-item">
                         <div className="annotation-header">
-                            {profile.profilePicture && (
-                                <img
-                                    src={profile.profilePicture}
-                                    alt="Profile"
-                                    className="annotation-profile-picture"
-                                />
-                            )}
-                            <p className="annotation-user-info">
-                                {profile.handle} • {new Date(annotation.timestamp).toLocaleString()}
-                            </p>
+                            <span className="annotation-author">{authorHandle}</span>
+                            <span className="annotation-timestamp">
+                                {' '}
+                                • {new Date(annotation.timestamp).toLocaleString()}
+                            </span>
+                            <button
+                                onClick={() => onDelete(annotation.id)}
+                                className="delete-button"
+                            >
+                                Delete
+                            </button>
                         </div>
-                        <p className="annotation-text">{annotation.text}</p>
-                        <button
-                            onClick={() => onDelete(annotation._id)}
-                            className="delete-button"
-                        >
-                            Delete
-                        </button>
+                        <p className="annotation-content">{annotation.content || 'No content'}</p>
                         {annotation.comments && annotation.comments.length > 0 && (
-                            <div className="comments-container">
-                                {annotation.comments.map((comment) => (
-                                    <Comment key={comment._id} comment={comment} profiles={profiles} />
-                                ))}
+                            <div className="comments-section">
+                                {annotation.comments.map((comment) => {
+                                    const commentAuthor = profiles[comment.author] || null;
+                                    const commentAuthorHandle = commentAuthor ? commentAuthor.handle : 'Unknown';
+                                    return (
+                                        <div key={comment.id} className="comment-item">
+                                            <span className="comment-author">{commentAuthorHandle}</span>
+                                            <span className="comment-timestamp">
+                                                {' '}
+                                                • {new Date(comment.timestamp).toLocaleString()}
+                                            </span>
+                                            <p className="comment-content">{comment.content}</p>
+                                        </div>
+                                    );
+                                })}
                             </div>
                         )}
                         {onSaveComment && (
-                            <div className="comment-input-section">
+                            <div className="add-comment-section">
                                 <textarea
-                                    value={commentInputs[annotation._id] || ''}
-                                    onChange={(e) => handleCommentChange(annotation._id, e.target.value)}
+                                    value={commentInputs[annotation.id] || ''}
+                                    onChange={(e) => handleCommentChange(annotation.id, e.target.value)}
                                     placeholder="Add a comment..."
                                     className="comment-textarea"
                                 />
                                 <button
-                                    onClick={() => handleSaveComment(annotation._id)}
-                                    disabled={!commentInputs[annotation._id]}
+                                    onClick={() => handleSaveComment(annotation.id)}
+                                    disabled={!commentInputs[annotation.id]?.trim()}
                                     className="add-comment-button"
                                 >
                                     Add Comment

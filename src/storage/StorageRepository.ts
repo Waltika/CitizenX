@@ -1,37 +1,53 @@
-// src/storage/StorageRepository.ts
-export interface Comment {
-    _id: string;
-    text: string;
-    timestamp: number;
-    [key: string]: any;
-}
+import { GunRepository } from './GunRepository';
+import { Annotation, Comment, Profile } from '../types';
 
-export interface Annotation {
-    _id: string;
-    text: string;
-    timestamp: number;
-    did: string;
-    comments?: Comment[];
-    [key: string]: any;
-}
+export class StorageRepository {
+    private repository: GunRepository;
 
-export interface Profile {
-    _id: string;
-    handle: string;
-    profilePicture: string;
-    [key: string]: any;
-}
+    constructor() {
+        this.repository = new GunRepository({
+            peers: ['http://localhost:8765/gun'],
+            radisk: false,
+        });
+    }
 
-export interface StorageRepository {
-    saveAnnotation(annotation: Annotation): Promise<void>;
-    loadAnnotations(): Promise<Annotation[]>;
-    deleteAnnotation(annotationId: string): Promise<void>;
-    saveComment(annotationId: string, comment: Comment): Promise<void>;
-    saveProfile(profile: Profile): Promise<void>;
-    loadProfile(did: string): Promise<Profile | null>;
-    loadAllProfiles(): Promise<{ [did: string]: { handle: string; profilePicture: string } }>;
-    initialize(): Promise<void>;
-    isReady(): boolean;
-    onUpdate(callback: () => void): void;
-    offUpdate(): void;
+    async initialize(): Promise<void> {
+        await this.repository.initialize();
+    }
+
+    async getCurrentDID(): Promise<string | null> {
+        return this.repository.getCurrentDID();
+    }
+
+    async setCurrentDID(did: string): Promise<void> {
+        await this.repository.setCurrentDID(did);
+    }
+
+    async clearCurrentDID(): Promise<void> {
+        await this.repository.clearCurrentDID();
+    }
+
+    async saveProfile(profile: Profile): Promise<void> {
+        await this.repository.saveProfile(profile);
+    }
+
+    async getProfile(did: string): Promise<Profile | null> {
+        return this.repository.getProfile(did);
+    }
+
+    async getAnnotations(url: string): Promise<Annotation[]> {
+        return this.repository.getAnnotations(url);
+    }
+
+    async saveAnnotation(annotation: Annotation): Promise<void> {
+        await this.repository.saveAnnotation(annotation);
+    }
+
+    async deleteAnnotation(url: string, id: string): Promise<void> {
+        await this.repository.deleteAnnotation(url, id);
+    }
+
+    async saveComment(url: string, annotationId: string, comment: Comment): Promise<void> {
+        await this.repository.saveComment(url, annotationId, comment);
+    }
 }

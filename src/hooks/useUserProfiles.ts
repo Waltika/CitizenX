@@ -1,162 +1,250 @@
-// src/hooks/useUserProfiles.ts
-import { useState, useEffect } from 'react';
-import { createOrbitDB } from '@orbitdb/core';
-import { createHelia } from 'helia';
-import { webSockets } from '@libp2p/websockets';
-import { webRTC } from '@libp2p/webrtc';
-import { circuitRelayTransport } from '@libp2p/circuit-relay-v2';
-import { gossipsub } from '@chainsafe/libp2p-gossipsub';
-import { bootstrap } from '@libp2p/bootstrap';
-import { identify } from '@libp2p/identify';
-import { FaultTolerance } from '@libp2p/interface';
-import { bootstrapNodes} from "../config/boostrap"
+import { useState, useEffect, useCallback } from 'react';
+import { useStorage } from './useStorage';
+import { generateDID, validateDID } from '../utils/did';
+import { Profile } from '../types';
 
-interface Profile {
-    _id: string; // DID
-    handle: string;
-    profilePicture: string;
-}
-
-interface UseUserProfilesResult {
-    profiles: { [did: string]: { handle: string; profilePicture: string } };
+interface UseUserProfileReturn {
+    did: string | null;
+    profile: Profile | null;
+    loading: boolean;
     error: string | null;
+    authenticate: () => Promise<void>;
+    signOut: () => void;
+    exportIdentity: () => Promise<string>;
+    importIdentity: (data: string) => Promise<void>;
+    createProfile: (handle: string, profilePicture?: string) => Promise<void>;
+    updateProfile: (handle: string, profilePicture?: string) => Promise<void>;
 }
 
-export const useUserProfiles = (did: string | null): UseUserProfilesResult => {
-    const [profiles, setProfiles] = useState<{ [did: string]: { handle: string; profilePicture: string } }>({});
+export const useUserProfile = (): UseUserProfileReturn => {
+    const { storage, error: storageError, isLoading: storageLoading } = useStorage();
+    const [did, setDid] = useState<string | null>(null);
+    const [profile, setProfile] = useState<Profile | null>(null);
+    const [loading, setLoading] = useState<boolean>(true);
     const [error, setError] = useState<string | null>(null);
-    const [db, setDb] = useState<any>(null);
 
-    const loadProfiles = async () => {
-        try {
-            console.log('useUserProfiles: Current DID:', did);
-
-            // Load profiles from localStorage as a fallback
-            const localProfiles = localStorage.getItem('citizenx-profiles');
-            console.log('useUserProfiles: Raw localStorage profiles:', localProfiles);
-            const parsedLocalProfiles = localProfiles ? JSON.parse(localProfiles) : [];
-            console.log('useUserProfiles: Parsed localStorage profiles:', parsedLocalProfiles);
-
-            // Load profiles from OrbitDB if db is available
-            let orbitdbProfiles: Profile[] = [];
-            if (db) {
-                console.log('Fetching all documents from OrbitDB...');
-                try {
-                    const allDocsIterator = await db.all();
-                    console.log('Result of database.all():', allDocsIterator);
-                    console.log('Is iterator?', typeof allDocsIterator[Symbol.asyncIterator] === 'function');
-                    for await (const doc of allDocsIterator) {
-                        console.log('OrbitDB document:', doc);
-                        orbitdbProfiles.push(doc.value);
-                    }
-                } catch (err) {
-                    console.error('Failed to iterate over database.all():', err);
-                    const allDocs = await db.get('');
-                    orbitdbProfiles.push(...allDocs.map((doc: any) => doc.value));
-                }
-                console.log('useUserProfiles: OrbitDB profiles:', orbitdbProfiles);
-            }
-
-            // Merge profiles, prioritizing OrbitDB over localStorage
-            const combinedProfiles = [...parsedLocalProfiles, ...orbitdbProfiles];
-            const uniqueProfiles = Array.from(new Map(combinedProfiles.map((p: Profile) => [p._id, p])).values());
-            const profilesMap = uniqueProfiles.reduce((acc: { [did: string]: { handle: string; profilePicture: string } }, profile: Profile) => {
-                acc[profile._id] = {
-                    handle: profile.handle,
-                    profilePicture: profile.profilePicture,
-                };
-                return acc;
-            }, {});
-            console.log('useUserProfiles: Combined profiles map:', profilesMap);
-            setProfiles(profilesMap);
-        } catch (err) {
-            console.error('useUserProfiles: Failed to load profiles:', err);
-            setError('Failed to load user profiles');
-        }
-    };
-
-    // Initialize OrbitDB and load profiles
     useEffect(() => {
-        async function initProfilesDB() {
-            try {
-                console.log('Initializing user profiles database...');
-
-                const ipfs = await createHelia({
-                    libp2p: {
-                        transports: [webSockets(), webRTC(), circuitRelayTransport()],
-                        transportManager: { faultTolerance: FaultTolerance.NO_FATAL },
-                        peerDiscovery: [
-                            bootstrap({
-                                list: bootstrapNodes,
-                            }),
-                        ],
-                        services: {
-                            identify: identify(),
-                            pubsub: gossipsub(),
-                        },
-                    },
-                });
-                console.log('IPFS initialized for user profiles:', ipfs);
-
-                const orbitdb = await createOrbitDB({ ipfs });
-                const database = await orbitdb.open('citizenx-profiles', { type: 'documents' });
-                console.log('User profiles database opened:', database);
-
-                // Wait for the database to be ready
-                await new Promise<void>((resolve) => {
-                    database.events.on('ready', () => {
-                        console.log('Database ready:', database);
-                        resolve();
-                    });
-                });
-
-                setDb(database);
-
-                // Load profiles immediately after DB is set
-                await loadProfiles();
-            } catch (err) {
-                console.error('useUserProfiles: Failed to initialize user profiles database:', err);
-                setError('Failed to initialize user profiles database');
-                // Load profiles from localStorage even if OrbitDB fails
-                await loadProfiles();
+        const initializeProfile = async () => {
+            if (storageLoading) {
+                return;
             }
-        }
 
-        initProfilesDB();
+            if (!storage) {
+                setError('Storage not initialized');
+                setLoading(false);
+                return;
+            }
 
-        return () => {
-            if (db) {
-                db.close();
+            try {
+                const storedDid = await storage.getCurrentDID();
+                if (storedDid) {
+                    if (validateDID(storedDid)) {
+                        setDid(storedDid);
+                        console.log('useUserProfile: Loaded DID from storage:', storedDid);
+
+                        const userProfile = await storage.getProfile(storedDid);
+                        if (userProfile) {
+                            setProfile(userProfile);
+                            console.log('useUserProfile: Loaded profile from storage:', userProfile);
+                        } else {
+                            console.warn('useUserProfile: Profile not found for DID:', storedDid);
+                        }
+                    } else {
+                        console.warn('useUserProfile: Invalid DID in storage, clearing...');
+                        await storage.clearCurrentDID();
+                    }
+                }
+            } catch (err) {
+                console.error('useUserProfile: Failed to initialize:', err);
+                setError('Failed to initialize user profile');
+            } finally {
+                setLoading(false);
             }
         };
-    }, []);
 
-    // Reload profiles whenever DID changes
-    useEffect(() => {
-        if (did) {
-            loadProfiles();
+        initializeProfile();
+    }, [storage, storageLoading]);
+
+    const authenticate = useCallback(async () => {
+        if (storageLoading) {
+            setError('Storage is still initializing');
+            return;
         }
-    }, [did]);
 
-    // Poll localStorage for changes every 5 seconds
-    useEffect(() => {
-        const interval = setInterval(() => {
-            console.log('useUserProfiles: Polling localStorage for profile updates...');
-            loadProfiles();
-        }, 5000);
+        if (!storage) {
+            setError('Storage not initialized');
+            return;
+        }
 
-        return () => clearInterval(interval);
-    }, [db]); // Depend on db so polling starts after DB initialization
+        try {
+            setLoading(true);
+            setError(null);
 
-    // Handle OrbitDB updates
-    useEffect(() => {
-        if (!db) return;
+            if (!did) {
+                const newDid = await generateDID();
+                if (validateDID(newDid)) {
+                    setDid(newDid);
+                    await storage.setCurrentDID(newDid);
+                    console.log('useUserProfile: Created and saved new DID:', newDid);
+                } else {
+                    throw new Error('Generated DID is invalid');
+                }
+            }
+        } catch (err) {
+            console.error('useUserProfile: Authentication failed:', err);
+            setError('Authentication failed');
+        } finally {
+            setLoading(false);
+        }
+    }, [storage, storageLoading, did]);
 
-        db.events.on('update', async () => {
-            console.log('useUserProfiles: Database update event triggered');
-            await loadProfiles();
-        });
-    }, [db]);
+    const signOut = useCallback(async () => {
+        if (storageLoading) {
+            setError('Storage is still initializing');
+            return;
+        }
 
-    return { profiles, error };
+        if (!storage) {
+            setError('Storage not initialized');
+            return;
+        }
+
+        try {
+            await storage.clearCurrentDID();
+            setDid(null);
+            setProfile(null);
+            setError(null);
+            console.log('useUserProfile: Signed out');
+        } catch (err) {
+            console.error('useUserProfile: Sign out failed:', err);
+            setError('Sign out failed');
+        }
+    }, [storage, storageLoading]);
+
+    const exportIdentity = useCallback(async () => {
+        if (storageLoading) {
+            throw new Error('Storage is still initializing');
+        }
+
+        if (!storage) {
+            throw new Error('Storage not initialized');
+        }
+
+        if (!did) {
+            throw new Error('Not authenticated');
+        }
+
+        try {
+            console.log('useUserProfile: Exported identity:', did);
+            return did;
+        } catch (err) {
+            console.error('useUserProfile: Export identity failed:', err);
+            throw new Error('Failed to export identity');
+        }
+    }, [storageLoading, storage, did]);
+
+    const importIdentity = useCallback(async (data: string) => {
+        if (storageLoading) {
+            throw new Error('Storage is still initializing');
+        }
+
+        if (!storage) {
+            throw new Error('Storage not initialized');
+        }
+
+        try {
+            if (!validateDID(data)) {
+                throw new Error('Invalid DID format');
+            }
+
+            const importedDid = data;
+            setDid(importedDid);
+            await storage.setCurrentDID(importedDid);
+            console.log('useUserProfile: Imported identity:', importedDid);
+
+            const userProfile = await storage.getProfile(importedDid);
+            if (userProfile) {
+                setProfile(userProfile);
+                console.log('useUserProfile: Loaded profile after import:', userProfile);
+            }
+        } catch (err) {
+            console.error('useUserProfile: Import identity failed:', err);
+            throw new Error('Failed to import identity');
+        }
+    }, [storageLoading, storage]);
+
+    const createProfile = useCallback(
+        async (handle: string, profilePicture?: string) => {
+            if (storageLoading) {
+                setError('Storage is still initializing');
+                return;
+            }
+
+            if (!storage || !did) {
+                setError('Not authenticated or storage not initialized');
+                return;
+            }
+
+            try {
+                const newProfile: Profile = {
+                    did,
+                    handle,
+                    profilePicture,
+                };
+
+                console.log('useUserProfile: Saving profile to storage:', newProfile);
+                await storage.saveProfile(newProfile);
+                setProfile(newProfile);
+                setError(null);
+            } catch (err) {
+                console.error('useUserProfile: Failed to create profile:', err);
+                setError('Failed to create profile');
+            }
+        },
+        [storageLoading, storage, did]
+    );
+
+    const updateProfile = useCallback(
+        async (handle: string, profilePicture?: string) => {
+            if (storageLoading) {
+                setError('Storage is still initializing');
+                return;
+            }
+
+            if (!storage || !did) {
+                setError('Not authenticated or storage not initialized');
+                return;
+            }
+
+            try {
+                const updatedProfile: Profile = {
+                    did,
+                    handle,
+                    profilePicture,
+                };
+
+                console.log('useUserProfile: Updating profile in storage:', updatedProfile);
+                await storage.saveProfile(updatedProfile);
+                setProfile(updatedProfile);
+                setError(null);
+            } catch (err) {
+                console.error('useUserProfile: Failed to update profile:', err);
+                setError('Failed to update profile');
+            }
+        },
+        [storageLoading, storage, did]
+    );
+
+    return {
+        did,
+        profile,
+        loading: loading || storageLoading,
+        error: error || storageError,
+        authenticate,
+        signOut,
+        exportIdentity,
+        importIdentity,
+        createProfile,
+        updateProfile,
+    };
 };

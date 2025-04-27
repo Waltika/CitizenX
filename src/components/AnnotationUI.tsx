@@ -1,300 +1,127 @@
-// src/components/AnnotationUI.tsx
-import React, { useState, useEffect, useRef } from 'react';
-import { useOrbitDB } from '../hooks/useOrbitDB';
+import React, { useState, useEffect } from 'react';
+import { useUserProfile } from '../hooks/useUserProfiles';
 import { useAnnotations } from '../hooks/useAnnotations';
-import { useUserProfiles } from '../hooks/useUserProfiles';
-import { useAuth } from '../hooks/useAuth';
-import { useIdentityExportImport } from '../hooks/useIdentityExportImport';
-import { useProfileModal } from '../hooks/useProfileModal';
 import { AnnotationList } from './AnnotationList';
 import './AnnotationUI.css';
 
 interface AnnotationUIProps {
     url: string;
+    isPopupUrl: boolean;
 }
 
-export const AnnotationUI: React.FC<AnnotationUIProps> = ({ url }) => {
-    const [annotation, setAnnotation] = useState('');
-    const [isSettingsMenuOpen, setIsSettingsMenuOpen] = useState(false);
-    const settingsMenuRef = useRef<HTMLDivElement>(null);
-
-    const { did, profile, loading: authLoading, authenticate, signOut, exportIdentity, importIdentity, createProfile, updateProfile, error: authError } = useAuth();
-    const { profiles, error: profilesError } = useUserProfiles(did);
-
-    const {
-        exportedIdentity,
-        importData,
-        setImportData,
-        passphrase,
-        setPassphrase,
-        importPassphrase,
-        setImportPassphrase,
-        importError,
-        exportError,
-        handleExport,
-        handleImport,
-    } = useIdentityExportImport({ exportIdentity, importIdentity });
-
-    const {
-        isProfileModalOpen,
-        setIsProfileModalOpen,
-        newHandle,
-        setNewHandle,
-        newProfilePicture,
-        handleProfileSubmit,
-        handleFileChange,
-    } = useProfileModal({ profile, createProfile, updateProfile });
-
-    const [isExportModalOpen, setIsExportModalOpen] = useState(false);
-
-    const isPopupUrl = url.startsWith('chrome-extension://');
-    const { db, error: dbError, isReady } = isPopupUrl ? { db: null, error: null, isReady: true } : useOrbitDB(url);
-    const { annotations, error: annotationsError, handleSaveAnnotation, handleDeleteAnnotation, handleSaveComment } = isPopupUrl
-        ? { annotations: [], error: null, handleSaveAnnotation: async () => {}, handleDeleteAnnotation: async () => {}, handleSaveComment: async () => {} }
-        : useAnnotations({ url, db, did, isReady });
-
-    const error = authError || dbError || annotationsError || profilesError;
+export const AnnotationUI: React.FC<AnnotationUIProps> = ({ url, isPopupUrl }) => {
+    const { did, profile, loading: profileLoading, error: profileError, createProfile, updateProfile } = useUserProfile();
+    const { annotations, profiles, error: annotationsError, handleSaveAnnotation, handleDeleteAnnotation, handleSaveComment } = useAnnotations({ url, did });
+    const [annotationText, setAnnotationText] = useState('');
+    const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
+    const [profileHandle, setProfileHandle] = useState('');
+    const [profilePicture, setProfilePicture] = useState<string | undefined>(undefined);
 
     useEffect(() => {
-        console.log('AnnotationUI: Checking profile modal conditions - loading:', authLoading, 'did:', did, 'profile:', profile);
-        if (!authLoading && did && !profile) {
+        if (!profileLoading && did && !profile) {
             console.log('AnnotationUI: Opening Update Profile modal');
             setIsProfileModalOpen(true);
+        } else {
+            console.log('AnnotationUI: Profile modal conditions - loading:', profileLoading, 'did:', did, 'profile:', profile);
         }
-    }, [did, profile, authLoading, setIsProfileModalOpen]);
+    }, [profileLoading, did, profile]);
 
-    useEffect(() => {
-        const handleClickOutside = (event: MouseEvent) => {
-            if (settingsMenuRef.current && !settingsMenuRef.current.contains(event.target as Node)) {
-                setIsSettingsMenuOpen(false);
+    const handleSave = async () => {
+        if (annotationText.trim() && !isPopupUrl) {
+            await handleSaveAnnotation(annotationText);
+            setAnnotationText('');
+        }
+    };
+
+    const handleProfileSave = async () => {
+        if (profileHandle.trim()) {
+            if (profile) {
+                await updateProfile(profileHandle, profilePicture);
+            } else {
+                await createProfile(profileHandle, profilePicture);
             }
-        };
-        document.addEventListener('mousedown', handleClickOutside);
-        return () => {
-            document.removeEventListener('mousedown', handleClickOutside);
-        };
-    }, []);
-
-    const onSave = async () => {
-        try {
-            await handleSaveAnnotation(annotation);
-            setAnnotation('');
-        } catch (err) {
-            console.error('Failed to save annotation in AnnotationUI:', err);
+            setIsProfileModalOpen(false);
+            setProfileHandle('');
+            setProfilePicture(undefined);
         }
     };
 
-    const toggleSettingsMenu = () => {
-        setIsSettingsMenuOpen((prev) => !prev);
-    };
-
-    const openExportModal = () => {
-        setIsSettingsMenuOpen(false);
-        setIsExportModalOpen(true);
-        setPassphrase('');
-    };
-
-    if (authLoading) {
-        return <div style={{ padding: '1rem' }}>Loading authentication...</div>;
-    }
+    // Debug log to track renders
+    console.log('AnnotationUI: Rendering with annotations:', annotations, 'profiles:', profiles);
 
     return (
         <div className="annotation-ui-container">
-            {did ? (
-                <div className="connected-section">
-                    <div className="connected-section-content">
-                        <div className="connected-user-info">
-                            {profile && profile.profilePicture && (
-                                <img
-                                    src={profile.profilePicture}
-                                    alt="Profile"
-                                    className="profile-picture"
-                                />
-                            )}
-                            <p className="connected-text">
-                                Connected: {profile?.handle || 'Set your handle'}
-                            </p>
-                        </div>
-                        <div className="settings-menu-container">
-                            <button
-                                onClick={toggleSettingsMenu}
-                                className="settings-button"
-                                aria-label="Settings"
-                            >
-                                <svg
-                                    xmlns="http://www.w3.org/2000/svg"
-                                    width="1.25rem"
-                                    height="1.25rem"
-                                    viewBox="0 0 24 24"
-                                    fill="none"
-                                    stroke="#2c7a7b"
-                                    strokeWidth="2"
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                >
-                                    <circle cx="12" cy="12" r="3"></circle>
-                                    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l-.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h-.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l-.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v-.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l-.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
-                                </svg>
-                            </button>
-                            {isSettingsMenuOpen && (
-                                <div
-                                    ref={settingsMenuRef}
-                                    className="settings-menu"
-                                >
-                                    <button
-                                        onClick={() => setIsProfileModalOpen(true)}
-                                        className="settings-menu-button"
-                                    >
-                                        Edit Profile
-                                    </button>
-                                    <button
-                                        onClick={openExportModal}
-                                        className="settings-menu-button"
-                                    >
-                                        Export Identity
-                                    </button>
-                                    <button
-                                        onClick={signOut}
-                                        className="settings-menu-button sign-out-button"
-                                    >
-                                        Sign Out
-                                    </button>
-                                </div>
-                            )}
-                        </div>
+            {profileError && <div className="error-text">{profileError}</div>}
+            {annotationsError && <div className="error-text">{annotationsError}</div>}
+            <div className="connected-section">
+                <div className="connected-section-content">
+                    <div className="connected-user-info">
+                        {profile ? (
+                            <>
+                                {profile.profilePicture && <img src={profile.profilePicture} alt="Profile" className="profile-picture" />}
+                                <p className="connected-text">Connected: {profile.handle}</p>
+                            </>
+                        ) : (
+                            <p className="connected-text">Not connected</p>
+                        )}
                     </div>
                 </div>
-            ) : (
-                <div className="authenticate-section">
-                    <button
-                        onClick={authenticate}
-                        className="authenticate-button"
-                    >
-                        Authenticate
-                    </button>
-                    <div className="import-section">
-            <textarea
-                value={importData}
-                onChange={(e) => setImportData(e.target.value)}
-                placeholder="Paste your exported identity here..."
-                className="import-textarea"
-            />
-                        <input
-                            type="password"
-                            placeholder="Enter passphrase to import"
-                            value={importPassphrase}
-                            onChange={(e) => setImportPassphrase(e.target.value)}
-                            className="import-input"
-                        />
-                        <button
-                            onClick={handleImport}
-                            className="authenticate-button"
-                        >
-                            Import Identity
-                        </button>
-                        {importError && <p className="error-text">{importError}</p>}
-                    </div>
-                </div>
-            )}
-            {isProfileModalOpen && (
-                <div className="profile-modal">
-                    <h2 className="profile-modal-title">
-                        {profile ? 'Update Profile' : 'Set Profile'}
-                    </h2>
-                    <input
-                        type="text"
-                        placeholder="Enter your handle"
-                        value={newHandle}
-                        onChange={(e) => setNewHandle(e.target.value)}
-                        className="profile-modal-input"
-                    />
-                    <input
-                        type="file"
-                        accept="image/*"
-                        onChange={handleFileChange}
-                        className="profile-modal-file-input"
-                    />
-                    {newProfilePicture && (
-                        <img
-                            src={newProfilePicture}
-                            alt="Preview"
-                            className="profile-modal-preview"
-                        />
-                    )}
-                    <div className="profile-modal-buttons">
-                        <button
-                            onClick={handleProfileSubmit}
-                            className="profile-modal-button profile-modal-save-button"
-                        >
-                            Save
-                        </button>
-                        <button
-                            onClick={() => setIsProfileModalOpen(false)}
-                            className="profile-modal-button profile-modal-cancel-button"
-                        >
-                            Cancel
-                        </button>
-                    </div>
-                </div>
-            )}
-            {isExportModalOpen && (
-                <div className="export-modal">
-                    <h2 className="export-modal-title">
-                        Export Identity
-                    </h2>
-                    <input
-                        type="password"
-                        placeholder="Enter passphrase to export"
-                        value={passphrase}
-                        onChange={(e) => setPassphrase(e.target.value)}
-                        className="export-modal-input"
+            </div>
+            {!isPopupUrl && (
+                <div className="annotation-input">
+                    <textarea
+                        value={annotationText}
+                        onChange={(e) => setAnnotationText(e.target.value)}
+                        placeholder="Enter annotation..."
+                        className="annotation-textarea"
                     />
                     <button
-                        onClick={handleExport}
-                        className="export-modal-button"
-                    >
-                        Export
-                    </button>
-                    {exportError && <p className="error-text">{exportError}</p>}
-                    {exportedIdentity && (
-                        <textarea
-                            value={exportedIdentity}
-                            readOnly
-                            className="export-modal-textarea"
-                        />
-                    )}
-                    <button
-                        onClick={() => setIsExportModalOpen(false)}
-                        className="export-modal-close-button"
-                    >
-                        Close
-                    </button>
-                </div>
-            )}
-            {error && <p className="error-text">{error}</p>}
-            {did && (
-                <>
-          <textarea
-              value={annotation}
-              onChange={(e) => setAnnotation(e.target.value)}
-              placeholder="Enter annotation..."
-              className="annotation-textarea"
-          />
-                    <button
-                        onClick={onSave}
-                        disabled={!did || !db || !isReady}
+                        onClick={handleSave}
                         className="annotation-save-button"
+                        disabled={!annotationText.trim()}
                     >
                         Save
                     </button>
-                </>
+                </div>
             )}
             <AnnotationList
                 annotations={annotations}
                 profiles={profiles}
                 onDelete={handleDeleteAnnotation}
-                onSaveComment={did && db && isReady ? handleSaveComment : undefined}
+                onSaveComment={isPopupUrl ? undefined : handleSaveComment}
             />
+            {isProfileModalOpen && (
+                <div className="profile-modal">
+                    <h2 className="profile-modal-title">{profile ? 'Update Profile' : 'Create Profile'}</h2>
+                    <input
+                        type="text"
+                        value={profileHandle}
+                        onChange={(e) => setProfileHandle(e.target.value)}
+                        placeholder="Enter your handle"
+                        className="profile-modal-input"
+                    />
+                    <input
+                        type="file"
+                        accept="image/*"
+                        onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (file) {
+                                const reader = new FileReader();
+                                reader.onloadend = () => {
+                                    setProfilePicture(reader.result as string);
+                                };
+                                reader.readAsDataURL(file);
+                            }
+                        }}
+                        className="profile-modal-file-input"
+                    />
+                    {profilePicture && <img src={profilePicture} alt="Preview" className="profile-modal-preview" />}
+                    <div className="profile-modal-buttons">
+                        <button onClick={handleProfileSave} className="profile-modal-save-button">Save Profile</button>
+                        <button onClick={() => setIsProfileModalOpen(false)} className="profile-modal-cancel-button">Cancel</button>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };
