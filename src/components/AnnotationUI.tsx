@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useUserProfile } from '../hooks/useUserProfiles';
+import { useUserProfile } from '../hooks/useUserProfile';
 import { useAnnotations } from '../hooks/useAnnotations';
 import { AnnotationList } from './AnnotationList';
 import './AnnotationUI.css';
@@ -11,12 +11,12 @@ interface AnnotationUIProps {
 
 export const AnnotationUI: React.FC<AnnotationUIProps> = ({ url, isPopupUrl }) => {
     const { did, profile, loading: profileLoading, error: profileError, authenticate, signOut, exportIdentity, importIdentity, createProfile, updateProfile } = useUserProfile();
-    const { annotations, profiles, error: annotationsError, handleSaveAnnotation, handleDeleteAnnotation, handleSaveComment } = useAnnotations({ url, did });
+    const { annotations, profiles, error: annotationsError, loading: annotationsLoading, handleSaveAnnotation, handleDeleteAnnotation, handleSaveComment } = useAnnotations({ url, did });
     const [annotationText, setAnnotationText] = useState('');
     const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
     const [profileHandle, setProfileHandle] = useState('');
     const [profilePicture, setProfilePicture] = useState<string | undefined>(undefined);
-    const [isSettingsOpen, setIsSettingsOpen] = useState(false); // State for settings menu
+    const [isSettingsOpen, setIsSettingsOpen] = useState(false);
     const [importIdentityData, setImportIdentityData] = useState('');
     const [isExportModalOpen, setIsExportModalOpen] = useState(false);
     const [exportedIdentity, setExportedIdentity] = useState('');
@@ -29,6 +29,10 @@ export const AnnotationUI: React.FC<AnnotationUIProps> = ({ url, isPopupUrl }) =
             console.log('AnnotationUI: Profile modal conditions - loading:', profileLoading, 'did:', did, 'profile:', profile);
         }
     }, [profileLoading, did, profile]);
+
+    useEffect(() => {
+        console.log('AnnotationUI: annotationsLoading changed:', annotationsLoading);
+    }, [annotationsLoading]);
 
     const handleSave = async () => {
         if (annotationText.trim() && !isPopupUrl) {
@@ -81,7 +85,7 @@ export const AnnotationUI: React.FC<AnnotationUIProps> = ({ url, isPopupUrl }) =
         }
     };
 
-    console.log('AnnotationUI: Rendering with annotations:', annotations, 'profiles:', profiles);
+    console.log('AnnotationUI: Rendering with annotations:', annotations, 'profiles:', profiles, 'loading:', annotationsLoading);
 
     return (
         <div className="annotation-ui-container">
@@ -151,6 +155,11 @@ export const AnnotationUI: React.FC<AnnotationUIProps> = ({ url, isPopupUrl }) =
                     </div>
                 </div>
             </div>
+            {annotationsLoading && (
+                <div className="loading-spinner">
+                    <span>Loading annotations...</span>
+                </div>
+            )}
             {!isPopupUrl && (
                 <div className="annotation-input">
                     <textarea
@@ -158,12 +167,12 @@ export const AnnotationUI: React.FC<AnnotationUIProps> = ({ url, isPopupUrl }) =
                         onChange={(e) => setAnnotationText(e.target.value)}
                         placeholder="Enter annotation..."
                         className="annotation-textarea"
-                        disabled={!did} // Disable if not authenticated
+                        disabled={!did || annotationsLoading}
                     />
                     <button
                         onClick={handleSave}
                         className="annotation-save-button"
-                        disabled={!annotationText.trim() || !did}
+                        disabled={!annotationText.trim() || !did || annotationsLoading}
                     >
                         Save
                     </button>
@@ -173,7 +182,7 @@ export const AnnotationUI: React.FC<AnnotationUIProps> = ({ url, isPopupUrl }) =
                 annotations={annotations}
                 profiles={profiles}
                 onDelete={handleDeleteAnnotation}
-                onSaveComment={isPopupUrl || !did ? undefined : handleSaveComment}
+                onSaveComment={isPopupUrl || !did || annotationsLoading ? undefined : handleSaveComment}
             />
             {isProfileModalOpen && (
                 <div className="profile-modal">

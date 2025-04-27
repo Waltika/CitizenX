@@ -21,9 +21,8 @@ export class GunRepository {
     private annotationCallbacks: Map<string, AnnotationUpdateCallback[]> = new Map();
 
     constructor(options: GunRepositoryOptions = {}) {
-        // Start with an initial list of peers (can be empty)
         this.options = {
-            peers: options.peers || [],
+            peers: options.peers || ['https://citizenx-bootstrap.example.com/gun'],
             radisk: options.radisk ?? true,
         };
         this.gun = Gun({
@@ -34,7 +33,6 @@ export class GunRepository {
             webrtc: true,
         });
 
-        // Dynamically discover peers from the knownPeers node
         this.discoverPeers();
     }
 
@@ -48,35 +46,29 @@ export class GunRepository {
         });
     }
 
-    // Fetch and update the list of known peers
     private discoverPeers(): void {
-        // Initial fetch of known peers
         this.fetchKnownPeers().then((peers) => {
             if (peers.length > 0) {
                 console.log('GunRepository: Discovered initial peers:', peers);
-                this.gun.opt({ peers }); // Update the Gun instance's peers list
+                this.gun.opt({ peers });
             }
         });
 
-        // Listen for real-time updates to the knownPeers node
         this.gun.get('knownPeers').map().on((peer: KnownPeer, id: string) => {
             if (peer && peer.url && peer.timestamp) {
-                // Check if the peer is still alive (e.g., timestamp within the last 10 minutes)
                 const now = Date.now();
                 const age = now - peer.timestamp;
-                if (age > 10 * 60 * 1000) { // 10 minutes
+                if (age > 10 * 60 * 1000) {
                     console.log('GunRepository: Removing expired peer:', peer.url);
-                    this.gun.get('knownPeers').get(id).put(null); // Remove expired peer
+                    this.gun.get('knownPeers').get(id).put(null);
                     return;
                 }
 
-                // Fetch the current list of peers and update
                 this.fetchKnownPeers().then((peers) => {
                     console.log('GunRepository: Updated peers list:', peers);
                     this.gun.opt({ peers });
                 });
             } else {
-                // Peer was removed
                 this.fetchKnownPeers().then((peers) => {
                     console.log('GunRepository: Updated peers list after removal:', peers);
                     this.gun.opt({ peers });
@@ -85,16 +77,14 @@ export class GunRepository {
         });
     }
 
-    // Fetch the current list of known peers
     private async fetchKnownPeers(): Promise<string[]> {
         return new Promise((resolve) => {
             const peers: string[] = [];
             this.gun.get('knownPeers').map().once((peer: KnownPeer) => {
                 if (peer && peer.url && peer.timestamp) {
-                    // Only include peers that are still alive (timestamp within the last 10 minutes)
                     const now = Date.now();
                     const age = now - peer.timestamp;
-                    if (age <= 10 * 60 * 1000) { // 10 minutes
+                    if (age <= 10 * 60 * 1000) {
                         peers.push(peer.url);
                     }
                 }
@@ -183,41 +173,59 @@ export class GunRepository {
         const annotations: Annotation[] = [];
         const annotationNode = this.gun.get('annotations').get(url);
 
-        await new Promise<void>((resolve) => {
-            annotationNode.map().once(async (annotation: any) => {
-                if (annotation) {
-                    const comments: Comment[] = await new Promise((resolveComments) => {
-                        const commentList: Comment[] = [];
-                        annotationNode.get(annotation.id).get('comments').map().once((comment: any) => {
-                            if (comment) {
-                                commentList.push({
-                                    id: comment.id,
-                                    content: comment.content,
-                                    author: comment.author,
-                                    timestamp: comment.timestamp,
-                                });
-                            }
-                        });
-                        setTimeout(() => resolveComments(commentList), 100);
-                    });
+        // Initial fetch with retries
+        const maxRetries = 3;
+        for (let attempt = 1; attempt <= maxRetries; attempt++) {
+            const loadedAnnotations: Set<string> = new Set();
+            let hasNewData = false;
 
-                    annotations.push({
-                        id: annotation.id,
-                        url: annotation.url,
-                        content: annotation.content,
-                        author: annotation.author,
-                        timestamp: annotation.timestamp,
-                        comments,
-                    });
-                    console.log('GunRepository: Loaded annotation:', { ...annotation, comments });
-                }
+            await new Promise<void>((resolve) => {
+                annotationNode.map().once(async (annotation: any) => {
+                    if (annotation && !loadedAnnotations.has(annotation.id)) {
+                        loadedAnnotations.add(annotation.id);
+                        hasNewData = true;
+
+                        const comments: Comment[] = await new Promise((resolveComments) => {
+                            const commentList: Comment[] = [];
+                            annotationNode.get(annotation.id).get('comments').map().once((comment: any) => {
+                                if (comment) {
+                                    commentList.push({
+                                        id: comment.id,
+                                        content: comment.content,
+                                        author: comment.author,
+                                        timestamp: comment.timestamp,
+                                    });
+                                }
+                            });
+                            setTimeout(() => resolveComments(commentList), 500);
+                        });
+
+                        const annotationData = {
+                            id: annotation.id,
+                            url: annotation.url,
+                            content: annotation.content,
+                            author: annotation.author,
+                            timestamp: annotation.timestamp,
+                            comments,
+                        };
+                        annotations.push(annotationData);
+                        console.log('GunRepository: Loaded annotation:', annotationData);
+                    }
+                });
+
+                setTimeout(() => {
+                    console.log('GunRepository: Initial annotations loaded for URL:', url, annotations, 'Has new data:', hasNewData, 'Attempt:', attempt);
+                    resolve();
+                }, 2000); // Increased timeout to 2 seconds
             });
 
-            setTimeout(() => {
-                console.log('GunRepository: Initial annotations loaded for URL:', url, annotations);
-                resolve();
-            }, 200);
-        });
+            if (hasNewData || attempt === maxRetries) {
+                break; // Exit if we loaded data or reached max retries
+            }
+
+            console.log('GunRepository: Retrying annotations fetch for URL:', url, 'Attempt:', attempt);
+            await new Promise((resolve) => setTimeout(resolve, 1000));
+        }
 
         if (callback) {
             if (!this.annotationCallbacks.has(url)) {
@@ -239,7 +247,7 @@ export class GunRepository {
                                 });
                             }
                         });
-                        setTimeout(() => resolveComments(commentList), 100);
+                        setTimeout(() => resolveComments(commentList), 500);
                     });
 
                     const updatedAnnotations = annotations.filter(a => a.id !== annotation.id);

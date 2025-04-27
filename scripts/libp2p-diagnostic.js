@@ -16,7 +16,7 @@ import { promisify } from 'util';
 // Promisify exec for cross-platform command execution
 const execPromise = promisify(exec);
 
-// Bootstrap nodes from your CitizenX configuration (useAuth.ts, useUserProfiles.ts)
+// Bootstrap nodes from your CitizenX configuration (useAuth.ts, useUserProfile.ts)
 const bootstrapNodes = [
     '/dnsaddr/bootstrap.libp2p.io/p2p/QmNnooDu7bfjPFoTZYxMNLWUQJyrVwtbZg5gBMjTezGAJN',
     '/dnsaddr/bootstrap.libp2p.io/p2p/QmbLHAnMoJPAeL4N3XUjZx4j4vJqJ5gMhW8f1z2W9z5pQ',

@@ -27,7 +27,7 @@ As of April 23, 2025, the core functionality of creating, storing, and displayin
 ### Key Components
 1. **Hooks**:
    - `useAuth.ts`: Manages user authentication, DID generation, and profile creation/update. Stores the DID and private key in `chrome.storage.local` and profiles in `localStorage` and OrbitDB.
-   - `useUserProfiles.ts`: Fetches and maintains a map of user profiles (keyed by DID) for display in annotations and comments. Polls `localStorage` every 5 seconds to ensure profile data is up-to-date.
+   - `useUserProfile.ts`: Fetches and maintains a map of user profiles (keyed by DID) for display in annotations and comments. Polls `localStorage` every 5 seconds to ensure profile data is up-to-date.
    - `useAnnotations.ts`: Manages annotation creation, storage, and retrieval. Stores annotations in an OrbitDB database (`citizenx-annotations`) with a fallback to `localStorage`.
    - `useOrbitDB.ts`: Initializes the OrbitDB instance and handles database lifecycle (open/close).
 
@@ -80,7 +80,7 @@ As of April 23, 2025, the core functionality of creating, storing, and displayin
 ## File Structure
 - **Hooks**:
   - `src/hooks/useAuth.ts`
-  - `src/hooks/useUserProfiles.ts`
+  - `src/hooks/useUserProfile.ts`
   - `src/hooks/useAnnotations.ts`
   - `src/hooks/useOrbitDB.ts`
 - **Components**:
