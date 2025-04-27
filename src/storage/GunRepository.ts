@@ -96,7 +96,7 @@ export class GunRepository {
     async getCurrentDID(): Promise<string | null> {
         return new Promise((resolve) => {
             this.gun.get('currentDID').once((data: any) => {
-                resolve(data ? data.did : null);
+                resolve(data && data.did ? data.did : null);
             });
         });
     }
@@ -117,7 +117,7 @@ export class GunRepository {
 
     async clearCurrentDID(): Promise<void> {
         return new Promise((resolve, reject) => {
-            this.gun.get('currentDID').put(null, (ack: any) => {
+            this.gun.get('currentDID').put({ did: null }, (ack: any) => {
                 if (ack.err) {
                     console.error('GunRepository: Failed to clear current DID:', ack.err);
                     reject(new Error(ack.err));
@@ -173,7 +173,6 @@ export class GunRepository {
         const annotations: Annotation[] = [];
         const annotationNode = this.gun.get('annotations').get(url);
 
-        // Initial fetch with retries
         const maxRetries = 3;
         for (let attempt = 1; attempt <= maxRetries; attempt++) {
             const loadedAnnotations: Set<string> = new Set();
@@ -216,11 +215,11 @@ export class GunRepository {
                 setTimeout(() => {
                     console.log('GunRepository: Initial annotations loaded for URL:', url, annotations, 'Has new data:', hasNewData, 'Attempt:', attempt);
                     resolve();
-                }, 2000); // Increased timeout to 2 seconds
+                }, 2000);
             });
 
             if (hasNewData || attempt === maxRetries) {
-                break; // Exit if we loaded data or reached max retries
+                break;
             }
 
             console.log('GunRepository: Retrying annotations fetch for URL:', url, 'Attempt:', attempt);

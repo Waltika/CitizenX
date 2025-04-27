@@ -21,7 +21,7 @@
   },
   "homepage": "https://github.com/Waltika/CitizenX#readme",
   "devDependencies": {
-    "@testing-library/jest-dom": "^6.0.0",
+    "@testing-library/jest-dom": "^6.6.3",
     "@testing-library/react": "^16.3.0",
     "@testing-library/user-event": "^14.4.3",
     "@types/chrome": "^0.0.269",
@@ -36,6 +36,7 @@
     "ts-jest": "^29.3.2",
     "ts-node": "^10.9.2",
     "typescript": "^5.8.3",
+    "util": "^0.12.5",
     "vite": "^5.4.18"
   },
   "dependencies": {
@@ -46,13 +47,17 @@
     "@libp2p/interface": "^2.9.0",
     "@libp2p/webrtc": "^5.2.12",
     "@libp2p/websockets": "^9.2.10",
+    "@noble/ed25519": "^2.2.3",
+    "@noble/hashes": "^1.8.0",
     "@orbitdb/core": "latest",
     "base64-arraybuffer": "^1.0.2",
+    "buffer": "^6.0.3",
     "ethers": "^6.13.5",
     "events": "^3.3.0",
     "gun": "^0.2020.1240",
     "helia": "^5.3.0",
     "it-drain": "^3.0.8",
+    "multibase": "^4.0.6",
     "react": "^18.2.0",
     "react-dom": "^18.2.0"
   }

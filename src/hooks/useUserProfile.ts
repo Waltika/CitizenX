@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useStorage } from './useStorage';
 import { generateDID, validateDID } from '../utils/did';
+import { exportKeyPair, importKeyPair } from '../utils/crypto';
 import { Profile } from '../types';
 
 interface UseUserProfileReturn {
@@ -10,8 +11,8 @@ interface UseUserProfileReturn {
     error: string | null;
     authenticate: () => Promise<void>;
     signOut: () => void;
-    exportIdentity: () => Promise<string>;
-    importIdentity: (data: string) => Promise<void>;
+    exportIdentity: (passphrase: string) => Promise<string>;
+    importIdentity: (data: string, passphrase: string) => Promise<void>;
     createProfile: (handle: string, profilePicture?: string) => Promise<void>;
     updateProfile: (handle: string, profilePicture?: string) => Promise<void>;
 }
@@ -19,6 +20,7 @@ interface UseUserProfileReturn {
 export const useUserProfile = (): UseUserProfileReturn => {
     const { storage, error: storageError, isLoading: storageLoading } = useStorage();
     const [did, setDid] = useState<string | null>(null);
+    const [privateKey, setPrivateKey] = useState<string | null>(null);
     const [profile, setProfile] = useState<Profile | null>(null);
     const [loading, setLoading] = useState<boolean>(true);
     const [error, setError] = useState<string | null>(null);
@@ -42,6 +44,20 @@ export const useUserProfile = (): UseUserProfileReturn => {
                         setDid(storedDid);
                         console.log('useUserProfile: Loaded DID from storage:', storedDid);
 
+                        // Load the private key from chrome.storage.local
+                        const storedPrivateKey = await new Promise<string | null>((resolve) => {
+                            chrome.storage.local.get(['privateKey'], (result) => {
+                                resolve(result.privateKey || null);
+                            });
+                        });
+
+                        if (storedPrivateKey) {
+                            setPrivateKey(storedPrivateKey);
+                            console.log('useUserProfile: Loaded private key from storage');
+                        } else {
+                            console.warn('useUserProfile: Private key not found in storage');
+                        }
+
                         const userProfile = await storage.getProfile(storedDid);
                         if (userProfile) {
                             setProfile(userProfile);
@@ -52,6 +68,9 @@ export const useUserProfile = (): UseUserProfileReturn => {
                     } else {
                         console.warn('useUserProfile: Invalid DID in storage, clearing...');
                         await storage.clearCurrentDID();
+                        await new Promise<void>((resolve) => {
+                            chrome.storage.local.remove('privateKey', () => resolve());
+                        });
                     }
                 }
             } catch (err) {
@@ -81,10 +100,14 @@ export const useUserProfile = (): UseUserProfileReturn => {
             setError(null);
 
             if (!did) {
-                const newDid = await generateDID();
+                const { did: newDid, privateKey: newPrivateKey } = await generateDID();
                 if (validateDID(newDid)) {
                     setDid(newDid);
+                    setPrivateKey(newPrivateKey);
                     await storage.setCurrentDID(newDid);
+                    await new Promise<void>((resolve) => {
+                        chrome.storage.local.set({ privateKey: newPrivateKey }, () => resolve());
+                    });
                     console.log('useUserProfile: Created and saved new DID:', newDid);
                 } else {
                     throw new Error('Generated DID is invalid');
@@ -111,7 +134,11 @@ export const useUserProfile = (): UseUserProfileReturn => {
 
         try {
             await storage.clearCurrentDID();
+            await new Promise<void>((resolve) => {
+                chrome.storage.local.remove('privateKey', () => resolve());
+            });
             setDid(null);
+            setPrivateKey(null);
             setProfile(null);
             setError(null);
             console.log('useUserProfile: Signed out');
@@ -121,7 +148,7 @@ export const useUserProfile = (): UseUserProfileReturn => {
         }
     }, [storage, storageLoading]);
 
-    const exportIdentity = useCallback(async () => {
+    const exportIdentity = useCallback(async (passphrase: string) => {
         if (storageLoading) {
             throw new Error('Storage is still initializing');
         }
@@ -130,20 +157,21 @@ export const useUserProfile = (): UseUserProfileReturn => {
             throw new Error('Storage not initialized');
         }
 
-        if (!did) {
+        if (!did || !privateKey) {
             throw new Error('Not authenticated');
         }
 
         try {
-            console.log('useUserProfile: Exported identity:', did);
-            return did;
+            const exportedData = await exportKeyPair(did, privateKey, passphrase);
+            console.log('useUserProfile: Exported identity');
+            return exportedData;
         } catch (err) {
             console.error('useUserProfile: Export identity failed:', err);
             throw new Error('Failed to export identity');
         }
-    }, [storageLoading, storage, did]);
+    }, [storageLoading, storage, did, privateKey]);
 
-    const importIdentity = useCallback(async (data: string) => {
+    const importIdentity = useCallback(async (data: string, passphrase: string) => {
         if (storageLoading) {
             throw new Error('Storage is still initializing');
         }
@@ -153,13 +181,17 @@ export const useUserProfile = (): UseUserProfileReturn => {
         }
 
         try {
-            if (!validateDID(data)) {
+            const { did: importedDid, privateKey: importedPrivateKey } = await importKeyPair(data, passphrase);
+            if (!validateDID(importedDid)) {
                 throw new Error('Invalid DID format');
             }
 
-            const importedDid = data;
             setDid(importedDid);
+            setPrivateKey(importedPrivateKey);
             await storage.setCurrentDID(importedDid);
+            await new Promise<void>((resolve) => {
+                chrome.storage.local.set({ privateKey: importedPrivateKey }, () => resolve());
+            });
             console.log('useUserProfile: Imported identity:', importedDid);
 
             const userProfile = await storage.getProfile(importedDid);

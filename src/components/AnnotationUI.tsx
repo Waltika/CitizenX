@@ -20,6 +20,9 @@ export const AnnotationUI: React.FC<AnnotationUIProps> = ({ url, isPopupUrl }) =
     const [importIdentityData, setImportIdentityData] = useState('');
     const [isExportModalOpen, setIsExportModalOpen] = useState(false);
     const [exportedIdentity, setExportedIdentity] = useState('');
+    const [passphrase, setPassphrase] = useState('');
+    const [passphraseModalOpen, setPassphraseModalOpen] = useState<'export' | 'import' | null>(null);
+    const [importPassphrase, setImportPassphrase] = useState('');
 
     useEffect(() => {
         if (!profileLoading && did && !profile) {
@@ -65,23 +68,52 @@ export const AnnotationUI: React.FC<AnnotationUIProps> = ({ url, isPopupUrl }) =
     };
 
     const handleExportIdentity = async () => {
+        setPassphraseModalOpen('export');
+    };
+
+    const handleExportWithPassphrase = async () => {
+        if (!passphrase) {
+            alert('Please enter a passphrase');
+            return;
+        }
+
         try {
-            const identity = await exportIdentity();
+            const identity = await exportIdentity(passphrase);
             setExportedIdentity(identity);
             setIsExportModalOpen(true);
+            setPassphraseModalOpen(null);
+            setPassphrase('');
             setIsSettingsOpen(false);
         } catch (err) {
             console.error('Failed to export identity:', err);
+            alert('Failed to export identity');
         }
     };
 
     const handleImportIdentity = async () => {
+        if (!importIdentityData.trim()) {
+            alert('Please paste the identity data');
+            return;
+        }
+
+        setPassphraseModalOpen('import');
+    };
+
+    const handleImportWithPassphrase = async () => {
+        if (!importPassphrase) {
+            alert('Please enter the passphrase');
+            return;
+        }
+
         try {
-            await importIdentity(importIdentityData);
+            await importIdentity(importIdentityData, importPassphrase);
             setImportIdentityData('');
+            setImportPassphrase('');
+            setPassphraseModalOpen(null);
             setIsSettingsOpen(false);
         } catch (err) {
             console.error('Failed to import identity:', err);
+            alert('Failed to import identity');
         }
     };
 
@@ -113,27 +145,29 @@ export const AnnotationUI: React.FC<AnnotationUIProps> = ({ url, isPopupUrl }) =
                         {isSettingsOpen && (
                             <div className="settings-menu">
                                 {!did ? (
-                                    <>
+                                    <div className="auth-section">
                                         <button
-                                            className="settings-menu-button"
+                                            className="authenticate-button"
                                             onClick={handleAuthenticate}
                                         >
                                             Authenticate
                                         </button>
-                                        <textarea
-                                            className="import-textarea"
-                                            value={importIdentityData}
-                                            onChange={(e) => setImportIdentityData(e.target.value)}
-                                            placeholder="Paste identity to import..."
-                                        />
-                                        <button
-                                            className="settings-menu-button"
-                                            onClick={handleImportIdentity}
-                                            disabled={!importIdentityData.trim()}
-                                        >
-                                            Import Identity
-                                        </button>
-                                    </>
+                                        <div className="import-section">
+                                            <textarea
+                                                className="import-textarea"
+                                                value={importIdentityData}
+                                                onChange={(e) => setImportIdentityData(e.target.value)}
+                                                placeholder="Paste identity to import..."
+                                            />
+                                            <button
+                                                className="import-button"
+                                                onClick={handleImportIdentity}
+                                                disabled={!importIdentityData.trim()}
+                                            >
+                                                Import Identity
+                                            </button>
+                                        </div>
+                                    </div>
                                 ) : (
                                     <>
                                         <button
@@ -236,6 +270,42 @@ export const AnnotationUI: React.FC<AnnotationUIProps> = ({ url, isPopupUrl }) =
                     >
                         Close
                     </button>
+                </div>
+            )}
+            {passphraseModalOpen && (
+                <div className="profile-modal">
+                    <h2 className="profile-modal-title">{passphraseModalOpen === 'export' ? 'Export Identity' : 'Import Identity'}</h2>
+                    <input
+                        type="password"
+                        value={passphraseModalOpen === 'export' ? passphrase : importPassphrase}
+                        onChange={(e) => {
+                            if (passphraseModalOpen === 'export') {
+                                setPassphrase(e.target.value);
+                            } else {
+                                setImportPassphrase(e.target.value);
+                            }
+                        }}
+                        placeholder="Enter passphrase"
+                        className="profile-modal-input"
+                    />
+                    <div className="profile-modal-buttons">
+                        <button
+                            onClick={passphraseModalOpen === 'export' ? handleExportWithPassphrase : handleImportWithPassphrase}
+                            className="profile-modal-save-button"
+                        >
+                            {passphraseModalOpen === 'export' ? 'Export' : 'Import'}
+                        </button>
+                        <button
+                            onClick={() => {
+                                setPassphraseModalOpen(null);
+                                setPassphrase('');
+                                setImportPassphrase('');
+                            }}
+                            className="profile-modal-cancel-button"
+                        >
+                            Cancel
+                        </button>
+                    </div>
                 </div>
             )}
         </div>

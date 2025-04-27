@@ -1,10 +1,22 @@
 // src/utils/crypto.ts
+import * as multibase from 'multibase';
+import * as ed25519 from '@noble/ed25519';
+import { sha512 } from '@noble/hashes/sha512';
 import { encode, decode } from 'base64-arraybuffer';
+import { Buffer } from 'buffer';
+
+// Configure @noble/ed25519 to use the SHA-512 implementation from @noble/hashes
+ed25519.etc.sha512Sync = (...m) => sha512(ed25519.etc.concatBytes(...m));
+ed25519.etc.sha512Async = (...m) => Promise.resolve(sha512(ed25519.etc.concatBytes(...m)));
+
+// Ed25519 multicodec prefix for did:key (0xED01 for Ed25519)
+const ED25519_MULTICODEC_PREFIX = [0xED, 0x01];
 
 // Helper function to convert a string to an ArrayBuffer
 function stringToArrayBuffer(str: string): ArrayBuffer {
     const encoder = new TextEncoder();
-    return encoder.encode(str).buffer;
+    const uint8Array = encoder.encode(str);
+    return uint8Array.buffer as ArrayBuffer; // Explicitly cast to ArrayBuffer
 }
 
 // Helper function to convert an ArrayBuffer to a string
@@ -13,29 +25,29 @@ function arrayBufferToString(buffer: ArrayBuffer): string {
     return decoder.decode(buffer);
 }
 
-// Generate a key pair and derive a DID from the public key
+// Generate a key pair and derive a DID from the public key (Ed25519)
 export async function generateKeyPair(): Promise<{ did: string; privateKey: string }> {
     try {
-        // Generate an ECDSA key pair using the P-256 curve
-        const keyPair = await crypto.subtle.generateKey(
-            {
-                name: 'ECDSA',
-                namedCurve: 'P-256',
-            },
-            true, // Extractable
-            ['sign', 'verify'] // Usages
-        );
+        // Generate an Ed25519 key pair using @noble/ed25519
+        const privateKeyBytes = ed25519.utils.randomPrivateKey();
+        const publicKeyBytes = await ed25519.getPublicKey(privateKeyBytes);
 
-        // Export the public key to derive the DID
-        const publicKey = await crypto.subtle.exportKey('spki', keyPair.publicKey);
-        const publicKeyBase64 = encode(publicKey);
-        const did = `did:key:${publicKeyBase64}`; // Simplified DID format
+        // Prepend the Ed25519 multicodec prefix (0xED01) to the public key
+        const prefixedPublicKey = new Uint8Array(ED25519_MULTICODEC_PREFIX.length + publicKeyBytes.length);
+        prefixedPublicKey.set(ED25519_MULTICODEC_PREFIX, 0);
+        prefixedPublicKey.set(publicKeyBytes, ED25519_MULTICODEC_PREFIX.length);
 
-        // Export the private key as JWK (JSON Web Key) for storage
-        const privateKeyJwk = await crypto.subtle.exportKey('jwk', keyPair.privateKey);
-        const privateKeyString = JSON.stringify(privateKeyJwk);
+        // Encode the prefixed public key with multibase (base58btc, prefix 'z')
+        const encodedPublicKey = multibase.encode('base58btc', prefixedPublicKey);
+        const encodedPublicKeyStr = Buffer.from(encodedPublicKey).toString('utf8');
 
-        return { did, privateKey: privateKeyString };
+        // Create the DID (did:key:z<encoded-public-key>)
+        const did = `did:key:${encodedPublicKeyStr}`;
+
+        // Encode the private key as a hex string for storage
+        const privateKeyHex = Buffer.from(privateKeyBytes).toString('hex');
+
+        return { did, privateKey: privateKeyHex };
     } catch (err) {
         console.error('Failed to generate key pair:', err);
         throw new Error('Failed to generate key pair');
@@ -45,7 +57,6 @@ export async function generateKeyPair(): Promise<{ did: string; privateKey: stri
 // Export the key pair with encryption using a passphrase
 export async function exportKeyPair(did: string, privateKey: string, passphrase: string): Promise<string> {
     try {
-        // Derive a key from the passphrase using PBKDF2
         const passphraseKey = await crypto.subtle.importKey(
             'raw',
             stringToArrayBuffer(passphrase),
@@ -68,7 +79,6 @@ export async function exportKeyPair(did: string, privateKey: string, passphrase:
             ['encrypt']
         );
 
-        // Encrypt the private key with the derived key
         const iv = crypto.getRandomValues(new Uint8Array(12));
         const encryptedPrivateKey = await crypto.subtle.encrypt(
             {
@@ -79,10 +89,9 @@ export async function exportKeyPair(did: string, privateKey: string, passphrase:
             stringToArrayBuffer(privateKey)
         );
 
-        // Combine the salt, IV, and encrypted data into a single string
         const exportData = {
-            salt: encode(salt),
-            iv: encode(iv),
+            salt: encode(salt.buffer as ArrayBuffer), // Convert Uint8Array to ArrayBuffer
+            iv: encode(iv.buffer as ArrayBuffer), // Convert Uint8Array to ArrayBuffer
             encryptedPrivateKey: encode(encryptedPrivateKey),
             did,
         };
@@ -100,7 +109,6 @@ export async function importKeyPair(identityData: string, passphrase: string): P
         const parsedData = JSON.parse(identityData);
         const { salt, iv, encryptedPrivateKey, did } = parsedData;
 
-        // Derive the key from the passphrase using PBKDF2
         const passphraseKey = await crypto.subtle.importKey(
             'raw',
             stringToArrayBuffer(passphrase),
@@ -122,7 +130,6 @@ export async function importKeyPair(identityData: string, passphrase: string): P
             ['decrypt']
         );
 
-        // Decrypt the private key
         const decryptedPrivateKey = await crypto.subtle.decrypt(
             {
                 name: 'AES-GCM',
@@ -132,11 +139,43 @@ export async function importKeyPair(identityData: string, passphrase: string): P
             decode(encryptedPrivateKey)
         );
 
-        const privateKeyString = arrayBufferToString(decryptedPrivateKey);
+        const privateKeyHex = arrayBufferToString(decryptedPrivateKey);
 
-        return { did, privateKey: privateKeyString };
+        return { did, privateKey: privateKeyHex };
     } catch (err) {
         console.error('Failed to import key pair:', err);
         throw new Error('Failed to import key pair');
+    }
+}
+
+// Sign a message with the private key
+export async function signMessage(privateKeyHex: string, message: string): Promise<string> {
+    try {
+        const privateKeyBytes = Buffer.from(privateKeyHex, 'hex');
+        const messageBytes = new TextEncoder().encode(message);
+        const signature = await ed25519.sign(messageBytes, privateKeyBytes);
+        return Buffer.from(signature).toString('hex');
+    } catch (err) {
+        console.error('Failed to sign message:', err);
+        throw new Error('Failed to sign message');
+    }
+}
+
+// Verify a signature with the public key derived from the DID
+export async function verifySignature(did: string, message: string, signatureHex: string): Promise<boolean> {
+    try {
+        // Extract the public key from the DID
+        const identifier = did.split('did:key:')[1];
+        const publicKeyBytes = multibase.decode(identifier);
+
+        // Remove the multicodec prefix (2 bytes)
+        const publicKey = publicKeyBytes.slice(2);
+
+        const messageBytes = new TextEncoder().encode(message);
+        const signature = Buffer.from(signatureHex, 'hex');
+        return await ed25519.verify(signature, messageBytes, publicKey);
+    } catch (err) {
+        console.error('Failed to verify signature:', err);
+        throw new Error('Failed to verify signature');
     }
 }

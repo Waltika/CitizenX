@@ -4,7 +4,12 @@ export default {
     testEnvironment: 'jsdom',
     transform: {
         '^.+\\.tsx?$': 'ts-jest',
+        '^.+\\.jsx?$': 'ts-jest', // Transform JavaScript files as well
     },
+    transformIgnorePatterns: [
+        '/node_modules/(?!(@noble/ed25519|@noble/hashes)/)', // Allow transforming @noble modules and their dependencies
+    ],
+    moduleDirectories: ['node_modules', 'src'],
     moduleNameMapper: {
         '\\.(css|less|scss|sass)$': 'identity-obj-proxy',
         '^helia$': '<rootDir>/__mocks__/helia.js',
@@ -16,8 +21,8 @@ export default {
         '^@libp2p/identify$': '<rootDir>/__mocks__/@libp2p/identify.js',
         '^@libp2p/interface$': '<rootDir>/__mocks__/@libp2p/interface.js',
         '^@orbitdb/core$': '<rootDir>/__mocks__/@orbitdb/core.js',
-}
-,
-setupFilesAfterEnv: ['@testing-library/jest-dom'],
-}
-;
+        '^(\\.{1,2}/.*)\\.js$': '$1',
+    },
+    setupFiles: ['<rootDir>/jest.setup.js'],
+    setupFilesAfterEnv: ['@testing-library/jest-dom'],
+};
