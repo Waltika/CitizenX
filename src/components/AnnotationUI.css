@@ -1,5 +1,10 @@
 /* src/components/AnnotationUI.css */
 
+/* Ensure box-sizing is applied globally */
+* {
+    box-sizing: border-box;
+}
+
 /* Container for the entire component */
 .annotation-ui-container {
     padding: 1rem;
@@ -7,6 +12,8 @@
     background-color: #f5f7fa;
     min-height: 100vh;
     font-family: Arial, sans-serif;
+    position: relative;
+    overflow-x: hidden; /* Prevent horizontal scrollbar */
 }
 
 /* Connected user section */
@@ -41,7 +48,7 @@
 .connected-text {
     margin: 0;
     font-size: 0.9rem;
-    color: #333;
+    color: #d1d5db;
     white-space: nowrap;
 }
 
@@ -51,10 +58,11 @@
 }
 
 .settings-button {
-    padding: 0.25rem;
+    padding: 0.5rem;
     background: none;
     border: none;
     cursor: pointer;
+    font-size: 1rem;
 }
 
 .settings-menu {
@@ -76,7 +84,7 @@
     width: 100%;
     text-align: left;
     cursor: pointer;
-    color: #333;
+    color: #d1d5db;
     font-size: 0.9rem;
 }
 
@@ -148,7 +156,7 @@
 }
 
 .error-text {
-    color: #e11d48;
+    color: #f87171;
     margin: 0.25rem 0 0 0;
     font-size: 0.8rem;
 }
@@ -171,7 +179,7 @@
 .profile-modal-title {
     font-size: 1.2rem;
     margin: 0 0 0.5rem 0;
-    color: #333;
+    color: #d1d5db;
 }
 
 .profile-modal-input {
@@ -247,7 +255,7 @@
 .export-modal-title {
     font-size: 1.2rem;
     margin: 0 0 0.5rem 0;
-    color: #333;
+    color: #d1d5db;
 }
 
 .export-modal-input {
@@ -305,6 +313,14 @@
 }
 
 /* Main annotation textarea and save button */
+.annotation-input {
+    margin-bottom: 1rem;
+    background-color: #fff;
+    padding: 0.5rem;
+    border-radius: 5px;
+    border: 1px solid #e5e7eb;
+}
+
 .annotation-textarea {
     width: 100%;
     height: 5rem;
@@ -352,7 +368,7 @@
 
 .loading-spinner span {
     font-size: 0.9rem;
-    color: #2c7a7b;
+    color: #4a999a;
     display: inline-flex;
     align-items: center;
 }
@@ -366,4 +382,17 @@
 @keyframes spin {
     0% { transform: rotate(0deg); }
     100% { transform: rotate(360deg); }
+}
+
+/* Logo container at the bottom right */
+.logo-container {
+    position: absolute;
+    bottom: 1rem;
+    right: 1rem;
+}
+
+.citizenx-logo {
+    width: 3rem;
+    height: auto;
+    display: block;
 }

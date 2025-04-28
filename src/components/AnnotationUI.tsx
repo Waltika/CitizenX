@@ -4,6 +4,9 @@ import { useAnnotations } from '../hooks/useAnnotations';
 import { AnnotationList } from './AnnotationList';
 import './AnnotationUI.css';
 
+// Assuming the logo is placed in src/assets/
+import citizenxLogo from '../assets/citizenx-logo.png';
+
 interface AnnotationUIProps {
     url: string;
     isPopupUrl: boolean;
@@ -308,6 +311,11 @@ export const AnnotationUI: React.FC<AnnotationUIProps> = ({ url, isPopupUrl }) =
                     </div>
                 </div>
             )}
+            <div className="logo-container">
+                <a href="https://citizenx.app" target="_blank" rel="noopener noreferrer">
+                    <img src={citizenxLogo} alt="CitizenX Logo" className="citizenx-logo" />
+                </a>
+            </div>
         </div>
     );
 };
