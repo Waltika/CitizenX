@@ -1,9 +1,8 @@
-// manifest.json
 {
   "manifest_version": 3,
   "name": "CitizenX",
-  "version": "1.0.0",
-  "description": "A Chrome extension for decentralized web annotations using OrbitDB. Permissions: 'storage' to save user data, 'sidePanel' for the UI, 'tabs' to get the current tab URL.",
+  "version": "0.0.1",
+  "description": "Citizen X allows you to annotate the web and share your annotations with the world",
   "permissions": [
     "sidePanel",
     "storage",
@@ -19,6 +18,9 @@
   },
   "background": {
     "service_worker": "background.js"
+  },
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'; connect-src 'self' ws: wss: https://dns.google https://cloudflare-dns.com"
   },
   "homepage_url": "https://citizenx.app"
 }
