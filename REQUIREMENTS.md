@@ -32,7 +32,7 @@ A decentralized Chrome extension for annotating websites in order to bring a kno
 
 ## Non Functional Requirements - Future Versions
 1. Add a pinning service—most probably our own but distributed among willing users, incentivizing them in a crypto-based way.
-2. Restructure the OrbitDB organization so that not every user replicates all annotations from the whole world, but only those from pages they visited (or visit now) and pages they annotated.
+2. Restructure the Gun organization so that not every user replicates all annotations from the whole world, but only those from pages they visited (or visit now) and pages they annotated.
 3. Ensure compliance with Chrome Manifest V3 requirements:
    - Use `background.service_worker` instead of persistent background pages, adapting to the service worker lifecycle (e.g., stateless design, persistence via `chrome.storage`).
    - Avoid `eval`, `new Function`, and other dynamic code execution methods.
@@ -56,8 +56,8 @@ A decentralized Chrome extension for annotating websites in order to bring a kno
    - Ensure accessibility (a11y) in the UI (e.g., ARIA attributes, keyboard navigation).
 8. Prepare for Chrome Web Store review process:
    - Avoid obfuscated or unreadable code, providing source maps if minification is used.
-   - Clearly document data sharing (e.g., via OrbitDB) in the privacy policy and obtain user consent if necessary.
+   - Clearly document data sharing (e.g., via Gun) in the privacy policy and obtain user consent if necessary.
    - Ensure the extension provides meaningful functionality and avoids unexpected behavior (e.g., no ads, no unauthorized tracking).
 9. Manage storage limits for scalability:
    - Request the `unlimitedStorage` permission if large data storage is needed (e.g., for annotations in `localStorage`).
-   - Offload data to OrbitDB for peer-to-peer storage, ensuring data is pinned to prevent loss.
+   - Offload data to Gun for peer-to-peer storage, ensuring data is pinned to prevent loss.
