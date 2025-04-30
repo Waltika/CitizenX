@@ -12,6 +12,7 @@ A decentralized Chrome extension for annotating websites in order to bring a kno
 7. We want the comments to be a thread under the annotation.
 8. We want the persistence to be decentralized using IPFS.
 9. We want the notifications and other collaborative features to not rely on a centralized server.
+10. We want users to share annotations on social media (e.g., Twitter, Facebook), messaging platforms (e.g., WhatsApp), or other channels to attract new users. The sharing mechanism should optimize for social media reach by including engaging text or images (e.g., annotation snippets or screenshots) while providing a link that first checks if the CitizenX extension is installed. If installed, the link navigates to the annotated page; if not, it directs to an installation page (e.g., Chrome Web Store or CitizenX website).
 
 ## Non Functional Requirements - v1.0
 1. Except for the Chrome Extension, we want zero installation on the user's device.
