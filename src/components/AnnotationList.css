@@ -196,3 +196,114 @@
 .share-modal-close:hover {
     background: #fb923c;
 }
+
+/* src/components/AnnotationList.css */
+.share-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+}
+
+.share-modal-content {
+    background: #fff;
+    padding: 2rem;
+    border-radius: 10px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+    width: 300px;
+    height: 300px;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.share-wheel {
+    position: relative;
+    width: 200px;
+    height: 200px;
+}
+
+.share-button-social {
+    position: absolute;
+    width: 50px;
+    height: 50px;
+    background: #2c7a7b;
+    color: #fff;
+    border-radius: 50%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-size: 1.5rem;
+    text-decoration: none;
+    transition: transform 0.3s ease, background 0.3s ease;
+}
+
+.share-button-social:hover {
+    background: #4a999a;
+    transform: scale(1.1);
+}
+
+/* Position buttons in a wheel layout (6 buttons, 60° apart) */
+.share-x {
+    transform: rotate(0deg) translate(80px) rotate(0deg);
+    animation: fadeIn 0.3s ease forwards;
+}
+
+.share-facebook {
+    transform: rotate(60deg) translate(80px) rotate(-60deg);
+    animation: fadeIn 0.3s ease forwards 0.1s;
+}
+
+.share-whatsapp {
+    transform: rotate(120deg) translate(80px) rotate(-120deg);
+    animation: fadeIn 0.3s ease forwards 0.2s;
+}
+
+.share-telegram {
+    transform: rotate(180deg) translate(80px) rotate(-180deg);
+    animation: fadeIn 0.3s ease forwards 0.3s;
+}
+
+.share-email {
+    transform: rotate(240deg) translate(80px) rotate(-240deg);
+    animation: fadeIn 0.3s ease forwards 0.4s;
+}
+
+.share-copy {
+    transform: rotate(300deg) translate(80px) rotate(-300deg);
+    animation: fadeIn 0.3s ease forwards 0.5s;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: scale(0.5);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+.share-modal-close {
+    margin-top: 1rem;
+    padding: 0.5rem 1rem;
+    background: #f97316;
+    color: #fff;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 0.9rem;
+    transition: background 0.3s ease;
+}
+
+.share-modal-close:hover {
+    background: #fb923c;
+}
