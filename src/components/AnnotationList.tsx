@@ -141,8 +141,6 @@ export const AnnotationList: React.FC<AnnotationListProps> = ({ annotations, pro
                 );
             })}
 
-
-            // Update the share modal section in your AnnotationList.tsx
             {showShareModal && (
                 <div className="share-modal">
                     <div className="share-modal-content">
