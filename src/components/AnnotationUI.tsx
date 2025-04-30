@@ -5,7 +5,8 @@ import { AnnotationList } from './AnnotationList';
 import './AnnotationUI.css';
 
 // Assuming the logo is placed in src/assets/
-import citizenxLogo from '../assets/citizenx-logo.png';
+import citizenxLogo from './../assets/citizenx-logo.png';
+import {normalizeUrl} from "../shared/utils/normalizeUrl";
 
 interface AnnotationUIProps {
     url: string;
@@ -119,6 +120,23 @@ export const AnnotationUI: React.FC<AnnotationUIProps> = ({ url, isPopupUrl }) =
             alert('Failed to import identity');
         }
     };
+
+    useEffect(() => {
+        const handleMessage = (message: any) => {
+            if (message.type === 'HIGHLIGHT_ANNOTATION' && message.url === normalizeUrl(url)) {
+                const annotationElement = document.querySelector(`[data-annotation-id="${message.annotationId}"]`);
+                if (annotationElement) {
+                    annotationElement.scrollIntoView({ behavior: 'smooth' });
+                    annotationElement.classList.add('highlight');
+                    // Remove highlight after 3 seconds
+                    setTimeout(() => annotationElement.classList.remove('highlight'), 3000);
+                }
+            }
+        };
+
+        chrome.runtime.onMessage.addListener(handleMessage);
+        return () => chrome.runtime.onMessage.removeListener(handleMessage);
+    }, [url]);
 
     console.log('AnnotationUI: Rendering with annotations:', annotations, 'profiles:', profiles, 'loading:', annotationsLoading);
 

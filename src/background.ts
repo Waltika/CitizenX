@@ -1,8 +1,8 @@
+// src/background.ts
 console.log('background.ts: Service worker started');
 
-const HEARTBEAT_INTERVAL = 1000; // Heartbeat interval in milliseconds
+const HEARTBEAT_INTERVAL = 1000;
 
-// Fetch the current tab's URL
 const getCurrentTabUrl = async (): Promise<string | undefined> => {
     try {
         const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
@@ -14,7 +14,6 @@ const getCurrentTabUrl = async (): Promise<string | undefined> => {
     }
 };
 
-// Send the URL to the side panel
 const sendUrlToSidePanel = async () => {
     const url = await getCurrentTabUrl();
     if (url) {
@@ -27,24 +26,28 @@ const sendUrlToSidePanel = async () => {
     }
 };
 
-// Handle messages from the side panel
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     console.log('background.ts: Received message:', message);
     if (message.action === 'getCurrentTabUrl') {
         console.log('background.ts: Fetching current tab URL');
         getCurrentTabUrl()
-            .then((url) => {
-                sendResponse({ url });
-            })
-            .catch((err) => {
-                console.error('background.ts: Failed to fetch tab URL:', err);
-                sendResponse({ error: err.message });
-            });
-        return true; // Keep the message channel open for async response
+            .then((url) => sendResponse({ url }))
+            .catch((err) => sendResponse({ error: err.message }));
+        return true;
     }
 });
 
-// Listen for tab and window changes
+chrome.runtime.onInstalled.addListener(() => {
+    chrome.storage.local.get(['citizenx_redirect'], (result) => {
+        const redirect = result.citizenx_redirect;
+        if (redirect) {
+            const { annotationId, targetUrl } = JSON.parse(redirect);
+            chrome.tabs.create({ url: `${targetUrl}?annotationId=${annotationId}` });
+            chrome.storage.local.remove(['citizenx_redirect']);
+        }
+    });
+});
+
 chrome.tabs.onActivated.addListener(() => {
     console.log('background.ts: Tab activated, sending URL update');
     sendUrlToSidePanel();
@@ -63,7 +66,6 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
     }
 });
 
-// Periodically send heartbeat to check if side panel is active
 setInterval(() => {
     console.log('background.ts: Sending heartbeat');
     chrome.runtime.sendMessage({ action: 'heartbeat' }, (response) => {

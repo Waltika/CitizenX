@@ -108,3 +108,91 @@
     background: #d1d5db;
     cursor: not-allowed;
 }
+/* src/components/AnnotationList.css */
+.share-button {
+    padding: 0.25rem 0.5rem;
+    background: #2c7a7b;
+    color: #fff;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 0.8rem;
+    margin-left: 0.5rem;
+}
+
+.share-button:hover {
+    background-color: #4a999a;
+}
+
+.annotation-item.highlight {
+    background-color: #e6f7fa;
+    border: 2px solid #2c7a7b;
+    transition: background-color 1s ease-out;
+}
+
+/* src/components/AnnotationList.css */
+.share-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+}
+
+.share-modal-content {
+    background: #fff;
+    padding: 1rem;
+    border-radius: 5px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    width: 90%;
+    max-width: 400px;
+    text-align: center;
+}
+
+.share-modal-content h3 {
+    margin: 0 0 1rem;
+    font-size: 1.2rem;
+    color: #333;
+}
+
+.share-buttons {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    justify-content: center;
+}
+
+.share-button-social {
+    padding: 0.5rem 1rem;
+    background: #2c7a7b;
+    color: #fff;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 0.9rem;
+    text-decoration: none;
+}
+
+.share-button-social:hover {
+    background: #4a999a;
+}
+
+.share-modal-close {
+    margin-top: 1rem;
+    padding: 0.5rem 1rem;
+    background: #f97316;
+    color: #fff;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 0.9rem;
+}
+
+.share-modal-close:hover {
+    background: #fb923c;
+}

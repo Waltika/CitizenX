@@ -1,3 +1,4 @@
+// src/storage/StorageRepository.ts
 import { GunRepository } from './GunRepository';
 import { Annotation, Comment, Profile } from '../types';
 

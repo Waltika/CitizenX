@@ -5,16 +5,13 @@ import { resolve } from 'path';
 import { copyFile, mkdir, rename, rm } from 'fs/promises';
 import { existsSync } from 'fs';
 
-// Define output directory
 const outDir = resolve(process.cwd(), 'dist');
 
-// Custom Vite plugin to handle post-build tasks
 function postBuildPlugin() {
     return {
         name: 'post-build-plugin',
         async writeBundle() {
             console.log('Running post-build tasks...');
-            // Copy static files
             console.log('Copying static files...');
             await mkdir(resolve(outDir, 'icons'), { recursive: true });
             try {
@@ -41,13 +38,11 @@ function postBuildPlugin() {
             } catch (error) {
                 console.error('Failed to copy manifest.json:', error);
             }
-            // Move index.html from dist/src/sidepanel/index.html to dist/index.html
             const srcIndexPath = resolve(outDir, 'src/sidepanel/index.html');
             const destIndexPath = resolve(outDir, 'index.html');
             if (existsSync(srcIndexPath)) {
                 await rename(srcIndexPath, destIndexPath);
                 console.log('Moved index.html to dist/index.html');
-                // Clean up the src/sidepanel directory
                 await rm(resolve(outDir, 'src'), { recursive: true });
                 console.log('Removed temporary src directory');
             } else {
@@ -57,7 +52,6 @@ function postBuildPlugin() {
     };
 }
 
-// Build configuration
 export default defineConfig({
     plugins: [
         react(),
@@ -70,18 +64,24 @@ export default defineConfig({
     },
     build: {
         outDir,
-        emptyOutDir: true, // Clean the output directory before building
+        emptyOutDir: true,
         rollupOptions: {
             input: {
-                // Side panel content, temporarily output to dist/src/sidepanel/index.html
                 sidepanel: resolve(process.cwd(), 'src/sidepanel/index.html'),
-                // Background script
                 background: resolve(process.cwd(), 'src/background.ts'),
+                highlightAnnotation: resolve(process.cwd(), 'src/contentScripts/highlightAnnotation.ts'),
+                injectPresence: resolve(process.cwd(), 'src/contentScripts/injectPresence.ts'),
             },
             output: {
-                entryFileNames: function (chunkInfo) {
+                entryFileNames: (chunkInfo) => {
                     if (chunkInfo.name === 'background') {
                         return 'background.js';
+                    }
+                    if (chunkInfo.name === 'highlightAnnotation') {
+                        return 'contentScripts/highlightAnnotation.js';
+                    }
+                    if (chunkInfo.name === 'injectPresence') {
+                        return 'contentScripts/injectPresence.js';
                     }
                     return 'sidepanel.js';
                 },
@@ -89,7 +89,7 @@ export default defineConfig({
                 assetFileNames: 'assets/[name].[ext]',
             },
         },
-        base: './', // Use relative paths for the extension
+        base: './',
         minify: true,
         chunkSizeWarningLimit: 2000,
     }
