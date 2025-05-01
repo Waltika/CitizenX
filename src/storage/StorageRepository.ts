@@ -6,14 +6,45 @@ export class StorageRepository {
     private repository: GunRepository;
 
     constructor() {
+        // Initial bootstrap node on Render
+        const bootstrapPeers = [
+            'https://citizen-x-bootsrap.onrender.com/gun',
+        ];
+
         this.repository = new GunRepository({
-            peers: ['https://543e-2a02-1210-5819-6100-81a1-536c-dd36-9fcf.ngrok-free.app/gun'],
+            peers: bootstrapPeers,
             radisk: false,
         });
+
+        // Dynamically discover additional peers from knownPeers
+        this.discoverPeers();
     }
 
     async initialize(): Promise<void> {
         await this.repository.initialize();
+    }
+
+    async discoverPeers(): Promise<void> {
+        const gun = this.repository.getGunInstance();
+        const knownPeers = await new Promise<string[]>((resolve) => {
+            const peers = new Set<string>();
+            gun.get('knownPeers').map().once((peer) => {
+                if (peer && peer.url && peer.timestamp) {
+                    const now = Date.now();
+                    const age = now - peer.timestamp;
+                    if (age <= 10 * 60 * 1000) {
+                        peers.add(peer.url);
+                    }
+                }
+            });
+            setTimeout(() => resolve(Array.from(peers)), 2000);
+        });
+
+        console.log('Discovered peers:', knownPeers);
+
+        if (knownPeers.length > 0) {
+            this.repository.addPeers(knownPeers);
+        }
     }
 
     async getCurrentDID(): Promise<string | null> {

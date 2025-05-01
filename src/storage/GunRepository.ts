@@ -93,6 +93,20 @@ export class GunRepository {
         });
     }
 
+    // Add method to access the Gun instance
+    getGunInstance(): any {
+        return this.gun;
+    }
+
+    // Add method to dynamically add peers
+    addPeers(newPeers: string[]): void {
+        const currentPeers = this.options.peers || [];
+        const updatedPeers = [...new Set([...currentPeers, ...newPeers])]; // Avoid duplicates
+        this.options.peers = updatedPeers;
+        this.gun.opt({ peers: updatedPeers });
+        console.log('Updated peers:', updatedPeers);
+    }
+
     async getCurrentDID(): Promise<string | null> {
         return new Promise((resolve) => {
             this.gun.get('currentDID').once((data: any) => {
