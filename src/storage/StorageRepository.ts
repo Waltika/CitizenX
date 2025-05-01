@@ -7,7 +7,7 @@ export class StorageRepository {
 
     constructor() {
         this.repository = new GunRepository({
-            peers: ['http://localhost:8765/gun'],
+            peers: ['https://543e-2a02-1210-5819-6100-81a1-536c-dd36-9fcf.ngrok-free.app/gun'],
             radisk: false,
         });
     }

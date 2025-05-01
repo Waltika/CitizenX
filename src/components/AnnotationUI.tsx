@@ -6,7 +6,7 @@ import './AnnotationUI.css';
 
 // Assuming the logo is placed in src/assets/
 import citizenxLogo from './../assets/citizenx-logo.png';
-import {normalizeUrl} from "../shared/utils/normalizeUrl";
+import { normalizeUrl } from "../shared/utils/normalizeUrl";
 
 interface AnnotationUIProps {
     url: string;
@@ -122,20 +122,27 @@ export const AnnotationUI: React.FC<AnnotationUIProps> = ({ url, isPopupUrl }) =
     };
 
     useEffect(() => {
-        const handleMessage = (message: any) => {
-            if (message.type === 'HIGHLIGHT_ANNOTATION' && message.url === normalizeUrl(url)) {
-                const annotationElement = document.querySelector(`[data-annotation-id="${message.annotationId}"]`);
-                if (annotationElement) {
-                    annotationElement.scrollIntoView({ behavior: 'smooth' });
-                    annotationElement.classList.add('highlight');
-                    // Remove highlight after 3 seconds
-                    setTimeout(() => annotationElement.classList.remove('highlight'), 3000);
+        // Define the Chrome-specific logic in a separate function
+        const setupChromeMessageListener = () => {
+            const handleMessage = (message: any) => {
+                if (message.type === 'HIGHLIGHT_ANNOTATION' && message.url === normalizeUrl(url)) {
+                    const annotationElement = document.querySelector(`[data-annotation-id="${message.annotationId}"]`);
+                    if (annotationElement) {
+                        annotationElement.scrollIntoView({ behavior: 'smooth' });
+                        annotationElement.classList.add('highlight');
+                        setTimeout(() => annotationElement.classList.remove('highlight'), 3000);
+                    }
                 }
-            }
+            };
+
+            chrome.runtime.onMessage.addListener(handleMessage);
+            return () => chrome.runtime.onMessage.removeListener(handleMessage);
         };
 
-        chrome.runtime.onMessage.addListener(handleMessage);
-        return () => chrome.runtime.onMessage.removeListener(handleMessage);
+        // Only execute Chrome-specific logic if in a Chrome extension context
+        if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.onMessage) {
+            return setupChromeMessageListener();
+        }
     }, [url]);
 
     console.log('AnnotationUI: Rendering with annotations:', annotations, 'profiles:', profiles, 'loading:', annotationsLoading);
@@ -174,12 +181,12 @@ export const AnnotationUI: React.FC<AnnotationUIProps> = ({ url, isPopupUrl }) =
                                             Authenticate
                                         </button>
                                         <div className="import-section">
-                                            <textarea
-                                                className="import-textarea"
-                                                value={importIdentityData}
-                                                onChange={(e) => setImportIdentityData(e.target.value)}
-                                                placeholder="Paste identity to import..."
-                                            />
+                      <textarea
+                          className="import-textarea"
+                          value={importIdentityData}
+                          onChange={(e) => setImportIdentityData(e.target.value)}
+                          placeholder="Paste identity to import..."
+                      />
                                             <button
                                                 className="import-button"
                                                 onClick={handleImportIdentity}
@@ -217,13 +224,13 @@ export const AnnotationUI: React.FC<AnnotationUIProps> = ({ url, isPopupUrl }) =
             )}
             {!isPopupUrl && (
                 <div className="annotation-input">
-                    <textarea
-                        value={annotationText}
-                        onChange={(e) => setAnnotationText(e.target.value)}
-                        placeholder="Enter annotation..."
-                        className="annotation-textarea"
-                        disabled={!did || annotationsLoading}
-                    />
+          <textarea
+              value={annotationText}
+              onChange={(e) => setAnnotationText(e.target.value)}
+              placeholder="Enter annotation..."
+              className="annotation-textarea"
+              disabled={!did || annotationsLoading}
+          />
                     <button
                         onClick={handleSave}
                         className="annotation-save-button"
