@@ -1,0 +1,1 @@
+function o(e){if(!e){console.warn("normalizeUrl: URL is undefined or empty");return}try{const r=new URL(e),n=r.hostname+r.pathname;return console.log("normalizeUrl: Normalized URL:",n),n}catch(r){return console.error("Failed to normalize URL:",r),e}}export{o as n};
