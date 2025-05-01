@@ -5,6 +5,7 @@ A decentralized Chrome extension for annotating websites in order to bring a kno
 ## Requirements - v1.0
 1. We want the user to be unique and the same if he changes device, clears his browser data, or loses his device.
    - **Status**: Implemented. Users authenticate via a DID, stored in `chrome.storage.local` and Gun.js (`user_<did>`). The `currentDID` is cached in `localStorage` for persistence on the same device, with import/export functionality for cross-device use.
+   - **Advanced User Support**: Advanced users can deploy their own Gun.js server and set it as their "primary server" via the settings menu (⚙️ icon), storing the URL in `user_<did>/primaryServer`. The extension prioritizes this server for their data interactions.
 2. We want the user to have a profile picture and a handle.
    - **Status**: Implemented. Users can create profiles with a handle and profile picture, stored in Gun.js (`user_<did>/profile` and `profiles` nodes). Profiles are included in the import/export process.
 3. We want pages from different languages and with non-functional parameters (like UTM parameters) to be considered the same page.
@@ -21,10 +22,12 @@ A decentralized Chrome extension for annotating websites in order to bring a kno
    - **Status**: Partially implemented. Shifted to Gun.js for decentralized storage, which can integrate with IPFS in the future. Currently using a single Gun.js node on Render, with persistence pending a paid plan upgrade or pinning service.
 9. We want the notifications and other collaborative features to not rely on a centralized server.
    - **Status**: Partially implemented. Gun.js provides decentralized storage, but notifications are pending. The Render server is a single point of failure until a pinning service or multi-node setup is implemented.
+   - **Sharding and Replication**: Designed domain-based sharding (`annotations_<domain>`) with peer-to-peer replication (minimum factor of three), ensuring servers only replicate relevant shards while maintaining availability.
 10. We want users to share annotations on social media (e.g., Twitter, Facebook), messaging platforms (e.g., WhatsApp), or other channels to attract new users. The sharing mechanism should optimize for social media reach by including engaging text or images (e.g., annotation snippets or screenshots) while providing a link that first checks if the CitizenX extension is installed. If installed, the link navigates to the annotated page; if not, it directs to an installation page (e.g., Chrome Web Store or CitizenX website).
     - **Status**: Implemented. Users can share annotations via a custom share modal (macOS) or `navigator.share` (other platforms). The link (`https://citizenx.app/check-extension?annotationId=<id>&url=<encoded-url>`) redirects appropriately based on browser and extension presence. URL shortening was considered but deferred.
 11. When a user clicks an annotation sharing URL on a browser that cannot install the Chrome extension (e.g., mobile browsers, Safari, Firefox), they should be redirected to a page on `https://citizenx.app` that displays the annotated page’s URL as a clickable link (opening in a new tab). This page should reuse the extension’s UI, DID, and existing code to allow viewing and interacting with annotations on the website, mimicking the extension’s functionality.
     - **Status**: Implemented. The `/view-annotations` page displays annotations, with a clickable link to the annotated page (opens in a new tab). Styled to match the CitizenX design (white `#fff`, teal `#2c7a7b`, Inter font), with a loading spinner.
+    - **Mobile Detection**: Added a mobile check (`/android|iphone|ipad|ipod|mobile/i.test(userAgent)`) in `check-extension.js` to redirect mobile browsers (e.g., Chrome on Android) to `/view-annotations`, as they cannot install extensions.
 12. Both on the annotation feature under 11 and on the sharing functionality, provide a screenshot of the top of the page being annotated (I guess store it along the annotations but only once).
     - **Status**: Pending.
 
@@ -36,11 +39,14 @@ A decentralized Chrome extension for annotating websites in order to bring a kno
 3. We want the authentication to also be decentralized.
    - **Status**: Met. Authentication uses DIDs stored in Gun.js (`user_<did>`).
 4. We want to ensure as much as possible zero loss of data in case of network issues or other failures.
-   - **Status**: Partially met. Data is stored in Gun.js, but persistence requires a pinning service or Render paid plan upgrade.
+   - **Status**: Partially met. Data is stored in Gun.js, with a replication factor of three across servers (user-deployed, pinning service). Persistence requires a pinning service or Render paid plan upgrade.
 5. We want the Chrome extension to be minimal in terms of content, with all code bundled locally to comply with Chrome Web Store policies (updated from serving content from a `github.io` page, which is not allowed).
    - **Status**: Met. All code is bundled locally using Vite.
 6. We want to secure the JWT tokens and other access technologies against hacking.
-   - **Status**: Not applicable. The project does not use JWT tokens; authentication is via DIDs.
+   - **Status**: Not applicable for JWT tokens (not used). Implemented security for annotations:
+     - Signed annotations and write requests to prevent unauthorized changes.
+     - Immutable versioning with tombstones for deletions.
+     - Protection against malicious peers, data injection, DID spoofing, replay attacks, and DoS attacks through signature verification, rate-limiting, timestamp checks, and logging.
 7. Add privacy policy to manifest.json once we have a website: "privacy_policy": "https://yourwebsite.com/privacy-policy"
    - **Status**: Pending. Awaiting website and `manifest.json`.
 
@@ -55,9 +61,9 @@ A decentralized Chrome extension for annotating websites in order to bring a kno
 
 ## Non Functional Requirements - Future Versions
 1. Add a pinning service—most probably our own but distributed among willing users, incentivizing them in a crypto-based way.
-   - **Status**: Planned. Needed for Gun.js to ensure data persistence.
+   - **Status**: Planned. Needed for Gun.js to ensure data persistence. Will replicate shards to reliable nodes, contributing to the replication factor of three.
 2. Restructure the Gun organization so that not every user replicates all annotations from the whole world, but only those from pages they visited (or visit now) and pages they annotated.
-   - **Status**: Planned. Proposed to split `annotations` node by domain.
+   - **Status**: Designed. Use domain-based sharding (`annotations_<domain>`), with servers replicating only relevant shards. Advanced users’ servers prioritize their `primaryServer` for these shards.
 3. Ensure compliance with Chrome Manifest V3 requirements:
    - Use `background.service_worker` instead of persistent background pages, adapting to the service worker lifecycle (e.g., stateless design, persistence via `chrome.storage`).
      - **Status**: Met.
