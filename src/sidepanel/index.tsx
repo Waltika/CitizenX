@@ -35,16 +35,14 @@ const App: React.FC = () => {
                     setIsPopupUrl(true);
                 }
             } else {
-                console.error('index.tsx: No URL received from background script:', response?.error || 'Unknown error');
-                setError('No URL received');
+                console.log('index.tsx: No URL received from background script:', response?.error || 'Unknown error');
                 setUrl('');
-                setIsPopupUrl(true);
+                setIsPopupUrl(false);
             }
         } catch (err) {
             console.error('index.tsx: Failed to get current tab URL:', err);
-            setError('Failed to get current tab URL');
             setUrl('');
-            setIsPopupUrl(true);
+            setIsPopupUrl(false);
         }
     };
 
