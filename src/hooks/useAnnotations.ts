@@ -25,50 +25,63 @@ export const useAnnotations = ({ url, did }: UseAnnotationsProps): UseAnnotation
     const [loading, setLoading] = useState<boolean>(false);
     const [isFetching, setIsFetching] = useState<boolean>(false);
 
-    // Debounce timer for URL changes
     const [debounceTimeout, setDebounceTimeout] = useState<NodeJS.Timeout | null>(null);
 
+    // Fetch annotations (only depends on storage and url)
     useEffect(() => {
         if (!storage) {
             console.log('useAnnotations: Waiting for storage to initialize');
             return;
         }
 
-        if (!did) {
-            console.log('useAnnotations: Not authenticated or storage not initialized', { storage, did });
-            return;
-        }
-
         console.log('useAnnotations: Starting fetch for annotations');
 
-        // Clear any existing debounce timeout
         if (debounceTimeout) {
             clearTimeout(debounceTimeout);
         }
 
-        // Set a new debounce timeout
         const timeout = setTimeout(async () => {
             setLoading(true);
             setIsFetching(true);
 
             try {
-                // Fetch annotations for the current URL
                 const loadedAnnotations = await storage.getAnnotations(url, (updatedAnnotations) => {
-                    // Real-time updates for the current URL
                     setAnnotationsByUrl((prev) => ({
                         ...prev,
                         [url]: updatedAnnotations,
                     }));
                 });
 
-                // Update annotations for the current URL
                 setAnnotationsByUrl((prev) => ({
                     ...prev,
                     [url]: loadedAnnotations,
                 }));
+            } catch (err) {
+                console.error('useAnnotations: Failed to fetch annotations:', err);
+                setError('Failed to fetch annotations');
+            } finally {
+                setLoading(false);
+                setIsFetching(false);
+                console.log('useAnnotations: Set loading to false (isFetching false)');
+            }
+        }, 300);
 
-                // Fetch profiles for authors
-                const authorDIDs = [...new Set(loadedAnnotations.map((ann) => ann.author))];
+        setDebounceTimeout(timeout);
+
+        return () => {
+            if (timeout) {
+                clearTimeout(timeout);
+            }
+        };
+    }, [storage, url]); // Removed did from dependencies
+
+    // Fetch profiles (depends on storage, did, and annotations)
+    useEffect(() => {
+        if (!storage || !did || !annotationsByUrl[url]) return;
+
+        const fetchProfiles = async () => {
+            try {
+                const authorDIDs = [...new Set(annotationsByUrl[url].map((ann) => ann.author))];
                 const profilePromises = authorDIDs.map(async (authorDID) => {
                     if (!profiles[authorDID]) {
                         const profile = await storage.getProfile(authorDID);
@@ -93,23 +106,13 @@ export const useAnnotations = ({ url, did }: UseAnnotationsProps): UseAnnotation
 
                 console.log('useAnnotations: Initial profiles loaded:', newProfiles);
             } catch (err) {
-                console.error('useAnnotations: Failed to fetch annotations:', err);
-                setError('Failed to fetch annotations');
-            } finally {
-                setLoading(false);
-                setIsFetching(false);
-                console.log('useAnnotations: Set loading to false (isFetching false)');
-            }
-        }, 300); // 300ms debounce
-
-        setDebounceTimeout(timeout);
-
-        return () => {
-            if (timeout) {
-                clearTimeout(timeout);
+                console.error('useAnnotations: Failed to fetch profiles:', err);
+                setError('Failed to fetch profiles');
             }
         };
-    }, [storage, url, did]);
+
+        fetchProfiles();
+    }, [storage, did, annotationsByUrl[url], profiles]); // Depend on annotationsByUrl[url] instead of annotations
 
     const handleSaveAnnotation = useCallback(
         async (content: string) => {
@@ -137,20 +140,17 @@ export const useAnnotations = ({ url, did }: UseAnnotationsProps): UseAnnotation
                 console.log('useAnnotations: Saving annotation to storage:', newAnnotation);
                 await storage.saveAnnotation(newAnnotation);
 
-                // Optimistically update the UI
                 setAnnotationsByUrl((prev) => ({
                     ...prev,
                     [url]: [...(prev[url] || []), newAnnotation],
                 }));
 
-                // Fetch the latest annotations to ensure consistency
                 const updatedAnnotations = await storage.getAnnotations(url);
                 setAnnotationsByUrl((prev) => ({
                     ...prev,
                     [url]: updatedAnnotations,
                 }));
 
-                // Fetch the author's profile if not already loaded
                 if (!profiles[did]) {
                     const profile = await storage.getProfile(did);
                     if (profile) {
@@ -186,13 +186,11 @@ export const useAnnotations = ({ url, did }: UseAnnotationsProps): UseAnnotation
 
                 await storage.deleteAnnotation(url, id);
 
-                // Optimistically update the UI
                 setAnnotationsByUrl((prev) => ({
                     ...prev,
                     [url]: (prev[url] || []).filter((ann) => ann.id !== id),
                 }));
 
-                // Fetch the latest annotations to ensure consistency
                 const updatedAnnotations = await storage.getAnnotations(url);
                 setAnnotationsByUrl((prev) => ({
                     ...prev,
@@ -233,7 +231,6 @@ export const useAnnotations = ({ url, did }: UseAnnotationsProps): UseAnnotation
 
                 await storage.saveComment(url, annotationId, newComment);
 
-                // Optimistically update the UI
                 setAnnotationsByUrl((prev) => {
                     const updatedAnnotations = (prev[url] || []).map((ann) => {
                         if (ann.id === annotationId) {
@@ -250,7 +247,6 @@ export const useAnnotations = ({ url, did }: UseAnnotationsProps): UseAnnotation
                     };
                 });
 
-                // Fetch the latest annotations to ensure consistency
                 const updatedAnnotations = await storage.getAnnotations(url);
                 setAnnotationsByUrl((prev) => ({
                     ...prev,
@@ -269,7 +265,6 @@ export const useAnnotations = ({ url, did }: UseAnnotationsProps): UseAnnotation
         [storage, did, url]
     );
 
-    // Return annotations for the current URL
     const currentAnnotations = annotationsByUrl[url] || [];
 
     return {

@@ -4,7 +4,6 @@ import { useAnnotations } from '../hooks/useAnnotations';
 import { AnnotationList } from './AnnotationList';
 import './AnnotationUI.css';
 
-// Assuming the logo is placed in src/assets/
 import citizenxLogo from './../assets/citizenx-logo.png';
 import { normalizeUrl } from "../shared/utils/normalizeUrl";
 
@@ -90,7 +89,7 @@ export const AnnotationUI: React.FC<AnnotationUIProps> = ({ url, isPopupUrl }) =
             setIsSettingsOpen(false);
         } catch (err) {
             console.error('Failed to export identity:', err);
-            alert('Failed to export identity');
+            alert(err.message || 'Failed to export identity');
         }
     };
 
@@ -117,12 +116,11 @@ export const AnnotationUI: React.FC<AnnotationUIProps> = ({ url, isPopupUrl }) =
             setIsSettingsOpen(false);
         } catch (err) {
             console.error('Failed to import identity:', err);
-            alert('Failed to import identity');
+            alert(err.message || 'Failed to import identity');
         }
     };
 
     useEffect(() => {
-        // Define the Chrome-specific logic in a separate function
         const setupChromeMessageListener = () => {
             const handleMessage = (message: any) => {
                 if (message.type === 'HIGHLIGHT_ANNOTATION' && message.url === normalizeUrl(url)) {
@@ -139,7 +137,6 @@ export const AnnotationUI: React.FC<AnnotationUIProps> = ({ url, isPopupUrl }) =
             return () => chrome.runtime.onMessage.removeListener(handleMessage);
         };
 
-        // Only execute Chrome-specific logic if in a Chrome extension context
         if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.onMessage) {
             return setupChromeMessageListener();
         }
@@ -181,12 +178,12 @@ export const AnnotationUI: React.FC<AnnotationUIProps> = ({ url, isPopupUrl }) =
                                             Authenticate
                                         </button>
                                         <div className="import-section">
-                      <textarea
-                          className="import-textarea"
-                          value={importIdentityData}
-                          onChange={(e) => setImportIdentityData(e.target.value)}
-                          placeholder="Paste identity to import..."
-                      />
+                                            <textarea
+                                                className="import-textarea"
+                                                value={importIdentityData}
+                                                onChange={(e) => setImportIdentityData(e.target.value)}
+                                                placeholder="Paste identity to import..."
+                                            />
                                             <button
                                                 className="import-button"
                                                 onClick={handleImportIdentity}
@@ -224,13 +221,13 @@ export const AnnotationUI: React.FC<AnnotationUIProps> = ({ url, isPopupUrl }) =
             )}
             {!isPopupUrl && (
                 <div className="annotation-input">
-          <textarea
-              value={annotationText}
-              onChange={(e) => setAnnotationText(e.target.value)}
-              placeholder="Enter annotation..."
-              className="annotation-textarea"
-              disabled={!did || annotationsLoading}
-          />
+                    <textarea
+                        value={annotationText}
+                        onChange={(e) => setAnnotationText(e.target.value)}
+                        placeholder="Enter annotation..."
+                        className="annotation-textarea"
+                        disabled={!did || annotationsLoading}
+                    />
                     <button
                         onClick={handleSave}
                         className="annotation-save-button"

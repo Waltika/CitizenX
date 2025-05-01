@@ -162,14 +162,21 @@ export const useUserProfile = (): UseUserProfileReturn => {
         }
 
         try {
-            const exportedData = await exportKeyPair(did, privateKey, passphrase);
-            console.log('useUserProfile: Exported identity');
+            // Include the DID, private key, and profile in the export
+            const exportData = {
+                did,
+                privateKey,
+                profile: profile || { did, handle: 'Unknown' },
+            };
+            const dataString = JSON.stringify(exportData);
+            const exportedData = await exportKeyPair(dataString, passphrase);
+            console.log('useUserProfile: Exported identity:', exportedData);
             return exportedData;
         } catch (err) {
             console.error('useUserProfile: Export identity failed:', err);
-            throw new Error('Failed to export identity');
+            throw new Error('Failed to export identity: ' + (err.message || 'Unknown error'));
         }
-    }, [storageLoading, storage, did, privateKey]);
+    }, [storageLoading, storage, did, privateKey, profile]);
 
     const importIdentity = useCallback(async (data: string, passphrase: string) => {
         if (storageLoading) {
@@ -181,7 +188,8 @@ export const useUserProfile = (): UseUserProfileReturn => {
         }
 
         try {
-            const { did: importedDid, privateKey: importedPrivateKey } = await importKeyPair(data, passphrase);
+            const decryptedData = await importKeyPair(data, passphrase);
+            const { did: importedDid, privateKey: importedPrivateKey, profile: importedProfile } = JSON.parse(decryptedData);
             if (!validateDID(importedDid)) {
                 throw new Error('Invalid DID format');
             }
@@ -194,14 +202,28 @@ export const useUserProfile = (): UseUserProfileReturn => {
             });
             console.log('useUserProfile: Imported identity:', importedDid);
 
-            const userProfile = await storage.getProfile(importedDid);
-            if (userProfile) {
-                setProfile(userProfile);
-                console.log('useUserProfile: Loaded profile after import:', userProfile);
+            if (importedProfile && importedProfile.did) {
+                await storage.saveProfile(importedProfile);
+                setProfile(importedProfile);
+                console.log('useUserProfile: Restored profile after import:', importedProfile);
+            } else {
+                const userProfile = await storage.getProfile(importedDid);
+                if (userProfile) {
+                    setProfile(userProfile);
+                    console.log('useUserProfile: Loaded profile after import:', userProfile);
+                }
             }
         } catch (err) {
             console.error('useUserProfile: Import identity failed:', err);
-            throw new Error('Failed to import identity');
+            let errorMessage = 'Failed to import identity';
+            if (err.message.includes('OperationError') || err.message.includes('Failed to decrypt')) {
+                errorMessage = 'Failed to import identity: Incorrect passphrase or corrupted data';
+            } else if (err.message.includes('Invalid DID format')) {
+                errorMessage = 'Failed to import identity: Invalid DID format';
+            } else {
+                errorMessage = 'Failed to import identity: ' + (err.message || 'Unknown error');
+            }
+            throw new Error(errorMessage);
         }
     }, [storageLoading, storage]);
 
