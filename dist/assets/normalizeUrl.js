@@ -1,1 +1,1 @@
-function o(e){if(!e){console.warn("normalizeUrl: URL is undefined or empty");return}try{const r=new URL(e),n=r.hostname+r.pathname;return console.log("normalizeUrl: Normalized URL:",n),n}catch(r){return console.error("Failed to normalize URL:",r),e}}export{o as n};
+function s(n){let t=n.replace(/^(https?:\/\/)+/,"https://");t=t.replace(/\/+$/,"");const e=new URL(t),r=new URLSearchParams(e.search);for(const a of r.keys())a.startsWith("utm_")&&r.delete(a);return e.search=r.toString(),e.toString()}export{s as n};

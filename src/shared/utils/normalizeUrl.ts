@@ -1,18 +1,17 @@
 // src/shared/utils/normalizeUrl.ts
-export function normalizeUrl(url: string | undefined): string | undefined {
-    if (!url) {
-        console.warn('normalizeUrl: URL is undefined or empty');
-        return undefined;
+export function normalizeUrl(url: string): string {
+    // Remove duplicate protocols (e.g., https://https://)
+    let cleanUrl = url.replace(/^(https?:\/\/)+/, 'https://');
+    // Remove trailing slashes
+    cleanUrl = cleanUrl.replace(/\/+$/, '');
+    // Remove non-functional parameters (e.g., UTM parameters)
+    const urlObj = new URL(cleanUrl);
+    const params = new URLSearchParams(urlObj.search);
+    for (const key of params.keys()) {
+        if (key.startsWith('utm_')) {
+            params.delete(key);
+        }
     }
-
-    try {
-        const parsedUrl = new URL(url);
-        const normalized = parsedUrl.hostname + parsedUrl.pathname;
-        console.log('normalizeUrl: Normalized URL:', normalized);
-        return normalized;
-    } catch (err) {
-        console.error('Failed to normalize URL:', err);
-        // Fallback for URLs that cannot be parsed (e.g., chrome:// URLs)
-        return url; // Return the original URL as a fallback
-    }
+    urlObj.search = params.toString();
+    return urlObj.toString();
 }
