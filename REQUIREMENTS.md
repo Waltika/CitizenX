@@ -62,7 +62,7 @@ A decentralized Chrome extension for annotating websites in order to bring a kno
 
 ## Non Functional Requirements - Future Versions
 1. Add a pinning service—most probably our own but distributed among willing users, incentivizing them in a crypto-based way.
-   - **Status**: Planned. Needed for Gun.js to ensure data persistence. Will replicate shards to reliable nodes, contributing to the replication factor of three.
+   - **Status**: Planned. Needed for Gun.js to ensure data persistence. Will replicate shards to reliable nodes, contributing to the replication factor of three, and improve performance by increasing data availability.
 2. Restructure the Gun organization so that not every user replicates all annotations from the whole world, but only those from pages they visited (or visit now) and pages they annotated.
    - **Status**: Designed. Use domain-based sharding (`annotations_<domain>`), with servers replicating only relevant shards. Advanced users’ servers prioritize their `primaryServer` for these shards.
 3. Ensure compliance with Chrome Manifest V3 requirements:
@@ -86,6 +86,7 @@ A decentralized Chrome extension for annotating websites in order to bring a kno
      - **Status**: Assumed met (pending confirmation).
    - Keep the extension bundle size under 100 MB (compressed) and 200 MB (uncompressed), leveraging tree-shaking with Vite.
      - **Status**: Met.
+   - **Annotation Loading Optimization**: Identified slow annotation loading (~10 seconds) on both web and extension UIs. Proposed reducing timeouts (from 5s to 1s in `gun-server.js`, 2s to 500ms in `GunRepository.ts`), batching profile fetching, caching annotations locally, increasing peer availability, and optimizing Gun.js data access to reduce fetch times to ~2-3 seconds.
 6. Enhance security to protect users and comply with Chrome policies:
    - Use HTTPS for all network requests (e.g., fetching data from `github.io`).
      - **Status**: Met (shifted to local bundling).
