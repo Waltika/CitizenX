@@ -12,6 +12,7 @@ interface UseAnnotationsReturn {
     profiles: { [key: string]: { handle: string; profilePicture?: string } };
     error: string | null;
     loading: boolean;
+    loadingProfiles: boolean; // New loading state for profiles
     handleSaveAnnotation: (content: string) => Promise<void>;
     handleDeleteAnnotation: (id: string) => Promise<void>;
     handleSaveComment: (annotationId: string, content: string) => Promise<void>;
@@ -23,6 +24,7 @@ export const useAnnotations = ({ url, did }: UseAnnotationsProps): UseAnnotation
     const [profiles, setProfiles] = useState<{ [key: string]: { handle: string; profilePicture?: string } }>({});
     const [error, setError] = useState<string | null>(null);
     const [loading, setLoading] = useState<boolean>(false);
+    const [loadingProfiles, setLoadingProfiles] = useState<boolean>(false); // New state for profile loading
     const [isFetching, setIsFetching] = useState<boolean>(false);
 
     const [debounceTimeout, setDebounceTimeout] = useState<NodeJS.Timeout | null>(null);
@@ -73,13 +75,14 @@ export const useAnnotations = ({ url, did }: UseAnnotationsProps): UseAnnotation
                 clearTimeout(timeout);
             }
         };
-    }, [storage, url]); // Removed did from dependencies
+    }, [storage, url]);
 
-    // Fetch profiles (depends on storage, did, and annotations)
+    // Fetch profiles after annotations are loaded
     useEffect(() => {
         if (!storage || !did || !annotationsByUrl[url]) return;
 
         const fetchProfiles = async () => {
+            setLoadingProfiles(true);
             try {
                 const authorDIDs = [...new Set(annotationsByUrl[url].map((ann) => ann.author))];
                 const profilePromises = authorDIDs.map(async (authorDID) => {
@@ -108,11 +111,13 @@ export const useAnnotations = ({ url, did }: UseAnnotationsProps): UseAnnotation
             } catch (err) {
                 console.error('useAnnotations: Failed to fetch profiles:', err);
                 setError('Failed to fetch profiles');
+            } finally {
+                setLoadingProfiles(false);
             }
         };
 
         fetchProfiles();
-    }, [storage, did, annotationsByUrl[url], profiles]); // Depend on annotationsByUrl[url] instead of annotations
+    }, [storage, did, annotationsByUrl[url], profiles]);
 
     const handleSaveAnnotation = useCallback(
         async (content: string) => {
@@ -272,6 +277,7 @@ export const useAnnotations = ({ url, did }: UseAnnotationsProps): UseAnnotation
         profiles,
         error,
         loading,
+        loadingProfiles, // Expose loadingProfiles state
         handleSaveAnnotation,
         handleDeleteAnnotation,
         handleSaveComment,
