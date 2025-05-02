@@ -237,12 +237,19 @@ export const AnnotationUI: React.FC<AnnotationUIProps> = ({ url, isPopupUrl }) =
                     </button>
                 </div>
             )}
-            <AnnotationList
-                annotations={annotations}
-                profiles={profiles}
-                onDelete={handleDeleteAnnotation}
-                onSaveComment={isPopupUrl || !did || annotationsLoading ? undefined : handleSaveComment}
-            />
+            <div className="annotation-list-wrapper">
+                <AnnotationList
+                    annotations={annotations}
+                    profiles={profiles}
+                    onDelete={handleDeleteAnnotation}
+                    onSaveComment={isPopupUrl || !did || annotationsLoading ? undefined : handleSaveComment}
+                />
+            </div>
+            <div className="logo-container">
+                <a href="https://citizenx.app" target="_blank" rel="noopener noreferrer">
+                    <img src={citizenxLogo} alt="CitizenX Logo" className="citizenx-logo" />
+                </a>
+            </div>
             {isProfileModalOpen && (
                 <div className="profile-modal">
                     <h2 className="profile-modal-title">{profile ? 'Update Profile' : 'Create Profile'}</h2>
@@ -333,11 +340,6 @@ export const AnnotationUI: React.FC<AnnotationUIProps> = ({ url, isPopupUrl }) =
                     </div>
                 </div>
             )}
-            <div className="logo-container">
-                <a href="https://citizenx.app" target="_blank" rel="noopener noreferrer">
-                    <img src={citizenxLogo} alt="CitizenX Logo" className="citizenx-logo" />
-                </a>
-            </div>
         </div>
     );
 };

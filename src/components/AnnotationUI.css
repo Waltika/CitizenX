@@ -7,6 +7,9 @@
     background-color: #f5f7fa;
     min-height: 100vh;
     font-family: Arial, sans-serif;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden; /* Prevent container from scrolling */
 }
 
 /* Connected user section */
@@ -369,11 +372,19 @@
     100% { transform: rotate(360deg); }
 }
 
+/* Wrapper for the annotation list to make it scrollable */
+.annotation-list-wrapper {
+    flex: 1;
+    overflow-y: auto;
+    padding-bottom: 60px; /* Add padding to avoid overlap with fixed logo */
+}
+
 /* Logo container at the bottom right */
 .logo-container {
-    position: absolute;
+    position: fixed;
     bottom: 1rem;
     right: 1rem;
+    z-index: 1000; /* Ensure logo stays above other content */
 }
 
 .citizenx-logo {
