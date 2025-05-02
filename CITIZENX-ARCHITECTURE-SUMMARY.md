@@ -3,12 +3,11 @@
 ## Overview
 CitizenX is a browser extension that enables users to annotate web pages and share those annotations in a decentralized manner using Gun.js. The project leverages React for the UI, TypeScript for type safety, and Vite as the build tool. The current focus is on ensuring annotations and user profiles are persisted and displayed correctly across devices and browsers, with plans to implement page history tracking and notifications in the future.
 
-As of May 2, 2025, the core functionality of creating, storing, and sharing annotations is working, along with displaying annotations on non-Chrome browsers. We’ve designed a sharding and replication strategy to improve scalability, added support for advanced users to specify their primary server, outlined security measures to protect annotations from unauthorized changes, and resolved an issue with author names displaying as "Unknown" on the web version by updating the `/api/annotations` endpoint. Additionally, we’ve identified and proposed optimizations for slow annotation loading times (~10 seconds) on both the web and extension UIs. However, there are still scalability and persistence concerns with the current Gun.js setup that need to be addressed in future iterations.
+As of May 2, 2025, the core functionality of creating, storing, and sharing annotations is working, along with displaying annotations on non-Chrome browsers. We’ve designed a sharding and replication strategy to improve scalability, added support for advanced users to specify their primary server, outlined security measures to protect annotations from unauthorized changes, and resolved an issue with author names displaying as "Unknown" on the web version by updating the `/api/annotations` endpoint. However, there are still scalability and persistence concerns with the current Gun.js setup that need to be addressed in future iterations.
 
 ## Current Status
 - **Annotations and Comments**: Users can create annotations and comments on web pages (e.g., `https://www.aaa.com/International/`). These are stored in a Gun.js database (`annotations`) with replication across peers when available.
   - **Implementation**: Annotations are stored in Gun.js under the `annotations` node, keyed by URL, with comments stored as sub-nodes (`annotations/<url>/<annotationId>/comments`). The `useAnnotations` hook manages annotation creation, retrieval, and real-time updates.
-  - **Performance Issue**: Annotation loading takes ~10 seconds on both the web and extension UIs due to replication delays in Gun.js, conservative timeouts, and profile fetching overhead. Proposed optimizations include reducing timeout durations, batching profile fetching, caching annotations locally, increasing peer availability, and optimizing Gun.js data access.
 - **User Profiles and Authentication**: Users authenticate via a DID (Decentralized Identifier) and create profiles with a handle and profile picture, stored in Gun.js under a user-specific namespace (`user_<did>/profile`) and mirrored in the global `profiles` node for lookup.
   - **Change**: Shifted from OrbitDB to Gun.js, with user-specific namespaces to isolate DID and profile data, resolving conflicts across users. The `currentDID` is cached in `localStorage` to persist on the same device, with import/export functionality for cross-device use.
   - **Import/Export**: Fixed DID import/export to include profiles, with improved error handling for user-friendly feedback (e.g., "Incorrect passphrase or corrupted data").
@@ -96,14 +95,13 @@ As of May 2, 2025, the core functionality of creating, storing, and sharing anno
 ### Network Setup
 - **Current**: Single-node setup using a Gun.js bootstrap node on Render (`https://citizen-x-bootsrap.onrender.com`).
   - **Issue**: Data storage is ephemeral due to Render’s free plan. Upgrading to a paid plan is required for persistence.
-  - **Performance Issue**: Slow annotation loading (~10 seconds) due to replication delays, conservative timeouts, and profile fetching overhead. Proposed optimizations include reducing timeouts, batching profile fetching, caching annotations locally, increasing peer availability, and optimizing Gun.js data access.
   - **Planned Fix**: Implement a pinning service for Gun.js to ensure data persistence and replication across nodes (e.g., Voyager, or a custom solution). Added as a non-functional requirement.
 - **Proposed Deployment**:
   - **Bootstrap Nodes**: Three bootstrap nodes across different regions (e.g., US-East, US-West, EU-Central), acting as entry points to the network. They replicate metadata (`knownPeers`) but not all annotation data, routing requests to servers hosting specific shards.
   - **User-Deployed Servers**: Advanced users can deploy their own Gun.js servers, set as their `primaryServer` in the settings menu. These servers replicate shards for domains the user interacts with (e.g., visited or annotated pages).
   - **Sharding**: Domain-based sharding (`annotations_<domain>`), with sub-sharding for popular domains (e.g., `annotations_google_com_shard_0`).
   - **Replication**: Peer-to-peer replication with a minimum replication factor of three, ensuring each shard is replicated to at least three servers (user-deployed servers, pinning service). The user’s primary server is prioritized for their data interactions, with fallback to other peers if offline.
-- **Future**: Consider a multi-node test network or production deployment with active peers to enable proper replication and improve performance.
+- **Future**: Consider a multi-node test network or production deployment with active peers to enable proper replication.
 
 ## Scalability Plan
 - **Current Limitation**: All annotations are stored in a single Gun.js node (`annotations`), which won’t scale to trillions of annotations across millions of users.
@@ -125,7 +123,6 @@ As of May 2, 2025, the core functionality of creating, storing, and sharing anno
 - **Notifications (Requirement 6)**: Notify users of new comments on their annotations.
 - **Pinning Service**: Implement a pinning service for Gun.js to prevent data loss and enable replication.
 - **Primary Server UI**: Add a "Set Primary Server" option in the settings menu (⚙️ icon) in `AnnotationUI.tsx`, allowing advanced users to specify their server URL, which is saved to `user_<did>/primaryServer`.
-- **Performance Optimization**: Implement proposed optimizations for annotation loading (reduce timeouts, batch profile fetching, cache annotations locally, increase peer availability, optimize Gun.js data access) to reduce fetch times from ~10 seconds to ~2-3 seconds.
 
 ## File Structure
 - **Hooks**:

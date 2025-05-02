@@ -22,7 +22,7 @@ export class GunRepository {
 
     constructor(options: GunRepositoryOptions = {}) {
         this.options = {
-            peers: options.peers || ['https://citizen-x-bootsrap.onrender.com/gun'],
+            peers: options.peers || ['https://citizen-x-bootsrap.onrender.com/gun'], // Updated to use the Render server
             radisk: options.radisk ?? true,
         };
         this.gun = Gun({
@@ -173,7 +173,7 @@ export class GunRepository {
         });
     }
 
-    async getProfile(did: string, retries = 5, delay = 200): Promise<Profile | null> {
+    async getProfile(did: string, retries = 5, delay = 1000): Promise<Profile | null> {
         for (let attempt = 1; attempt <= retries; attempt++) {
             const result = await new Promise<Profile | null>((resolve) => {
                 this.gun.get(`user_${did}`).get('profile').once((data: any) => {
@@ -245,7 +245,7 @@ export class GunRepository {
                 setTimeout(() => {
                     console.log('GunRepository: Initial annotations loaded for URL:', url, annotations, 'Has new data:', hasNewData, 'Attempt:', attempt);
                     resolve();
-                }, 500); // Reduced from 2000ms to 500ms
+                }, 2000);
             });
 
             if (hasNewData || attempt === maxRetries) {
