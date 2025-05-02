@@ -14,7 +14,7 @@ interface AnnotationUIProps {
 
 export const AnnotationUI: React.FC<AnnotationUIProps> = ({ url, isPopupUrl }) => {
     const { did, profile, loading: profileLoading, error: profileError, authenticate, signOut, exportIdentity, importIdentity, createProfile, updateProfile } = useUserProfile();
-    const { annotations, profiles, error: annotationsError, loading: annotationsLoading, loadingProfiles, handleSaveAnnotation, handleDeleteAnnotation, handleSaveComment } = useAnnotations({ url, did });
+    const { annotations, profiles, error: annotationsError, loading: annotationsLoading, handleSaveAnnotation, handleDeleteAnnotation, handleSaveComment } = useAnnotations({ url, did });
     const [annotationText, setAnnotationText] = useState('');
     const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
     const [profileHandle, setProfileHandle] = useState('');
@@ -214,7 +214,7 @@ export const AnnotationUI: React.FC<AnnotationUIProps> = ({ url, isPopupUrl }) =
                     </div>
                 </div>
             </div>
-            {(annotationsLoading || loadingProfiles) && ( // Include loadingProfiles in the condition
+            {annotationsLoading && (
                 <div className="loading-spinner">
                     <span>Loading annotations...</span>
                 </div>
@@ -226,12 +226,12 @@ export const AnnotationUI: React.FC<AnnotationUIProps> = ({ url, isPopupUrl }) =
                         onChange={(e) => setAnnotationText(e.target.value)}
                         placeholder="Enter annotation..."
                         className="annotation-textarea"
-                        disabled={!did || annotationsLoading || loadingProfiles} // Disable while loading profiles
+                        disabled={!did || annotationsLoading}
                     />
                     <button
                         onClick={handleSave}
                         className="annotation-save-button"
-                        disabled={!annotationText.trim() || !did || annotationsLoading || loadingProfiles} // Disable while loading profiles
+                        disabled={!annotationText.trim() || !did || annotationsLoading}
                     >
                         Save
                     </button>
@@ -241,7 +241,7 @@ export const AnnotationUI: React.FC<AnnotationUIProps> = ({ url, isPopupUrl }) =
                 annotations={annotations}
                 profiles={profiles}
                 onDelete={handleDeleteAnnotation}
-                onSaveComment={isPopupUrl || !did || annotationsLoading || loadingProfiles ? undefined : handleSaveComment} // Disable commenting while loading profiles
+                onSaveComment={isPopupUrl || !did || annotationsLoading ? undefined : handleSaveComment}
             />
             {isProfileModalOpen && (
                 <div className="profile-modal">

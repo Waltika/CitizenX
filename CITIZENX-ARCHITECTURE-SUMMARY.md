@@ -3,7 +3,7 @@
 ## Overview
 CitizenX is a browser extension that enables users to annotate web pages and share those annotations in a decentralized manner using Gun.js. The project leverages React for the UI, TypeScript for type safety, and Vite as the build tool. The current focus is on ensuring annotations and user profiles are persisted and displayed correctly across devices and browsers, with plans to implement page history tracking and notifications in the future.
 
-As of May 1, 2025, the core functionality of creating, storing, and sharing annotations is working, along with displaying annotations on non-Chrome browsers. We’ve designed a sharding and replication strategy to improve scalability, added support for advanced users to specify their primary server, and outlined security measures to protect annotations from unauthorized changes. However, there are still scalability and persistence concerns with the current Gun.js setup that need to be addressed in future iterations.
+As of May 2, 2025, the core functionality of creating, storing, and sharing annotations is working, along with displaying annotations on non-Chrome browsers. We’ve designed a sharding and replication strategy to improve scalability, added support for advanced users to specify their primary server, outlined security measures to protect annotations from unauthorized changes, and resolved an issue with author names displaying as "Unknown" on the web version by updating the `/api/annotations` endpoint. However, there are still scalability and persistence concerns with the current Gun.js setup that need to be addressed in future iterations.
 
 ## Current Status
 - **Annotations and Comments**: Users can create annotations and comments on web pages (e.g., `https://www.aaa.com/International/`). These are stored in a Gun.js database (`annotations`) with replication across peers when available.
@@ -17,7 +17,8 @@ As of May 1, 2025, the core functionality of creating, storing, and sharing anno
   - **Proposed Solution**: Use domain-based sharding, creating one Gun.js node per domain (e.g., `annotations_example_com`, `annotations_aaa_com`). Servers replicate only the shards (domains) relevant to their users’ activity (e.g., pages visited or annotated).
   - **Sub-Sharding for Popular Domains**: For high-traffic domains (e.g., `google.com`), sub-shard by hashing the full URL (e.g., `annotations_google_com_shard_0`).
 - **Non-Chrome Browsers (Req 11)**: Implemented the `/view-annotations` page on `https://citizenx.app` to display annotations for non-Chrome browsers. The page shows all annotations for a given URL, with a clickable link to the annotated page (opens in a new tab). Added a loading spinner with proper show/hide logic, styled to match the CitizenX design (white `#fff`, teal `#2c7a7b`, Inter font).
-  - **Chrome on Android Issue**: Chrome on Android (e.g., on Samsung devices) was incorrectly identified as non-Chrome due to the `!userAgent.includes('samsung')` check in `check-extension.js`. Proposed fixing this by using `!userAgent.includes('samsungbrowser')` and adding a mobile check (`/android|iphone|ipad|ipod|mobile/i.test(userAgent)`) to redirect mobile browsers to `/view-annotations`, as they cannot install extensions.
+  - **Chrome on Android Issue**: Chrome on Android (e.g., on Samsung devices) was incorrectly identified as non-Chrome due to the `!userAgent.includes('samsung')` check in `check-extension.js`. Fixed by using `!userAgent.includes('samsungbrowser')` and adding a mobile check (`/android|iphone|ipad|ipod|mobile/i.test(userAgent)`) to redirect mobile browsers to `/view-annotations`, as they cannot install extensions.
+  - **Author Display Issue**: Authors were displaying as "Unknown" on the `/view-annotations` page due to the Render server’s `/api/annotations` endpoint not fetching user profiles. Fixed by updating the endpoint to fetch profiles from Gun.js (`profiles/<did>` or `user_<did>/profile`) with retries (up to 5 attempts) and in-memory caching (5-minute TTL), ensuring the correct `authorHandle` is included in the response.
 - **Sharing (Req 10)**: Users can share annotations via a custom share modal (macOS) or `navigator.share` (other platforms). The sharing link format is `https://citizenx.app/check-extension?annotationId=<id>&url=<encoded-url>`. Considered URL shortening with Bitly but deferred due to ad-supported preview pages in the free plan.
 - **Persistence**: Attempted to store Gun.js data at `/var/data/gun-data` on the Render server, but storage is ephemeral due to the free plan. A paid plan upgrade is needed for persistence.
 - **Security for Annotations**: Designed a security model to ensure annotations can only be modified or deleted by their creator and to protect against hacking:
@@ -89,6 +90,7 @@ As of May 1, 2025, the core functionality of creating, storing, and sharing anno
 4. **Non-Chrome Browsers**:
    - The `/check-extension` page redirects non-Chrome users to `/view-annotations`, which fetches annotations from the Render server and displays them, mimicking the extension’s UI.
    - Mobile browsers (e.g., Chrome on Android) are detected using `/android|iphone|ipad|ipod|mobile/i.test(userAgent)` and redirected to `/view-annotations`, as they cannot install extensions.
+   - The `/api/annotations` endpoint on the Render server fetches annotations and user profiles, including the correct `authorHandle` with retries and caching to handle replication delays.
 
 ### Network Setup
 - **Current**: Single-node setup using a Gun.js bootstrap node on Render (`https://citizen-x-bootsrap.onrender.com`).
@@ -110,7 +112,7 @@ As of May 1, 2025, the core functionality of creating, storing, and sharing anno
 ## Security Plan
 - **Goal**: Ensure annotations can only be modified or deleted by their creator and protect the system from hacking.
 - **Mechanisms**:
-  - **Signed Annotations**: Annotations are signed with the creator’s private key, with the signature stored in Gun.js. Clients verify signatures on read, discarding tampered data.
+  - **Signed Annotations**: Each annotation is signed with the creator’s private key, with the signature stored in Gun.js. Clients verify signatures on read, discarding tampered data.
   - **Signed Write Requests**: Write operations (create, update, delete) are signed and stored in `writeRequests`. Servers verify the signature and ensure the requester’s DID matches the annotation’s `author` before applying the write.
   - **Immutable Versioning**: Annotations are stored as immutable versions (`annotations/<url>/<annotationId>/versions/<timestamp>`), with updates creating new versions. Deletions use tombstones (`deleted: true`).
   - **Attack Mitigation**: Protect against malicious peers, data injection, DID spoofing, replay attacks, and DoS attacks through signature verification, rate-limiting (`rateLimits/<did>`), timestamp checks, and logging unauthorized attempts (`securityLogs`).
@@ -141,4 +143,4 @@ As of May 1, 2025, the core functionality of creating, storing, and sharing anno
   - Gun.js: `annotations`, `profiles`, `user_<did>`, `writeRequests`, `securityLogs`, `rateLimits`
 
 ## Last Updated
-May 1, 2025
+May 2, 2025

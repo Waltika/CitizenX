@@ -22,7 +22,7 @@ export class GunRepository {
 
     constructor(options: GunRepositoryOptions = {}) {
         this.options = {
-            peers: options.peers || ['https://citizen-x-bootsrap.onrender.com/gun'],
+            peers: options.peers || ['https://citizen-x-bootsrap.onrender.com/gun'], // Updated to use the Render server
             radisk: options.radisk ?? true,
         };
         this.gun = Gun({
@@ -107,9 +107,11 @@ export class GunRepository {
 
     async getCurrentDID(): Promise<string | null> {
         return new Promise((resolve) => {
+            // First, check localStorage for the cached DID
             const cachedDID = localStorage.getItem('currentDID');
             console.log('GunRepository: Retrieved cached DID from localStorage:', cachedDID);
             if (cachedDID) {
+                // Verify the DID exists in Gun.js (e.g., user-specific namespace)
                 this.gun.get(`user_${cachedDID}`).get('did').once((data: any) => {
                     if (data && data.did === cachedDID) {
                         console.log('GunRepository: Confirmed DID in user-specific namespace:', cachedDID);
@@ -128,9 +130,11 @@ export class GunRepository {
 
     async setCurrentDID(did: string): Promise<void> {
         return new Promise((resolve, reject) => {
+            // Cache the DID in localStorage
             localStorage.setItem('currentDID', did);
             console.log('GunRepository: Set current DID in localStorage:', did);
 
+            // Store the DID in a user-specific namespace in Gun.js
             this.gun.get(`user_${did}`).get('did').put({ did }, (ack: any) => {
                 if (ack.err) {
                     console.error('GunRepository: Failed to set user-specific DID:', ack.err);
@@ -145,15 +149,18 @@ export class GunRepository {
 
     async clearCurrentDID(): Promise<void> {
         return new Promise((resolve) => {
+            // Clear the DID from localStorage
             localStorage.removeItem('currentDID');
             console.log('GunRepository: Cleared current DID from localStorage');
 
+            // No need to clear the user-specific namespace in Gun.js, as it should persist
             resolve();
         });
     }
 
     async saveProfile(profile: Profile): Promise<void> {
         return new Promise((resolve, reject) => {
+            // Store the profile in the user-specific namespace
             this.gun.get(`user_${profile.did}`).get('profile').put(profile, (ack: any) => {
                 if (ack.err) {
                     console.error('GunRepository: Failed to save profile:', ack.err);
@@ -166,7 +173,7 @@ export class GunRepository {
         });
     }
 
-    async getProfile(did: string, retries = 5, delay = 2000): Promise<Profile | null> { // Increased delay to 2000ms
+    async getProfile(did: string, retries = 5, delay = 1000): Promise<Profile | null> {
         for (let attempt = 1; attempt <= retries; attempt++) {
             const result = await new Promise<Profile | null>((resolve) => {
                 this.gun.get(`user_${did}`).get('profile').once((data: any) => {
