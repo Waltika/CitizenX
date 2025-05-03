@@ -1,8 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useUserProfile } from '../hooks/useUserProfile';
 import { useAnnotations } from '../hooks/useAnnotations';
 import { AnnotationList } from './AnnotationList';
 import './AnnotationUI.css';
+
+import Quill from 'quill';
+import 'quill/dist/quill.snow.css'; // Import Quill styles (bundle this in production)
 
 import citizenxLogo from './../assets/citizenx-logo.png';
 import { normalizeUrl } from "../shared/utils/normalizeUrl";
@@ -27,6 +30,39 @@ export const AnnotationUI: React.FC<AnnotationUIProps> = ({ url, isPopupUrl }) =
     const [passphraseModalOpen, setPassphraseModalOpen] = useState<'export' | 'import' | null>(null);
     const [importPassphrase, setImportPassphrase] = useState('');
 
+    const editorRef = useRef<HTMLDivElement>(null);
+    const quillRef = useRef<Quill | null>(null);
+
+    // Initialize Quill editor for annotation input
+    useEffect(() => {
+        if (editorRef.current && !quillRef.current) {
+            quillRef.current = new Quill(editorRef.current, {
+                theme: 'snow',
+                modules: {
+                    toolbar: [
+                        ['bold', 'italic', 'underline'],
+                        [{ 'list': 'ordered' }, { 'list': 'bullet' }],
+                        ['link']
+                    ]
+                },
+                placeholder: 'Enter annotation...'
+            });
+
+            // Update state on content change
+            quillRef.current.on('text-change', () => {
+                const content = quillRef.current?.root.innerHTML || '';
+                setAnnotationText(content === '<p><br></p>' ? '' : content);
+            });
+        }
+
+        return () => {
+            if (quillRef.current) {
+                quillRef.current.off('text-change');
+                quillRef.current = null;
+            }
+        };
+    }, []);
+
     useEffect(() => {
         if (!profileLoading && did && !profile) {
             console.log('AnnotationUI: Opening Update Profile modal');
@@ -44,6 +80,9 @@ export const AnnotationUI: React.FC<AnnotationUIProps> = ({ url, isPopupUrl }) =
         if (annotationText.trim() && !isPopupUrl) {
             await handleSaveAnnotation(annotationText);
             setAnnotationText('');
+            if (quillRef.current) {
+                quillRef.current.setContents([]);
+            }
         }
     };
 
@@ -221,13 +260,7 @@ export const AnnotationUI: React.FC<AnnotationUIProps> = ({ url, isPopupUrl }) =
             )}
             {!isPopupUrl && (
                 <div className="annotation-input">
-                    <textarea
-                        value={annotationText}
-                        onChange={(e) => setAnnotationText(e.target.value)}
-                        placeholder="Enter annotation..."
-                        className="annotation-textarea"
-                        disabled={!did || annotationsLoading}
-                    />
+                    <div ref={editorRef} className="quill-editor"></div>
                     <button
                         onClick={handleSave}
                         className="annotation-save-button"

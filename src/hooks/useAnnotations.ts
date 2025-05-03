@@ -231,22 +231,8 @@ export const useAnnotations = ({ url, did }: UseAnnotationsProps): UseAnnotation
 
                 await storage.saveComment(url, annotationId, newComment);
 
-                setAnnotationsByUrl((prev) => {
-                    const updatedAnnotations = (prev[url] || []).map((ann) => {
-                        if (ann.id === annotationId) {
-                            return {
-                                ...ann,
-                                comments: [...ann.comments, newComment],
-                            };
-                        }
-                        return ann;
-                    });
-                    return {
-                        ...prev,
-                        [url]: updatedAnnotations,
-                    };
-                });
-
+                // Removed local state update to prevent duplication
+                // The real-time listener in getAnnotations will handle the UI update
                 const updatedAnnotations = await storage.getAnnotations(url);
                 setAnnotationsByUrl((prev) => ({
                     ...prev,

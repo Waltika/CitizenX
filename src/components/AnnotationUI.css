@@ -321,6 +321,28 @@
     background-color: #fff;
 }
 
+/* Quill editor styles */
+.quill-editor {
+    width: 100%;
+    margin-bottom: 0.5rem;
+    font-size: 0.9rem;
+    color: #333;
+    background-color: #fff;
+}
+
+.quill-editor .ql-toolbar {
+    border: 1px solid #e5e7eb;
+    border-radius: 5px 5px 0 0;
+    background-color: #f5f7fa;
+}
+
+.quill-editor .ql-container {
+    border: 1px solid #e5e7eb;
+    border-top: none;
+    border-radius: 0 0 5px 5px;
+    height: 5rem; /* Match the height of annotation-textarea */
+}
+
 .annotation-save-button {
     padding: 0.5rem 1rem;
     background: #2c7a7b;

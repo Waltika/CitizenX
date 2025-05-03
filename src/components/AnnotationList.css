@@ -71,8 +71,17 @@
     border-left: 2px solid #e5e7eb;
 }
 
+/* Add padding above the first comment */
+.comments-container .comment-item:first-child {
+    padding-top: 0.5rem;
+}
+
 /* Comment input section */
 .comment-input-section {
+    margin-top: 0.5rem;
+}
+
+.comments-section {
     margin-top: 0.5rem;
 }
 
@@ -87,6 +96,28 @@
     padding: 0.5rem;
     color: #333;
     background-color: #fff;
+}
+
+/* Quill editor styles for comments */
+.quill-editor {
+    width: 100%;
+    margin-bottom: 0.5rem;
+    font-size: 0.8rem;
+    color: #333;
+    background-color: #fff;
+}
+
+.quill-editor .ql-toolbar {
+    border: 1px solid #e5e7eb;
+    border-radius: 5px 5px 0 0;
+    background-color: #f5f7fa;
+}
+
+.quill-editor .ql-container {
+    border: 1px solid #e5e7eb;
+    border-top: none;
+    border-radius: 0 0 5px 5px;
+    height: 2.5rem; /* Match the height of comment-textarea */
 }
 
 /* Add Comment button */
@@ -129,6 +160,41 @@
     background-color: #e6f7fa;
     border: 2px solid #2c7a7b;
     transition: background-color 1s ease-out;
+}
+
+/* Comment item */
+.comment-item {
+    margin-bottom: 0.8rem;
+}
+
+/* Comment group (header and content) */
+.comment-group {
+    padding-left: 1rem; /* Indent the entire comment group */
+}
+
+/* Comment header (author and timestamp) */
+.comment-header {
+    display: flex;
+    align-items: center;
+    margin-bottom: 0.3rem;
+}
+
+/* Comment author */
+.comment-author {
+    font-size: 0.8rem;
+    color: #666;
+}
+
+/* Comment timestamp */
+.comment-timestamp {
+    font-size: 0.8rem;
+    color: #666;
+}
+
+/* Comment content */
+.comment-content {
+    font-size: 0.8rem;
+    color: #333;
 }
 
 /* Share Modal Styles */

@@ -1,7 +1,7 @@
-// src/components/AnnotationList.tsx
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Annotation, Profile } from '../types';
 import { normalizeUrl } from '../shared/utils/normalizeUrl';
+import Quill from 'quill';
 import './AnnotationList.css';
 
 interface AnnotationListProps {
@@ -14,10 +14,47 @@ interface AnnotationListProps {
 export const AnnotationList: React.FC<AnnotationListProps> = ({ annotations, profiles, onDelete, onSaveComment }) => {
     const [commentInputs, setCommentInputs] = useState<Record<string, string>>({});
     const [showShareModal, setShowShareModal] = useState<string | null>(null);
+    const editorRefs = useRef<Record<string, HTMLDivElement | null>>({});
+    const quillInstances = useRef<Record<string, Quill | null>>({});
 
-    const handleCommentChange = (annotationId: string, value: string) => {
-        setCommentInputs((prev) => ({ ...prev, [annotationId]: value }));
-    };
+    // Initialize Quill editors for each comment
+    useEffect(() => {
+        annotations.forEach((annotation) => {
+            const editorId = annotation.id;
+            const editorElement = editorRefs.current[editorId];
+            if (editorElement && !quillInstances.current[editorId]) {
+                quillInstances.current[editorId] = new Quill(editorElement, {
+                    theme: 'snow',
+                    modules: {
+                        toolbar: [
+                            ['bold', 'italic', 'underline'],
+                            [{ 'list': 'ordered' }, { 'list': 'bullet' }],
+                            ['link']
+                        ]
+                    },
+                    placeholder: 'Add a comment...'
+                });
+
+                quillInstances.current[editorId]!.on('text-change', () => {
+                    const content = quillInstances.current[editorId]!.root.innerHTML || '';
+                    setCommentInputs((prev) => ({
+                        ...prev,
+                        [editorId]: content === '<p><br></p>' ? '' : content
+                    }));
+                });
+            }
+        });
+
+        return () => {
+            annotations.forEach((annotation) => {
+                const editorId = annotation.id;
+                if (quillInstances.current[editorId]) {
+                    quillInstances.current[editorId]!.off('text-change');
+                    quillInstances.current[editorId] = null;
+                }
+            });
+        };
+    }, [annotations]);
 
     const handleSaveComment = async (annotationId: string) => {
         const content = commentInputs[annotationId] || '';
@@ -25,6 +62,10 @@ export const AnnotationList: React.FC<AnnotationListProps> = ({ annotations, pro
             console.log('AnnotationList: Saving comment for annotation:', annotationId, content);
             await onSaveComment(annotationId, content);
             setCommentInputs((prev) => ({ ...prev, [annotationId]: '' }));
+            const quill = quillInstances.current[annotationId];
+            if (quill) {
+                quill.setContents([]);
+            }
         }
     };
 
@@ -33,11 +74,9 @@ export const AnnotationList: React.FC<AnnotationListProps> = ({ annotations, pro
         const shareUrl = `https://citizenx.app/check-extension?annotationId=${annotation.id}&url=${encodeURIComponent(normalizedUrl)}`;
         const shareText = `Check out this annotation: "${annotation.content.substring(0, 100)}..." by ${profiles[annotation.author]?.handle || 'Unknown'} #CitizenX`;
 
-        // Detect macOS
         const isMacOS = navigator.platform.toLowerCase().includes('mac');
 
         if (navigator.share && !isMacOS) {
-            // Use native share sheet on non-macOS platforms
             try {
                 await navigator.share({
                     title: 'CitizenX Annotation',
@@ -49,7 +88,6 @@ export const AnnotationList: React.FC<AnnotationListProps> = ({ annotations, pro
                 setShowShareModal(`${shareText} ${shareUrl}`);
             }
         } else {
-            // Show custom share modal on macOS or if share fails
             setShowShareModal(`${shareText} ${shareUrl}`);
         }
     };
@@ -67,7 +105,7 @@ export const AnnotationList: React.FC<AnnotationListProps> = ({ annotations, pro
             case 'x':
                 return `https://twitter.com/intent/tweet?text=${encodedText}&url=${encodedUrl}`;
             case 'facebook':
-                return `https://www.facebook.com/sharer/sharer.php?u=${encodedUrl}&quote=${encodedText}`;
+                return `https://www.facebook.com/sharer/sharer.php?u=${encodedUrl}"e=${encodedText}`;
             case 'whatsapp':
                 return `https://api.whatsapp.com/send?text=${encodedText}%20${encodedUrl}`;
             case 'telegram':
@@ -86,14 +124,17 @@ export const AnnotationList: React.FC<AnnotationListProps> = ({ annotations, pro
                 const authorHandle = authorProfile ? authorProfile.handle : 'Unknown';
                 console.log('AnnotationList: Rendering annotation:', annotation, 'Author handle:', authorHandle);
 
+                // Sort comments by timestamp in ascending order (oldest to newest)
+                const sortedComments = annotation.comments ? [...annotation.comments].sort((a, b) => a.timestamp - b.timestamp) : [];
+
                 return (
                     <div key={annotation.id} className="annotation-item" data-annotation-id={annotation.id}>
                         <div className="annotation-header">
                             <span className="annotation-author">{authorHandle}</span>
                             <span className="annotation-timestamp">
-                {' '}
+                                {' '}
                                 • {new Date(annotation.timestamp).toLocaleString()}
-              </span>
+                            </span>
                             <button onClick={() => onDelete(annotation.id)} className="delete-button">
                                 Delete
                             </button>
@@ -101,20 +142,30 @@ export const AnnotationList: React.FC<AnnotationListProps> = ({ annotations, pro
                                 Share
                             </button>
                         </div>
-                        <p className="annotation-content">{annotation.content || 'No content'}</p>
-                        {annotation.comments && annotation.comments.length > 0 && (
+                        <div
+                            className="annotation-content"
+                            dangerouslySetInnerHTML={{ __html: annotation.content || 'No content' }}
+                        />
+                        {sortedComments.length > 0 && (
                             <div className="comments-section">
-                                {annotation.comments.map((comment) => {
+                                {sortedComments.map((comment) => {
                                     const commentAuthor = profiles[comment.author] || null;
                                     const commentAuthorHandle = commentAuthor ? commentAuthor.handle : 'Unknown';
                                     return (
                                         <div key={comment.id} className="comment-item">
-                                            <span className="comment-author">{commentAuthorHandle}</span>
-                                            <span className="comment-timestamp">
-                        {' '}
-                                                • {new Date(comment.timestamp).toLocaleString()}
-                      </span>
-                                            <p className="comment-content">{comment.content}</p>
+                                            <div className="comment-group">
+                                                <div className="comment-header">
+                                                    <span className="comment-author">{commentAuthorHandle}</span>
+                                                    <span className="comment-timestamp">
+                                                        {' '}
+                                                        • {new Date(comment.timestamp).toLocaleString()}
+                                                    </span>
+                                                </div>
+                                                <div
+                                                    className="comment-content"
+                                                    dangerouslySetInnerHTML={{ __html: comment.content }}
+                                                />
+                                            </div>
                                         </div>
                                     );
                                 })}
@@ -122,12 +173,10 @@ export const AnnotationList: React.FC<AnnotationListProps> = ({ annotations, pro
                         )}
                         {onSaveComment && (
                             <div className="add-comment-section">
-                <textarea
-                    value={commentInputs[annotation.id] || ''}
-                    onChange={(e) => handleCommentChange(annotation.id, e.target.value)}
-                    placeholder="Add a comment..."
-                    className="comment-textarea"
-                />
+                                <div
+                                    ref={(el) => (editorRefs.current[annotation.id] = el)}
+                                    className="quill-editor"
+                                ></div>
                                 <button
                                     onClick={() => handleSaveComment(annotation.id)}
                                     disabled={!commentInputs[annotation.id]?.trim()}
@@ -162,7 +211,7 @@ export const AnnotationList: React.FC<AnnotationListProps> = ({ annotations, pro
                                 href={generateShareLink('facebook', showShareModal.split(' ').slice(0, -1).join(' '), showShareModal.split(' ').pop() || '')}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="share-button-social share-facebook"
+                                className="share-button-social share-whatsapp"
                                 title="Share on Facebook"
                             >
                                 <svg viewBox="0 0 24 24" fill="currentColor">
