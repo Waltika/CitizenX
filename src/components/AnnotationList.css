@@ -81,8 +81,26 @@
     margin-top: 0.5rem;
 }
 
+/* Comments section */
 .comments-section {
     margin-top: 0.5rem;
+}
+
+/* Comments toggle button */
+.comments-toggle-button {
+    background: none;
+    border: none;
+    padding: 0.25rem 0;
+    color: #2c7a7b;
+    font-size: 0.8rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+}
+
+.comments-toggle-button:hover {
+    color: #4a999a;
 }
 
 /* Comment textarea */

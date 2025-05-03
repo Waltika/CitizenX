@@ -16,6 +16,7 @@ export const AnnotationList: React.FC<AnnotationListProps> = ({ annotations, pro
     const [showShareModal, setShowShareModal] = useState<string | null>(null);
     const editorRefs = useRef<Record<string, HTMLDivElement | null>>({});
     const quillInstances = useRef<Record<string, Quill | null>>({});
+    const [expandedComments, setExpandedComments] = useState<Record<string, boolean>>({});
 
     // Initialize Quill editors for each comment
     useEffect(() => {
@@ -54,6 +55,21 @@ export const AnnotationList: React.FC<AnnotationListProps> = ({ annotations, pro
                 }
             });
         };
+    }, [annotations]);
+
+    // Initialize collapsed state for each annotation's comments
+    useEffect(() => {
+        const initialExpandedState: Record<string, boolean> = {};
+        annotations.forEach((annotation) => {
+            // Only initialize if not already set to preserve state across renders
+            if (expandedComments[annotation.id] === undefined) {
+                initialExpandedState[annotation.id] = false; // Collapsed by default
+            }
+        });
+        setExpandedComments((prev) => ({
+            ...prev,
+            ...initialExpandedState,
+        }));
     }, [annotations]);
 
     const handleSaveComment = async (annotationId: string) => {
@@ -98,6 +114,13 @@ export const AnnotationList: React.FC<AnnotationListProps> = ({ annotations, pro
         setShowShareModal(null);
     };
 
+    const toggleComments = (annotationId: string) => {
+        setExpandedComments((prev) => ({
+            ...prev,
+            [annotationId]: !prev[annotationId],
+        }));
+    };
+
     const generateShareLink = (platform: string, shareText: string, shareUrl: string) => {
         const encodedText = encodeURIComponent(shareText);
         const encodedUrl = encodeURIComponent(shareUrl);
@@ -126,6 +149,7 @@ export const AnnotationList: React.FC<AnnotationListProps> = ({ annotations, pro
 
                 // Sort comments by timestamp in ascending order (oldest to newest)
                 const sortedComments = annotation.comments ? [...annotation.comments].sort((a, b) => a.timestamp - b.timestamp) : [];
+                const isExpanded = expandedComments[annotation.id] || false;
 
                 return (
                     <div key={annotation.id} className="annotation-item" data-annotation-id={annotation.id}>
@@ -147,29 +171,39 @@ export const AnnotationList: React.FC<AnnotationListProps> = ({ annotations, pro
                             dangerouslySetInnerHTML={{ __html: annotation.content || 'No content' }}
                         />
                         {sortedComments.length > 0 && (
-                            <div className="comments-section">
-                                {sortedComments.map((comment) => {
-                                    const commentAuthor = profiles[comment.author] || null;
-                                    const commentAuthorHandle = commentAuthor ? commentAuthor.handle : 'Unknown';
-                                    return (
-                                        <div key={comment.id} className="comment-item">
-                                            <div className="comment-group">
-                                                <div className="comment-header">
-                                                    <span className="comment-author">{commentAuthorHandle}</span>
-                                                    <span className="comment-timestamp">
-                                                        {' '}
-                                                        • {new Date(comment.timestamp).toLocaleString()}
-                                                    </span>
+                            <>
+                                <button
+                                    className="comments-toggle-button"
+                                    onClick={() => toggleComments(annotation.id)}
+                                >
+                                    {isExpanded ? '−' : '+'} {isExpanded ? 'Hide comments' : `Show ${sortedComments.length} comment${sortedComments.length > 1 ? 's' : ''}`}
+                                </button>
+                                {isExpanded && (
+                                    <div className="comments-section">
+                                        {sortedComments.map((comment) => {
+                                            const commentAuthor = profiles[comment.author] || null;
+                                            const commentAuthorHandle = commentAuthor ? commentAuthor.handle : 'Unknown';
+                                            return (
+                                                <div key={comment.id} className="comment-item">
+                                                    <div className="comment-group">
+                                                        <div className="comment-header">
+                                                            <span className="comment-author">{commentAuthorHandle}</span>
+                                                            <span className="comment-timestamp">
+                                                                {' '}
+                                                                • {new Date(comment.timestamp).toLocaleString()}
+                                                            </span>
+                                                        </div>
+                                                        <div
+                                                            className="comment-content"
+                                                            dangerouslySetInnerHTML={{ __html: comment.content }}
+                                                        />
+                                                    </div>
                                                 </div>
-                                                <div
-                                                    className="comment-content"
-                                                    dangerouslySetInnerHTML={{ __html: comment.content }}
-                                                />
-                                            </div>
-                                        </div>
-                                    );
-                                })}
-                            </div>
+                                            );
+                                        })}
+                                    </div>
+                                )}
+                            </>
                         )}
                         {onSaveComment && (
                             <div className="add-comment-section">
