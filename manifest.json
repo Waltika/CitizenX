@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "CitizenX",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "description": "Citizen X allows you to annotate the web and share your annotations with the world",
   "permissions": [
     "sidePanel",
