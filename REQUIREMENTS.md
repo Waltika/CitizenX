@@ -59,6 +59,10 @@ A decentralized Chrome extension for annotating websites in order to bring a kno
 4. We want to enrich annotations with structured data, allowing complex reasoning on them.
 5. We want to use a WYSIWYG editor for annotations (but not comments).
 6. We want an AI-powered feature to extract structured information from annotations and comments, defined in a JSON format shared between users. Users can create their own extraction schemas, suggest schemas to the community, and the community can vote to adopt schemas if there’s sufficient interest.
+7. We need to find a solution for deployment between the server and the annotation extension because of the difference in time to deploy between our own server and the extension that needs to go through the Google Extension Store.
+   - **Status**: Pending.
+8. At some stage, we need to discuss how to structure the project so that all functionalities of the extension version are also available on the web version from the same code base but without having bloated JavaScript running on the client side (so having the node rendering happening on the server and lightweight JavaScript on the website).
+   - **Status**: Pending.
 
 ## Non Functional Requirements - Future Versions
 1. Add a pinning service—most probably our own but distributed among willing users, incentivizing them in a crypto-based way.
