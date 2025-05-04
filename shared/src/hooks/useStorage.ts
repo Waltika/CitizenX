@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { StorageRepository } from '../storage/StorageRepository';
+import { StorageRepository } from '../storage/StorageRepository.js';
 
 interface UseStorageReturn {
     storage: StorageRepository | null;
