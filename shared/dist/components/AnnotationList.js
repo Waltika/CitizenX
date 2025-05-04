@@ -1,0 +1,191 @@
+import React, { useState, useEffect, useRef } from 'react';
+import { normalizeUrl } from '../utils/normalizeUrl.js';
+export const AnnotationList = ({ annotations, profiles, onDelete, onSaveComment }) => {
+    const [commentInputs, setCommentInputs] = useState({});
+    const [showShareModal, setShowShareModal] = useState(null);
+    const editorRefs = useRef({});
+    const quillInstances = useRef({});
+    const [expandedComments, setExpandedComments] = useState({});
+    // Initialize Quill editors for each comment (client-side only)
+    useEffect(() => {
+        if (typeof window === 'undefined')
+            return; // Skip on server
+        import('quill').then((QuillModule) => {
+            const Quill = QuillModule.default;
+            annotations.forEach((annotation) => {
+                const editorId = annotation.id;
+                const editorElement = editorRefs.current[editorId];
+                if (editorElement && !quillInstances.current[editorId]) {
+                    quillInstances.current[editorId] = new Quill(editorElement, {
+                        theme: 'snow',
+                        modules: {
+                            toolbar: [
+                                ['bold', 'italic', 'underline'],
+                                [{ 'list': 'ordered' }, { 'list': 'bullet' }],
+                                ['link']
+                            ]
+                        },
+                        placeholder: 'Add a comment...'
+                    });
+                    quillInstances.current[editorId].on('text-change', () => {
+                        const content = quillInstances.current[editorId].root.innerHTML || '';
+                        setCommentInputs((prev) => ({
+                            ...prev,
+                            [editorId]: content === '<p><br></p>' ? '' : content
+                        }));
+                    });
+                }
+            });
+        });
+        return () => {
+            annotations.forEach((annotation) => {
+                const editorId = annotation.id;
+                if (quillInstances.current[editorId]) {
+                    quillInstances.current[editorId].off('text-change');
+                    quillInstances.current[editorId] = null;
+                }
+            });
+        };
+    }, [annotations]);
+    // Initialize collapsed state for each annotation's comments
+    useEffect(() => {
+        const initialExpandedState = {};
+        annotations.forEach((annotation) => {
+            if (expandedComments[annotation.id] === undefined) {
+                initialExpandedState[annotation.id] = false; // Collapsed by default
+            }
+        });
+        setExpandedComments((prev) => ({
+            ...prev,
+            ...initialExpandedState,
+        }));
+    }, [annotations]);
+    const handleSaveComment = async (annotationId) => {
+        const content = commentInputs[annotationId] || '';
+        if (content.trim() && onSaveComment) {
+            console.log('AnnotationList: Saving comment for annotation:', annotationId, content);
+            await onSaveComment(annotationId, content);
+            setCommentInputs((prev) => ({ ...prev, [annotationId]: '' }));
+            const quill = quillInstances.current[annotationId];
+            if (quill) {
+                quill.setContents([]);
+            }
+        }
+    };
+    const handleShare = async (annotation) => {
+        const normalizedUrl = normalizeUrl(annotation.url);
+        const shareUrl = `https://citizenx.app/check-extension?annotationId=${annotation.id}&url=${encodeURIComponent(normalizedUrl)}`;
+        const shareText = `Check out this annotation: "${annotation.content.substring(0, 100)}..." by ${profiles[annotation.author]?.handle || 'Unknown'} #CitizenX`;
+        const isMacOS = navigator.platform.toLowerCase().includes('mac');
+        if (navigator.share && !isMacOS) {
+            try {
+                await navigator.share({
+                    title: 'CitizenX Annotation',
+                    text: shareText,
+                    url: shareUrl,
+                });
+            }
+            catch (err) {
+                console.error('AnnotationList: Share failed:', err);
+                setShowShareModal(`${shareText} ${shareUrl}`);
+            }
+        }
+        else {
+            setShowShareModal(`${shareText} ${shareUrl}`);
+        }
+    };
+    const handleCopyLink = async (shareContent) => {
+        await navigator.clipboard.writeText(shareContent);
+        alert('Link copied to clipboard!');
+        setShowShareModal(null);
+    };
+    const toggleComments = (annotationId) => {
+        setExpandedComments((prev) => ({
+            ...prev,
+            [annotationId]: !prev[annotationId],
+        }));
+    };
+    const generateShareLink = (platform, shareText, shareUrl) => {
+        const encodedText = encodeURIComponent(shareText);
+        const encodedUrl = encodeURIComponent(shareUrl);
+        switch (platform) {
+            case 'x':
+                return `https://twitter.com/intent/tweet?text=${encodedText}&url=${encodedUrl}`;
+            case 'facebook':
+                return `https://www.facebook.com/sharer/sharer.php?u=${encodedUrl}&quote=${encodedText}`;
+            case 'whatsapp':
+                return `https://api.whatsapp.com/send?text=${encodedText}%20${encodedUrl}`;
+            case 'telegram':
+                return `https://t.me/share/url?url=${encodedUrl}&text=${encodedText}`;
+            case 'email':
+                return `mailto:?subject=CitizenX%20Annotation&body=${encodedText}%20${encodedUrl}`;
+            default:
+                return '#';
+        }
+    };
+    return (React.createElement("div", { className: "annotation-list" },
+        annotations.map((annotation) => {
+            const authorProfile = profiles[annotation.author] || null;
+            const authorHandle = authorProfile ? authorProfile.handle : 'Unknown';
+            console.log('AnnotationList: Rendering annotation:', annotation, 'Author handle:', authorHandle);
+            const sortedComments = annotation.comments ? [...annotation.comments].sort((a, b) => a.timestamp - b.timestamp) : [];
+            const isExpanded = expandedComments[annotation.id] || false;
+            return (React.createElement("div", { key: annotation.id, className: "annotation-item", "data-annotation-id": annotation.id },
+                React.createElement("div", { className: "annotation-header" },
+                    React.createElement("span", { className: "annotation-author" }, authorHandle),
+                    React.createElement("span", { className: "annotation-timestamp" },
+                        ' ',
+                        "\u2022 ",
+                        new Date(annotation.timestamp).toLocaleString()),
+                    React.createElement("button", { onClick: () => onDelete(annotation.id), className: "delete-button" }, "Delete"),
+                    React.createElement("button", { onClick: () => handleShare(annotation), className: "share-button" }, "Share")),
+                React.createElement("div", { className: "annotation-content", dangerouslySetInnerHTML: { __html: annotation.content || 'No content' } }),
+                sortedComments.length > 0 && (React.createElement(React.Fragment, null,
+                    React.createElement("button", { className: "comments-toggle-button", "data-annotation-id": annotation.id, "data-comment-count": sortedComments.length, onClick: () => toggleComments(annotation.id) }, isExpanded ? '− Hide comments' : `+ Show ${sortedComments.length} comment${sortedComments.length > 1 ? 's' : ''}`),
+                    isExpanded && (React.createElement("div", { className: "comments-section" }, sortedComments.map((comment) => {
+                        const commentAuthor = profiles[comment.author] || null;
+                        const commentAuthorHandle = commentAuthor ? commentAuthor.handle : 'Unknown';
+                        return (React.createElement("div", { key: comment.id, className: "comment-item" },
+                            React.createElement("div", { className: "comment-group" },
+                                React.createElement("div", { className: "comment-header" },
+                                    React.createElement("span", { className: "comment-author" }, commentAuthorHandle),
+                                    React.createElement("span", { className: "comment-timestamp" },
+                                        ' ',
+                                        "\u2022 ",
+                                        new Date(comment.timestamp).toLocaleString())),
+                                React.createElement("div", { className: "comment-content", dangerouslySetInnerHTML: { __html: comment.content } }))));
+                    }))))),
+                onSaveComment && (React.createElement("div", { className: "add-comment-section" },
+                    React.createElement("div", { ref: (el) => (editorRefs.current[annotation.id] = el), className: "quill-editor" }),
+                    React.createElement("button", { onClick: () => handleSaveComment(annotation.id), disabled: !commentInputs[annotation.id]?.trim(), className: "add-comment-button" }, "Add Comment")))));
+        }),
+        showShareModal && (React.createElement("div", { className: "share-modal" },
+            React.createElement("div", { className: "share-modal-content" },
+                React.createElement("h3", null, "Share Annotation"),
+                React.createElement("div", { className: "share-buttons" },
+                    React.createElement("a", { href: generateShareLink('x', showShareModal.split(' ').slice(0, -1).join(' '), showShareModal.split(' ').pop() || ''), target: "_blank", rel: "noopener noreferrer", className: "share-button-social share-x", title: "Share on X" },
+                        React.createElement("svg", { viewBox: "0 0 24 24", fill: "currentColor" },
+                            React.createElement("path", { d: "M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" })),
+                        React.createElement("span", null, "X (Twitter)")),
+                    React.createElement("a", { href: generateShareLink('facebook', showShareModal.split(' ').slice(0, -1).join(' '), showShareModal.split(' ').pop() || ''), target: "_blank", rel: "noopener noreferrer", className: "share-button-social share-facebook", title: "Share on Facebook" },
+                        React.createElement("svg", { viewBox: "0 0 24 24", fill: "currentColor" },
+                            React.createElement("path", { d: "M9.198 21.5h4v-8.01h3.604l.396-3.98h-4V7.5a1 1 0 0 1 1-1h3v-4h-3a5 5 0 0 0-5 5v2.01h-2l-.396 3.98h2.396v8.01Z" })),
+                        React.createElement("span", null, "Facebook")),
+                    React.createElement("a", { href: generateShareLink('whatsapp', showShareModal.split(' ').slice(0, -1).join(' '), showShareModal.split(' ').pop() || ''), target: "_blank", rel: "noopener noreferrer", className: "share-button-social share-whatsapp", title: "Share on WhatsApp" },
+                        React.createElement("svg", { viewBox: "0 0 24 24", fill: "currentColor" },
+                            React.createElement("path", { d: "M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z" })),
+                        React.createElement("span", null, "WhatsApp")),
+                    React.createElement("a", { href: generateShareLink('telegram', showShareModal.split(' ').slice(0, -1).join(' '), showShareModal.split(' ').pop() || ''), target: "_blank", rel: "noopener noreferrer", className: "share-button-social share-telegram", title: "Share on Telegram" },
+                        React.createElement("svg", { viewBox: "0 0 24 24", fill: "currentColor" },
+                            React.createElement("path", { d: "M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z" })),
+                        React.createElement("span", null, "Telegram")),
+                    React.createElement("a", { href: generateShareLink('email', showShareModal.split(' ').slice(0, -1).join(' '), showShareModal.split(' ').pop() || ''), target: "_blank", rel: "noopener noreferrer", className: "share-button-social share-email", title: "Share via Email" },
+                        React.createElement("svg", { viewBox: "0 0 24 24", fill: "currentColor" },
+                            React.createElement("path", { d: "M20 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z" })),
+                        React.createElement("span", null, "Email")),
+                    React.createElement("button", { onClick: () => handleCopyLink(showShareModal), className: "share-button-social share-copy", title: "Copy Message" },
+                        React.createElement("svg", { viewBox: "0 0 24 24", fill: "currentColor" },
+                            React.createElement("path", { d: "M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z" })),
+                        React.createElement("span", null, "Copy Message"))),
+                React.createElement("button", { onClick: () => setShowShareModal(null), className: "share-modal-close" }, "Close"))))));
+};

@@ -1,0 +1,1 @@
+import{n as o}from"../assets/normalizeUrl.js";const a=new URLSearchParams(window.location.search),n=a.get("annotationId");n&&chrome.runtime.sendMessage({type:"HIGHLIGHT_ANNOTATION",annotationId:n,url:o(window.location.href)});

@@ -1,0 +1,37 @@
+{
+  "name": "citizenx-website-server",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "dist/gun-server.js",
+  "scripts": {
+    "build": "tsc && npm run copy-assets",
+    "start": "node dist/gun-server.js",
+    "build:client": "vite build --config vite.config.web.js --outDir static",
+    "copy-assets": "mkdir -p dist/components && cp ../shared/src/components/AnnotationList.css dist/components/ && cp ../shared/src/components/AnnotationUI.css dist/components/"
+
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "cors": "^2.8.5",
+    "gun": "^0.2020.1240",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "jsonwebtoken": "^9.0.2",
+    "cookie-parser": "^1.4.6",
+    "@citizenx/shared": "file:../shared"
+  },
+  "devDependencies": {
+    "typescript": "^5.8.3",
+    "@types/cookie" : "latest",
+    "@types/cors": "latest",
+    "@types/express": "^4.17.17",
+    "@types/node": "^20.17.30",
+    "@types/gun": "latest",
+    "@types/jsonwebtoken": "^9.0.2",
+    "@types/cookie-parser": "^1.4.3",
+    "@types/react": "^18.3.20",
+    "@types/react-dom": "^18.3.6",
+    "vite": "^5.4.18",
+    "vite-plugin-static-copy": "^1.0.6"
+  }
+}
