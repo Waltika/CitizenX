@@ -149,7 +149,13 @@ export const AnnotationList: React.FC<AnnotationListProps> = ({ annotations, pro
                 const authorHandle = authorProfile ? authorProfile.handle : 'Unknown';
                 console.log('AnnotationList: Rendering annotation:', annotation, 'Author handle:', authorHandle);
 
-                const sortedComments = annotation.comments ? [...annotation.comments].sort((a: CommentType, b: CommentType) => a.timestamp - b.timestamp) : [];
+                // Ensure comments is an array
+                const sortedComments = Array.isArray(annotation.comments)
+                    ? [...annotation.comments].sort((a: CommentType, b: CommentType) => a.timestamp - b.timestamp)
+                    : [];
+                if (!Array.isArray(annotation.comments)) {
+                    console.warn('AnnotationList: Invalid comments for annotation:', annotation.id, 'Comments:', annotation.comments);
+                }
                 const isExpanded = expandedComments[annotation.id] || false;
 
                 return (
