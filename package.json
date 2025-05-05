@@ -4,10 +4,10 @@
   "type": "module",
   "description": "Decentralized web annotation Chrome extension",
   "scripts": {
-    "build": "cd extension && vite build --config vite.config.extension.js",
+    "build": "vite build --config vite.config.extension.js",
     "test": "jest",
     "test:watch": "jest --watch",
-    "diagnostic": "node extension/scripts/libp2p-diagnostic.js"
+    "diagnostic": "node scripts/libp2p-diagnostic.js"
   },
   "repository": {
     "type": "git",
@@ -40,16 +40,26 @@
     "vite": "^5.4.18"
   },
   "dependencies": {
+    "@chainsafe/libp2p-gossipsub": "^14.1.1",
+    "@libp2p/bootstrap": "^11.0.35",
+    "@libp2p/circuit-relay-v2": "^3.2.11",
+    "@libp2p/identify": "^3.0.29",
+    "@libp2p/interface": "^2.9.0",
+    "@libp2p/webrtc": "^5.2.12",
+    "@libp2p/websockets": "^9.2.10",
+    "@noble/ed25519": "^2.2.3",
+    "@noble/hashes": "^1.8.0",
+    "@orbitdb/core": "latest",
     "base64-arraybuffer": "^1.0.2",
     "buffer": "^6.0.3",
     "ethers": "^6.13.5",
     "events": "^3.3.0",
     "gun": "^0.2020.1240",
+    "helia": "^5.3.0",
+    "it-drain": "^3.0.8",
+    "multibase": "^4.0.6",
     "quill": "^2.0.3",
     "react": "^18.2.0",
-    "react-dom": "^18.2.0",
-    "@noble/ed25519": "^2.2.3",
-    "@noble/hashes": "^1.8.0",
-    "@citizenx/shared": "file:./shared"
+    "react-dom": "^18.2.0"
   }
 }
