@@ -1,0 +1,143 @@
+/* src/components/ShareModal.css */
+
+/* Share Modal Styles */
+.share-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.75);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+    backdrop-filter: blur(3px);
+}
+
+.share-modal-content {
+    background: #ffffff;
+    padding: 2rem;
+    border-radius: 16px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+    width: 320px;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.share-modal-content h3 {
+    color: #1a202c;
+    font-size: 1.5rem;
+    margin: 0 0 2rem 0;
+    font-weight: 600;
+}
+
+.share-buttons {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1rem;
+    margin-bottom: 2rem;
+    width: 100%;
+}
+
+.share-button-social {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    padding: 1rem;
+    background: #f7fafc;
+    color: #2c7a7b;
+    border: none;
+    border-radius: 12px;
+    cursor: pointer;
+    text-decoration: none;
+    transition: all 0.2s ease;
+}
+
+.share-button-social:hover {
+    background: #e6fffa;
+    transform: translateY(-2px);
+}
+
+.share-button-social svg {
+    width: 24px;
+    height: 24px;
+    transition: transform 0.2s ease;
+}
+
+.share-button-social:hover svg {
+    transform: scale(1.1);
+}
+
+.share-button-social span {
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: #4a5568;
+}
+
+/* Platform-specific colors on hover */
+.share-x:hover {
+    color: #000000;
+    background: #f7f7f7;
+}
+
+.share-facebook:hover {
+    color: #1877f2;
+    background: #e7f1ff;
+}
+
+.share-whatsapp:hover {
+    color: #25d366;
+    background: #e8fff3;
+}
+
+.share-telegram:hover {
+    color: #0088cc;
+    background: #e5f7ff;
+}
+
+.share-email:hover {
+    color: #ea4335;
+    background: #fff2f0;
+}
+
+.share-copy:hover {
+    color: #805ad5;
+    background: #f8f0ff;
+}
+
+.share-modal-close {
+    padding: 0.75rem 2rem;
+    background: #e2e8f0;
+    color: #4a5568;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 0.9rem;
+    font-weight: 500;
+    transition: all 0.2s ease;
+}
+
+.share-modal-close:hover {
+    background: #cbd5e0;
+}
+
+/* Animation for modal */
+@keyframes modalFadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.share-modal-content {
+    animation: modalFadeIn 0.3s ease-out;
+}
