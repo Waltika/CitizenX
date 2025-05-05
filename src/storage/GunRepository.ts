@@ -25,10 +25,11 @@ export class GunRepository {
     private fetchAttempts: number = 0;
     private maxFetchAttempts: number = 10; // Limit total fetch attempts
     private initializationResolve: ((value?: void | PromiseLike<void>) => void) | null = null;
+    private initialPeers: string[] = ['https://citizen-x-bootsrap.onrender.com/gun']; // Store initial peers for fallback
 
     constructor(options: GunRepositoryOptions = {}) {
         this.options = {
-            peers: options.peers || ['https://citizen-x-bootsrap.onrender.com/gun'],
+            peers: options.peers || this.initialPeers,
             radisk: options.radisk ?? true,
         };
         this.currentPeers = this.options.peers;
@@ -39,6 +40,9 @@ export class GunRepository {
             file: 'gun-data',
             webrtc: true,
         });
+
+        // Start periodic connection check
+        this.startConnectionCheck();
     }
 
     private throttleLog(message: string, interval: number = 60000): boolean {
@@ -112,9 +116,27 @@ export class GunRepository {
 
     private cleanupListeners: (() => void) | null = null;
 
+    private startConnectionCheck(): void {
+        // Check connection every 30 seconds
+        setInterval(() => {
+            if (!this.isConnected) {
+                console.log('GunRepository: Connection lost, attempting to reconnect...');
+                // Ensure initial peers are always included
+                const updatedPeers = [...new Set([...this.currentPeers, ...this.initialPeers])];
+                if (!this.arraysEqual(updatedPeers, this.currentPeers)) {
+                    this.currentPeers = updatedPeers;
+                    console.log('GunRepository: Reverted to initial peers:', this.currentPeers);
+                    this.gun.opt({ peers: this.currentPeers });
+                }
+                // Trigger peer discovery to find new peers
+                this.discoverPeers();
+            }
+        }, 30 * 1000);
+    }
+
     private discoverPeers(): void {
         this.fetchKnownPeers().then((peers) => {
-            const updatedPeers = [...new Set([...this.currentPeers, ...peers])];
+            const updatedPeers = [...new Set([...this.currentPeers, ...peers, ...this.initialPeers])]; // Always include initial peers
             if (this.arraysEqual(updatedPeers, this.currentPeers)) {
                 console.log('GunRepository: Initial peer list unchanged:', this.currentPeers);
                 return;
@@ -148,7 +170,7 @@ export class GunRepository {
             }
 
             this.fetchKnownPeers().then((peers) => {
-                const updatedPeers = [...new Set([...this.currentPeers, ...peers])];
+                const updatedPeers = [...new Set([...this.currentPeers, ...peers, ...this.initialPeers])]; // Always include initial peers
                 if (this.arraysEqual(updatedPeers, this.currentPeers)) {
                     if (this.throttleLog('Peer list unchanged after update')) {
                         console.log('GunRepository: Peer list unchanged after update:', this.currentPeers);
@@ -235,7 +257,7 @@ export class GunRepository {
     }
 
     addPeers(newPeers: string[]): void {
-        const updatedPeers = [...new Set([...this.currentPeers, ...newPeers])];
+        const updatedPeers = [...new Set([...this.currentPeers, ...newPeers, ...this.initialPeers])];
         if (this.arraysEqual(updatedPeers, this.currentPeers)) {
             console.log('GunRepository: No new peers to add:', this.currentPeers);
             return;
@@ -341,7 +363,7 @@ export class GunRepository {
             let hasNewData = false;
 
             await new Promise<void>((resolve) => {
-                annotationNode.map().once(async (annotation: any) => {
+                const onData = async (annotation: any) => {
                     if (!annotation) return;
                     if (loadedAnnotations.has(annotation.id)) return;
                     loadedAnnotations.add(annotation.id);
@@ -364,7 +386,7 @@ export class GunRepository {
 
                     const annotationData = {
                         id: annotation.id,
-                        url: annotation.url,
+                        url: annotation.url || url, // Fallback to the queried URL if url is missing
                         content: annotation.content,
                         author: annotation.author,
                         timestamp: annotation.timestamp,
@@ -372,7 +394,9 @@ export class GunRepository {
                     };
                     annotations.push(annotationData);
                     console.log('GunRepository: Loaded annotation:', annotationData);
-                });
+                };
+
+                annotationNode.map().once(onData);
 
                 setTimeout(() => {
                     console.log('GunRepository: Initial annotations loaded for URL:', url, annotations, 'Has new data:', hasNewData, 'Attempt:', attempt);
@@ -394,7 +418,7 @@ export class GunRepository {
             }
             this.annotationCallbacks.get(url)!.push(callback);
 
-            annotationNode.map().on(async (annotation: any, key: string) => {
+            const onUpdate = async (annotation: any, key: string) => {
                 console.log('Real-time update received for URL:', url, 'Annotation:', annotation);
                 if (annotation) {
                     const comments: Comment[] = await new Promise((resolveComments) => {
@@ -415,7 +439,7 @@ export class GunRepository {
                     const updatedAnnotations = annotations.filter(a => a.id !== annotation.id);
                     updatedAnnotations.push({
                         id: annotation.id,
-                        url: annotation.url,
+                        url: annotation.url || url, // Fallback to the queried URL
                         content: annotation.content,
                         author: annotation.author,
                         timestamp: annotation.timestamp,
@@ -435,10 +459,27 @@ export class GunRepository {
                     const callbacks = this.annotationCallbacks.get(url) || [];
                     callbacks.forEach(cb => cb([...annotations]));
                 }
-            });
+            };
+
+            annotationNode.map().on(onUpdate);
+
+            // Store the listener cleanup function
+            this.annotationCallbacks.get(url)!.cleanup = () => {
+                annotationNode.map().off();
+            };
         }
 
         return [...annotations];
+    }
+
+    // Cleanup method to remove listeners for a specific URL
+    cleanupAnnotationsListeners(url: string): void {
+        const callbacks = this.annotationCallbacks.get(url);
+        if (callbacks && callbacks.cleanup) {
+            callbacks.cleanup();
+            this.annotationCallbacks.delete(url);
+            console.log('GunRepository: Cleaned up listeners for URL:', url);
+        }
     }
 
     async saveAnnotation(annotation: Annotation): Promise<void> {

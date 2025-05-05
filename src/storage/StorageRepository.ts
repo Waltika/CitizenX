@@ -99,11 +99,11 @@ class StorageRepository {
         return this.repository.getProfile(did);
     }
 
-    async getAnnotations(url: string): Promise<Annotation[]> {
+    async getAnnotations(url: string, callback?: (annotations: Annotation[]) => void): Promise<Annotation[]> {
         await this.initialize();
         const normalizedUrl = this.normalizeUrl(url);
         console.log('StorageRepository: Fetching annotations for normalized URL:', normalizedUrl);
-        return this.repository.getAnnotations(normalizedUrl);
+        return this.repository.getAnnotations(normalizedUrl, callback);
     }
 
     async saveAnnotation(annotation: Annotation): Promise<void> {
@@ -122,6 +122,11 @@ class StorageRepository {
         await this.initialize();
         const normalizedUrl = this.normalizeUrl(url);
         await this.repository.saveComment(normalizedUrl, annotationId, comment);
+    }
+
+    // Expose cleanup method to delegate to GunRepository
+    cleanupAnnotationsListeners(url: string): void {
+        this.repository.cleanupAnnotationsListeners(url);
     }
 }
 

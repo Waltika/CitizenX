@@ -276,6 +276,7 @@ export const AnnotationUI: React.FC<AnnotationUIProps> = ({ url, isPopupUrl }) =
                     profiles={profiles}
                     onDelete={handleDeleteAnnotation}
                     onSaveComment={isPopupUrl || !did || annotationsLoading ? undefined : handleSaveComment}
+                    currentUrl={url} // Pass the current URL as a prop
                 />
             </div>
             <div className="logo-container">

@@ -50,7 +50,11 @@ export const useAnnotations = ({ url, did }: UseAnnotationsProps): UseAnnotation
         setLoading(true);
         setError(null);
 
-        storage.getAnnotations(normalizedUrl).then((fetchedAnnotations) => {
+        const updateAnnotations = (newAnnotations: Annotation[]) => {
+            setAnnotations(newAnnotations);
+        };
+
+        storage.getAnnotations(normalizedUrl, updateAnnotations).then((fetchedAnnotations) => {
             console.log('useAnnotations: Fetched annotations:', fetchedAnnotations);
             setAnnotations(fetchedAnnotations);
 
@@ -76,6 +80,12 @@ export const useAnnotations = ({ url, did }: UseAnnotationsProps): UseAnnotation
         }).finally(() => {
             setLoading(false);
         });
+
+        // Cleanup listeners on unmount or URL change
+        return () => {
+            console.log('useAnnotations: Cleaning up listeners for URL:', normalizedUrl);
+            storage.cleanupAnnotationsListeners(normalizedUrl);
+        };
     }, [url, storage, storageLoading, storageError]);
 
     const handleSaveAnnotation = useCallback(async (content: string) => {
@@ -85,6 +95,10 @@ export const useAnnotations = ({ url, did }: UseAnnotationsProps): UseAnnotation
 
         if (!storage) {
             throw new Error('Storage not initialized');
+        }
+
+        if (!url) {
+            throw new Error('No URL provided for annotation');
         }
 
         const annotation: Annotation = {
@@ -105,6 +119,10 @@ export const useAnnotations = ({ url, did }: UseAnnotationsProps): UseAnnotation
             throw new Error('Storage not initialized');
         }
 
+        if (!url) {
+            throw new Error('No URL provided for deletion');
+        }
+
         await storage.deleteAnnotation(normalizeUrl(url), annotationId);
         setAnnotations((prev) => prev.filter((annotation) => annotation.id !== annotationId));
     }, [url, storage]);
@@ -116,6 +134,10 @@ export const useAnnotations = ({ url, did }: UseAnnotationsProps): UseAnnotation
 
         if (!storage) {
             throw new Error('Storage not initialized');
+        }
+
+        if (!url) {
+            throw new Error('No URL provided for comment');
         }
 
         const comment: Comment = {

@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Annotation, Profile } from '../types';
 import { normalizeUrl } from '../shared/utils/normalizeUrl';
+import { shortenUrl } from '../utils/shortenUrl';
+import { stripHtml } from '../utils/stripHtml';
 import Quill from 'quill';
 import './AnnotationList.css';
 
@@ -9,53 +11,17 @@ interface AnnotationListProps {
     profiles: Record<string, Profile>;
     onDelete: (id: string) => Promise<void>;
     onSaveComment?: (annotationId: string, content: string) => Promise<void>;
+    currentUrl: string;
 }
 
-export const AnnotationList: React.FC<AnnotationListProps> = ({ annotations, profiles, onDelete, onSaveComment }) => {
+export const AnnotationList: React.FC<AnnotationListProps> = ({ annotations, profiles, onDelete, onSaveComment, currentUrl }) => {
     const [commentInputs, setCommentInputs] = useState<Record<string, string>>({});
     const [showShareModal, setShowShareModal] = useState<string | null>(null);
+    const [shareLoading, setShareLoading] = useState<boolean>(false);
+    const [shareError, setShareError] = useState<string | null>(null);
     const editorRefs = useRef<Record<string, HTMLDivElement | null>>({});
     const quillInstances = useRef<Record<string, Quill | null>>({});
     const [expandedComments, setExpandedComments] = useState<Record<string, boolean>>({});
-
-    // Initialize Quill editors for each comment
-    useEffect(() => {
-        annotations.forEach((annotation) => {
-            const editorId = annotation.id;
-            const editorElement = editorRefs.current[editorId];
-            if (editorElement && !quillInstances.current[editorId]) {
-                quillInstances.current[editorId] = new Quill(editorElement, {
-                    theme: 'snow',
-                    modules: {
-                        toolbar: [
-                            ['bold', 'italic', 'underline'],
-                            [{ 'list': 'ordered' }, { 'list': 'bullet' }],
-                            ['link']
-                        ]
-                    },
-                    placeholder: 'Add a comment...'
-                });
-
-                quillInstances.current[editorId]!.on('text-change', () => {
-                    const content = quillInstances.current[editorId]!.root.innerHTML || '';
-                    setCommentInputs((prev) => ({
-                        ...prev,
-                        [editorId]: content === '<p><br></p>' ? '' : content
-                    }));
-                });
-            }
-        });
-
-        return () => {
-            annotations.forEach((annotation) => {
-                const editorId = annotation.id;
-                if (quillInstances.current[editorId]) {
-                    quillInstances.current[editorId]!.off('text-change');
-                    quillInstances.current[editorId] = null;
-                }
-            });
-        };
-    }, [annotations]);
 
     // Initialize collapsed state for each annotation's comments
     useEffect(() => {
@@ -72,6 +38,89 @@ export const AnnotationList: React.FC<AnnotationListProps> = ({ annotations, pro
         }));
     }, [annotations]);
 
+    // Separate useEffect for initializing Quill editors after refs are set
+    useEffect(() => {
+        const initializeQuillEditors = () => {
+            annotations.forEach((annotation) => {
+                const editorId = annotation.id;
+                const editorElement = editorRefs.current[editorId];
+                if (editorElement && !quillInstances.current[editorId]) {
+                    console.log(`Initializing Quill editor for annotation ${editorId}`);
+                    // Create a wrapper div to hold the Quill editor and toolbar
+                    const wrapper = document.createElement('div');
+                    wrapper.className = 'quill-wrapper';
+                    editorElement.appendChild(wrapper);
+
+                    try {
+                        // Initialize Quill editor
+                        quillInstances.current[editorId] = new Quill(wrapper, {
+                            theme: 'snow',
+                            modules: {
+                                toolbar: [
+                                    ['bold', 'italic', 'underline'],
+                                    [{ 'list': 'ordered' }, { 'list': 'bullet' }],
+                                    ['link']
+                                ]
+                            },
+                            placeholder: 'Add a comment...'
+                        });
+
+                        quillInstances.current[editorId]!.on('text-change', () => {
+                            const content = quillInstances.current[editorId]!.root.innerHTML || '';
+                            setCommentInputs((prev) => ({
+                                ...prev,
+                                [editorId]: content === '<p><br></p>' ? '' : content
+                            }));
+                        });
+                    } catch (error) {
+                        console.error(`Failed to initialize Quill editor for annotation ${editorId}:`, error);
+                    }
+                } else if (!editorElement) {
+                    console.warn(`Editor element not found for annotation ${editorId}`);
+                }
+            });
+        };
+
+        // Delay initialization to ensure DOM is fully rendered
+        const timer = setTimeout(initializeQuillEditors, 0);
+
+        // Clean up Quill editors for removed annotations
+        const currentAnnotationIds = new Set(annotations.map((annotation) => annotation.id));
+        Object.keys(quillInstances.current).forEach((editorId) => {
+            if (!currentAnnotationIds.has(editorId) && quillInstances.current[editorId]) {
+                console.log(`Cleaning up Quill editor for removed annotation ${editorId}`);
+                // Remove the Quill editor's DOM elements
+                const editorElement = editorRefs.current[editorId];
+                if (editorElement) {
+                    editorElement.innerHTML = ''; // Clear the DOM
+                }
+                // Remove the text-change listener and nullify the instance
+                quillInstances.current[editorId]!.off('text-change');
+                quillInstances.current[editorId] = null;
+                delete quillInstances.current[editorId];
+                delete editorRefs.current[editorId];
+            }
+        });
+
+        // Cleanup on unmount
+        return () => {
+            clearTimeout(timer);
+            Object.keys(quillInstances.current).forEach((editorId) => {
+                console.log(`Cleaning up Quill editor on unmount for annotation ${editorId}`);
+                const editorElement = editorRefs.current[editorId];
+                if (editorElement) {
+                    editorElement.innerHTML = ''; // Clear the DOM
+                }
+                if (quillInstances.current[editorId]) {
+                    quillInstances.current[editorId]!.off('text-change');
+                    quillInstances.current[editorId] = null;
+                }
+            });
+            quillInstances.current = {};
+            editorRefs.current = {};
+        };
+    }, [annotations]);
+
     const handleSaveComment = async (annotationId: string) => {
         const content = commentInputs[annotationId] || '';
         if (content.trim() && onSaveComment) {
@@ -86,25 +135,43 @@ export const AnnotationList: React.FC<AnnotationListProps> = ({ annotations, pro
     };
 
     const handleShare = async (annotation: Annotation) => {
-        const normalizedUrl = normalizeUrl(annotation.url);
-        const shareUrl = `https://citizenx.app/check-extension?annotationId=${annotation.id}&url=${encodeURIComponent(normalizedUrl)}`;
-        const shareText = `Check out this annotation: "${annotation.content.substring(0, 100)}..." by ${profiles[annotation.author]?.handle || 'Unknown'} #CitizenX`;
-
-        const isMacOS = navigator.platform.toLowerCase().includes('mac');
-
-        if (navigator.share && !isMacOS) {
-            try {
-                await navigator.share({
-                    title: 'CitizenX Annotation',
-                    text: shareText,
-                    url: shareUrl,
-                });
-            } catch (err) {
-                console.error('AnnotationList: Share failed:', err);
-                setShowShareModal(`${shareText} ${shareUrl}`);
+        setShareLoading(true);
+        setShareError(null);
+        try {
+            // Use annotation.url if defined, otherwise fall back to currentUrl
+            const urlToNormalize = annotation.url || currentUrl;
+            if (!urlToNormalize) {
+                throw new Error('No URL available for sharing');
             }
-        } else {
-            setShowShareModal(`${shareText} ${shareUrl}`);
+            const normalizedUrl = normalizeUrl(urlToNormalize);
+            const longUrl = `https://citizenx.app/check-extension?annotationId=${annotation.id}&url=${encodeURIComponent(normalizedUrl)}`;
+            const shortUrl = await shortenUrl(longUrl);
+            const plainContent = stripHtml(annotation.content);
+            const truncatedContent = plainContent.trim()
+                ? (plainContent.length > 100 ? plainContent.substring(0, 100) + "..." : plainContent)
+                : "No content available";
+            const shareText = `Check out this annotation: "${truncatedContent}" by ${profiles[annotation.author]?.handle || 'Unknown'} #CitizenX`;
+            setShowShareModal(`${shareText} ${shortUrl}`);
+        } catch (err) {
+            console.error('AnnotationList: Failed to shorten URL:', err);
+            setShareError('Failed to shorten URL');
+            // Use annotation.url if defined, otherwise fall back to currentUrl
+            const urlToNormalize = annotation.url || currentUrl;
+            let longUrl = '';
+            if (urlToNormalize) {
+                const normalizedUrl = normalizeUrl(urlToNormalize);
+                longUrl = `https://citizenx.app/check-extension?annotationId=${annotation.id}&url=${encodeURIComponent(normalizedUrl)}`;
+            } else {
+                longUrl = 'https://citizenx.app'; // Fallback to a generic URL if no URL is available
+            }
+            const plainContent = stripHtml(annotation.content);
+            const truncatedContent = plainContent.trim()
+                ? (plainContent.length > 100 ? plainContent.substring(0, 100) + "..." : plainContent)
+                : "No content available";
+            const shareText = `Check out this annotation: "${truncatedContent}" by ${profiles[annotation.author]?.handle || 'Unknown'} #CitizenX`;
+            setShowShareModal(`${shareText} ${longUrl}`); // Fallback to long URL
+        } finally {
+            setShareLoading(false);
         }
     };
 
@@ -162,55 +229,53 @@ export const AnnotationList: React.FC<AnnotationListProps> = ({ annotations, pro
                             <button onClick={() => onDelete(annotation.id)} className="delete-button">
                                 Delete
                             </button>
-                            <button onClick={() => handleShare(annotation)} className="share-button">
-                                Share
+                            <button onClick={() => handleShare(annotation)} className="share-button" disabled={shareLoading}>
+                                {shareLoading ? 'Shortening...' : 'Share'}
                             </button>
                         </div>
                         <div
                             className="annotation-content"
                             dangerouslySetInnerHTML={{ __html: annotation.content || 'No content' }}
                         />
-                        {sortedComments.length > 0 && (
-                            <>
-                                <button
-                                    className="comments-toggle-button"
-                                    onClick={() => toggleComments(annotation.id)}
-                                >
-                                    {isExpanded ? '−' : '+'} {isExpanded ? 'Hide comments' : `Show ${sortedComments.length} comment${sortedComments.length > 1 ? 's' : ''}`}
-                                </button>
-                                {isExpanded && (
-                                    <div className="comments-section">
-                                        {sortedComments.map((comment) => {
-                                            const commentAuthor = profiles[comment.author] || null;
-                                            const commentAuthorHandle = commentAuthor ? commentAuthor.handle : 'Unknown';
-                                            return (
-                                                <div key={comment.id} className="comment-item">
-                                                    <div className="comment-group">
-                                                        <div className="comment-header">
-                                                            <span className="comment-author">{commentAuthorHandle}</span>
-                                                            <span className="comment-timestamp">
-                                                                {' '}
-                                                                • {new Date(comment.timestamp).toLocaleString()}
-                                                            </span>
-                                                        </div>
-                                                        <div
-                                                            className="comment-content"
-                                                            dangerouslySetInnerHTML={{ __html: comment.content }}
-                                                        />
+                        <div className="comments-container">
+                            <button
+                                className="comments-toggle-button"
+                                onClick={() => toggleComments(annotation.id)}
+                            >
+                                {isExpanded ? '−' : '+'} {isExpanded ? 'Hide comments' : `Show ${sortedComments.length} comment${sortedComments.length > 1 ? 's' : ''}`}
+                            </button>
+                            {isExpanded && sortedComments.length > 0 && (
+                                <div className="comments-section">
+                                    {sortedComments.map((comment) => {
+                                        const commentAuthor = profiles[comment.author] || null;
+                                        const commentAuthorHandle = commentAuthor ? commentAuthor.handle : 'Unknown';
+                                        return (
+                                            <div key={comment.id} className="comment-item">
+                                                <div className="comment-group">
+                                                    <div className="comment-header">
+                                                        <span className="comment-author">{commentAuthorHandle}</span>
+                                                        <span className="comment-timestamp">
+                                                            {' '}
+                                                            • {new Date(comment.timestamp).toLocaleString()}
+                                                        </span>
                                                     </div>
+                                                    <div
+                                                        className="comment-content"
+                                                        dangerouslySetInnerHTML={{ __html: comment.content }}
+                                                    />
                                                 </div>
-                                            );
-                                        })}
-                                    </div>
-                                )}
-                            </>
-                        )}
-                        {onSaveComment && (
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            )}
                             <div className="add-comment-section">
                                 <div
                                     ref={(el) => (editorRefs.current[annotation.id] = el)}
                                     className="quill-editor"
                                 ></div>
+                            </div>
+                            {onSaveComment && (
                                 <button
                                     onClick={() => handleSaveComment(annotation.id)}
                                     disabled={!commentInputs[annotation.id]?.trim()}
@@ -218,8 +283,8 @@ export const AnnotationList: React.FC<AnnotationListProps> = ({ annotations, pro
                                 >
                                     Add Comment
                                 </button>
-                            </div>
-                        )}
+                            )}
+                        </div>
                     </div>
                 );
             })}
@@ -228,6 +293,7 @@ export const AnnotationList: React.FC<AnnotationListProps> = ({ annotations, pro
                 <div className="share-modal">
                     <div className="share-modal-content">
                         <h3>Share Annotation</h3>
+                        {shareError && <p className="error-text">{shareError}</p>}
                         <div className="share-buttons">
                             <a
                                 href={generateShareLink('x', showShareModal.split(' ').slice(0, -1).join(' '), showShareModal.split(' ').pop() || '')}
@@ -245,7 +311,7 @@ export const AnnotationList: React.FC<AnnotationListProps> = ({ annotations, pro
                                 href={generateShareLink('facebook', showShareModal.split(' ').slice(0, -1).join(' '), showShareModal.split(' ').pop() || '')}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="share-button-social share-whatsapp"
+                                className="share-button-social share-facebook"
                                 title="Share on Facebook"
                             >
                                 <svg viewBox="0 0 24 24" fill="currentColor">

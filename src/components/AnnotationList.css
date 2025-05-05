@@ -125,13 +125,21 @@
     background-color: #fff;
 }
 
-.quill-editor .ql-toolbar {
+.quill-wrapper {
+    width: 100%;
+    margin-bottom: 0.5rem;
+    font-size: 0.8rem;
+    color: #333;
+    background-color: #fff;
+}
+
+.quill-wrapper .ql-toolbar {
     border: 1px solid #e5e7eb;
     border-radius: 5px 5px 0 0;
     background-color: #f5f7fa;
 }
 
-.quill-editor .ql-container {
+.quill-wrapper .ql-container {
     border: 1px solid #e5e7eb;
     border-top: none;
     border-radius: 0 0 5px 5px;

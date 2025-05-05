@@ -30,7 +30,7 @@
     "https://citizenx.app/*"
   ],
   "content_security_policy": {
-    "extension_pages": "script-src 'self'; object-src 'self'; connect-src 'self' ws: wss: https://dns.google https://cloudflare-dns.com"
+    "extension_pages": "script-src 'self'; object-src 'self'; connect-src 'self' ws: wss: https://dns.google https://cloudflare-dns.com https://citizen-x-bootsrap.onrender.com"
   },
   "homepage_url": "https://citizenx.app"
 }
