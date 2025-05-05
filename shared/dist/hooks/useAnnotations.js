@@ -1,0 +1,212 @@
+import { useState, useEffect, useCallback } from 'react';
+import { useStorage } from './useStorage.js';
+export const useAnnotations = ({ url, did }) => {
+    const { storage } = useStorage();
+    const [annotationsByUrl, setAnnotationsByUrl] = useState({});
+    const [profiles, setProfiles] = useState({});
+    const [error, setError] = useState(null);
+    const [loading, setLoading] = useState(false);
+    const [isFetching, setIsFetching] = useState(false);
+    const [debounceTimeout, setDebounceTimeout] = useState(null);
+    // Fetch annotations (only depends on storage and url)
+    useEffect(() => {
+        if (!storage) {
+            console.log('useAnnotations: Waiting for storage to initialize');
+            return;
+        }
+        console.log('useAnnotations: Starting fetch for annotations');
+        if (debounceTimeout) {
+            clearTimeout(debounceTimeout);
+        }
+        const timeout = setTimeout(async () => {
+            setLoading(true);
+            setIsFetching(true);
+            try {
+                const loadedAnnotations = await storage.getAnnotations(url, (updatedAnnotations) => {
+                    setAnnotationsByUrl((prev) => ({
+                        ...prev,
+                        [url]: updatedAnnotations,
+                    }));
+                });
+                setAnnotationsByUrl((prev) => ({
+                    ...prev,
+                    [url]: loadedAnnotations,
+                }));
+            }
+            catch (err) {
+                console.error('useAnnotations: Failed to fetch annotations:', err);
+                setError('Failed to fetch annotations');
+            }
+            finally {
+                setLoading(false);
+                setIsFetching(false);
+                console.log('useAnnotations: Set loading to false (isFetching false)');
+            }
+        }, 300);
+        setDebounceTimeout(timeout);
+        return () => {
+            if (timeout) {
+                clearTimeout(timeout);
+            }
+        };
+    }, [storage, url]); // Removed did from dependencies
+    // Fetch profiles (depends on storage, did, and annotations)
+    useEffect(() => {
+        if (!storage || !did || !annotationsByUrl[url])
+            return;
+        const fetchProfiles = async () => {
+            try {
+                const authorDIDs = [...new Set(annotationsByUrl[url].map((ann) => ann.author))];
+                const profilePromises = authorDIDs.map(async (authorDID) => {
+                    if (!profiles[authorDID]) {
+                        const profile = await storage.getProfile(authorDID);
+                        if (profile) {
+                            console.log('useAnnotations: Loaded profile for DID:', authorDID, profile);
+                            return { did: authorDID, profile };
+                        }
+                    }
+                    return null;
+                });
+                const loadedProfiles = (await Promise.all(profilePromises)).filter((p) => p !== null);
+                const newProfiles = loadedProfiles.reduce((acc, { did, profile }) => {
+                    acc[did] = { did, handle: profile.handle, profilePicture: profile.profilePicture };
+                    return acc;
+                }, {});
+                setProfiles((prev) => ({
+                    ...prev,
+                    ...newProfiles,
+                }));
+                console.log('useAnnotations: Initial profiles loaded:', newProfiles);
+            }
+            catch (err) {
+                console.error('useAnnotations: Failed to fetch profiles:', err);
+                setError('Failed to fetch profiles');
+            }
+        };
+        fetchProfiles();
+    }, [storage, did, annotationsByUrl[url], profiles]);
+    const handleSaveAnnotation = useCallback(async (content) => {
+        if (!storage || !did) {
+            setError('Not authenticated or storage not initialized');
+            return;
+        }
+        try {
+            console.log('useAnnotations: Starting save annotation');
+            setLoading(true);
+            setIsFetching(true);
+            const timestamp = Date.now();
+            const id = `${did}-${timestamp}`;
+            const newAnnotation = {
+                id,
+                url,
+                content,
+                author: did,
+                timestamp,
+                comments: [],
+            };
+            console.log('useAnnotations: Saving annotation to storage:', newAnnotation);
+            await storage.saveAnnotation(newAnnotation);
+            setAnnotationsByUrl((prev) => ({
+                ...prev,
+                [url]: [...(prev[url] || []), newAnnotation],
+            }));
+            const updatedAnnotations = await storage.getAnnotations(url);
+            setAnnotationsByUrl((prev) => ({
+                ...prev,
+                [url]: updatedAnnotations,
+            }));
+            if (!profiles[did]) {
+                const profile = await storage.getProfile(did);
+                if (profile) {
+                    setProfiles((prev) => ({
+                        ...prev,
+                        [did]: { did, handle: profile.handle, profilePicture: profile.profilePicture },
+                    }));
+                }
+            }
+            setError(null);
+        }
+        catch (err) {
+            console.error('useAnnotations: Failed to save annotation:', err);
+            setError('Failed to save annotation');
+        }
+        finally {
+            setLoading(false);
+            setIsFetching(false);
+        }
+    }, [storage, did, url, profiles]);
+    const handleDeleteAnnotation = useCallback(async (id) => {
+        if (!storage || !did) {
+            setError('Not authenticated or storage not initialized');
+            return;
+        }
+        try {
+            setLoading(true);
+            setIsFetching(true);
+            await storage.deleteAnnotation(url, id);
+            setAnnotationsByUrl((prev) => ({
+                ...prev,
+                [url]: (prev[url] || []).filter((ann) => ann.id !== id),
+            }));
+            const updatedAnnotations = await storage.getAnnotations(url);
+            setAnnotationsByUrl((prev) => ({
+                ...prev,
+                [url]: updatedAnnotations,
+            }));
+            setError(null);
+        }
+        catch (err) {
+            console.error('useAnnotations: Failed to delete annotation:', err);
+            setError('Failed to delete annotation');
+        }
+        finally {
+            setLoading(false);
+            setIsFetching(false);
+        }
+    }, [storage, did, url]);
+    const handleSaveComment = useCallback(async (annotationId, content) => {
+        if (!storage || !did) {
+            setError('Not authenticated or storage not initialized');
+            return;
+        }
+        try {
+            setLoading(true);
+            setIsFetching(true);
+            const timestamp = Date.now();
+            const id = `${did}-${timestamp}`;
+            const newComment = {
+                id,
+                content,
+                author: did,
+                timestamp,
+            };
+            await storage.saveComment(url, annotationId, newComment);
+            // Removed local state update to prevent duplication
+            // The real-time listener in getAnnotations will handle the UI update
+            const updatedAnnotations = await storage.getAnnotations(url);
+            setAnnotationsByUrl((prev) => ({
+                ...prev,
+                [url]: updatedAnnotations,
+            }));
+            setError(null);
+        }
+        catch (err) {
+            console.error('useAnnotations: Failed to save comment:', err);
+            setError('Failed to save comment');
+        }
+        finally {
+            setLoading(false);
+            setIsFetching(false);
+        }
+    }, [storage, did, url]);
+    const currentAnnotations = annotationsByUrl[url] || [];
+    return {
+        annotations: currentAnnotations,
+        profiles,
+        error,
+        loading,
+        handleSaveAnnotation,
+        handleDeleteAnnotation,
+        handleSaveComment,
+    };
+};
