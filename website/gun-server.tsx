@@ -9,7 +9,6 @@ import ReactDOMServer from 'react-dom/server';
 import cookieParser from 'cookie-parser';
 import jwt from 'jsonwebtoken';
 import {
-    AnnotationListServer,
     AnnotationList,
     normalizeUrl,
     getAnnotationsServer,
@@ -34,7 +33,7 @@ interface AuthenticatedRequest extends Request {
 }
 
 const port = process.env.PORT || 8765;
-const publicUrl = 'https://citizen-x-0hsk.onrender.com/';
+const publicUrl = 'https://citizen-x-bootsrap.onrender.com';
 const initialPeers: string[] = [];
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
 
@@ -356,9 +355,11 @@ app.get('/view-annotations', async (req: Request, res: Response) => {
         }, {});
 
         const renderedAnnotations = ReactDOMServer.renderToString(
-            <AnnotationListServer
+            <AnnotationList
                 annotations={filteredAnnotations}
                 profiles={profiles}
+                onDelete={async () => {}} // No-op for SSR
+                onSaveComment={undefined} // Handled via API
             />
         );
 

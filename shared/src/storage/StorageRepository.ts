@@ -8,7 +8,7 @@ export class StorageRepository {
     constructor() {
         // Initial bootstrap node on Render
         const bootstrapPeers = [
-            'https://citizen-x-0hsk.onrender.com/gun',
+            'https://citizen-x-bootsrap.onrender.com/gun',
         ];
 
         this.repository = new GunRepository({

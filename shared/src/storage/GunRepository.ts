@@ -21,7 +21,7 @@ export class GunRepository {
 
     constructor(options: GunRepositoryOptions = {}) {
         this.options = {
-            peers: options.peers || ['https://citizen-x-0hsk.onrender.com/gun'], // Updated to use the Render server
+            peers: options.peers || ['https://citizen-x-bootsrap.onrender.com/gun'], // Updated to use the Render server
             radisk: options.radisk ?? true,
         };
         this.gun = Gun({

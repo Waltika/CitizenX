@@ -1,6 +1,5 @@
 // Export components
 export { AnnotationList } from './components/AnnotationList.js';
-export { AnnotationListServer } from './components/AnnotationListServer.js';
 export { Comment } from './components/Comment.js';
 
 // Export hooks
