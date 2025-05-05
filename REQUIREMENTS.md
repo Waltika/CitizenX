@@ -29,8 +29,13 @@ A decentralized Chrome extension for annotating websites in order to bring a kno
     - **Status**: Implemented. The `/view-annotations` page displays annotations, with a clickable link to the annotated page (opens in a new tab). Styled to match the CitizenX design (white `#fff`, teal `#2c7a7b`, Inter font), with a loading spinner.
     - **Mobile Detection**: Added a mobile check (`/android|iphone|ipad|ipod|mobile/i.test(userAgent)`) in `check-extension.js` to redirect mobile browsers (e.g., Chrome on Android) to `/view-annotations`, as they cannot install extensions.
     - **Author Display Fix**: Fixed an issue where authors were displayed as "Unknown" by updating the `/api/annotations` endpoint on the Render server to fetch user profiles from Gun.js with retries (up to 5 attempts) and in-memory caching (5-minute TTL), ensuring the correct `authorHandle` is included in the response.
+    - **SSR Limitation**: The `/view-annotations` endpoint currently fails to render due to `AnnotationList` using React hooks (`useState`), which are not supported in server-side rendering. A temporary workaround was implemented by creating `AnnotationListServer.tsx`, but this refactoring was reverted to focus on scalability and security.
 12. Both on the annotation feature under 11 and on the sharing functionality, provide a screenshot of the top of the page being annotated (I guess store it along the annotations but only once).
     - **Status**: Pending.
+
+**Focus for Next Sprint**:
+- **Scalability**: Optimize Gun.js peer connections for faster real-time updates, implement server load monitoring on Render, and explore multi-node setups or pinning services to handle increased user load.
+- **Security**: Secure JWT secrets with environment variables, sanitize user inputs (annotations, comments) to prevent XSS, implement rate limiting on API endpoints (`/api/annotations`, `/api/comments`), and enhance CORS security.
 
 ## Non Functional Requirements - v1.0
 1. Except for the Chrome Extension, we want zero installation on the user's device.
@@ -63,7 +68,7 @@ A decentralized Chrome extension for annotating websites in order to bring a kno
 7. We need to find a solution for deployment between the server and the annotation extension because of the difference in time to deploy between our own server and the extension that needs to go through the Google Extension Store.
    - **Status**: Pending.
 8. At some stage, we need to discuss how to structure the project so that all functionalities of the extension version are also available on the web version from the same code base but without having bloated JavaScript running on the client side (so having the node rendering happening on the server and lightweight JavaScript on the website).
-   - **Status**: Planned. See "Reusing Node.js Code for SSR on the Website" under Future Versions for details.
+   - **Status**: Planned. See "Reusing Node.js Code for SSR on the Website" for details.
 
 ### Comment Collapsing Mechanism
 - **Description**: Add a collapse/expand mechanism to the comments section under each annotation to save space. Display comments collapsed by default with a toggle button (e.g., "+ Show X comments" to expand, "− Hide comments" to collapse).
@@ -92,7 +97,26 @@ A decentralized Chrome extension for annotating websites in order to bring a kno
   - Add minimal client-side JavaScript for toggling comments.
   - Test SSR and client-side interactivity.
 
-**Status**: Planned, to be implemented later.
+**Status**: Planned. An attempt to implement this was made by creating `AnnotationListServer.tsx` for SSR and optimizing `AnnotationList.tsx` for client-side rendering, but it was reverted to focus on scalability and security (see "Separate Web and Extension Rendering for Scalability and SSR Compatibility" for details).
+
+### Separate Web and Extension Rendering for Scalability and SSR Compatibility
+**Description**: To address SSR compatibility issues in Requirement 11 (e.g., `TypeError: Cannot read properties of null (reading 'useState')` due to hooks in `AnnotationList.tsx`) and prepare for scalability, we explored separating the rendering logic for the web (server-side rendering via `/view-annotations`) and the extension (client-side rendering in the side panel). This involved creating `AnnotationListServer.tsx` for SSR and keeping `AnnotationList.tsx` for client-side use, with shared logic in `@citizenx/shared`.
+
+**Rationale for Parking**:
+- **User Traction Priority**: The current focus is on attracting early adopters by maintaining a stable, consistent user experience. The unified rendering approach, despite SSR limitations, is sufficient for early beta users.
+- **Complexity vs. Benefit**: Separating web and extension rendering adds development overhead without immediate user growth benefits, as the app is in early beta and not yet facing scalability demands.
+- **New Focus**: Resources are better allocated to improving scalability (e.g., Gun.js optimization, server load handling) and security (e.g., JWT secret management, input sanitization) to prepare for future growth.
+
+**Future Version Target**:
+- **Version 2.0 (Tentative)**: Revisit this refactoring when the app reaches a larger user base (e.g., 1,000+ active users) and requires optimized SSR for sharing annotations (e.g., via `/view-annotations`) and improved performance in the extension’s side panel.
+- **Trigger for Implementation**: When user feedback indicates a need for faster sharing links (e.g., `/view-annotations` performance issues) or when the app scales to require separate optimization for web and extension contexts.
+
+**Implementation Notes**:
+- **Previous Work**: Implemented `AnnotationListServer.tsx` for SSR, updated `gun-server.tsx` to use it, and optimized `AnnotationList.tsx` for client-side rendering with dynamic CSS loading. Fixed data inconsistencies (e.g., `TypeError: w.comments is not iterable`) by adding `Array.isArray` checks and normalizing data in `GunRepository.ts`. Improved heartbeat handling in `background.ts` and ensured CSS loading in the extension. These changes were reverted to focus on scalability and security but can be restored from commit history.
+- **Next Steps**: In Version 2.0, reintroduce `AnnotationListServer.tsx` and ensure both components share a consistent UI while optimizing for their respective environments (SSR for web, client-side for extension).
+- **Dependencies**: Requires updated Vite configuration for CSS bundling in the extension and robust Gun.js data normalization to prevent data issues.
+
+**Status**: Parked for Version 2.0.
 
 ### Implementing Decentralized AI for Moderation, Ranking, and Social Features
 **Description**: To enhance the CitizenX app with moderation, ranking, and social features (e.g., recommending annotations, surfacing trending content, building user reputation systems), we plan to explore decentralized AI initiatives using machine learning. This aligns with the app’s decentralized ethos (using Gun.js) and can leverage community-driven data to train models for moderation (e.g., flagging inappropriate content), ranking (e.g., prioritizing high-quality annotations), and social features (e.g., personalized recommendations).
