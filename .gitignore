@@ -2,5 +2,12 @@ node_modules/
 *.log
 .idea/
 coverage/
-src/background/services/config.ts
-/dist/
+dist/
+extension/src/background/services/config.ts
+/shared/dist/
+/website/dist
+/extension/dist
+node_modules/
+/shared/node_modules
+/extension/node_modules
+/website/node_modules

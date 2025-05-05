@@ -1,0 +1,25 @@
+{
+  "name": "@citizenx/shared",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc"
+  },
+  "dependencies": {
+    "gun": "latest",
+    "multibase": "^4.0.6",
+    "quill": "^2.0.3",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.17.30",
+    "@types/react": "^18.3.20",
+    "@types/react-dom": "^18.3.6",
+    "typescript": "^5.8.3",
+    "@types/gun": "latest",
+    "@types/cors": "latest"
+  }
+}
