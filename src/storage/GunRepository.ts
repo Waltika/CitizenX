@@ -43,6 +43,9 @@ export class GunRepository {
 
         // Start periodic connection check
         this.startConnectionCheck();
+
+        // Start periodic cleanup job for tombstones
+        this.startCleanupJob();
     }
 
     private throttleLog(message: string, interval: number = 60000): boolean {
@@ -132,6 +135,24 @@ export class GunRepository {
                 this.discoverPeers();
             }
         }, 30 * 1000);
+    }
+
+    private startCleanupJob(): void {
+        // Run cleanup every hour
+        setInterval(async () => {
+            console.log('GunRepository: Running cleanup job for tombstones');
+            const annotationNodes = this.gun.get('annotations');
+            annotationNodes.map().once(async (data: any, url: string) => {
+                if (!url) return;
+                const annotations = annotationNodes.get(url);
+                annotations.map().once((annotation: any, id: string) => {
+                    if (annotation === null && !annotation?.isDeleted) {
+                        console.log(`GunRepository: Cleaning up tombstone without deletion flag for URL: ${url}, ID: ${id}`);
+                        annotations.get(id).put(null); // Ensure tombstone is removed or handled appropriately
+                    }
+                });
+            });
+        }, 60 * 60 * 1000); // Run every hour
     }
 
     private discoverPeers(): void {
@@ -391,6 +412,7 @@ export class GunRepository {
                         author: annotation.author,
                         timestamp: annotation.timestamp,
                         comments,
+                        isDeleted: annotation.isDeleted || false, // Add isDeleted flag
                     };
                     annotations.push(annotationData);
                     console.log('GunRepository: Loaded annotation:', annotationData);
@@ -420,7 +442,29 @@ export class GunRepository {
 
             const onUpdate = async (annotation: any, key: string) => {
                 console.log('Real-time update received for URL:', url, 'Annotation:', annotation);
-                if (annotation) {
+
+                if (annotation === null) {
+                    console.log(`Received null annotation for URL: ${url}, verifying deletion intent`);
+
+                    // Check for deletion intent
+                    const hasDeletionFlag = annotations.some(ann => ann.id === key && ann.isDeleted === true);
+
+                    if (!hasDeletionFlag) {
+                        console.log(`No deletion flag found for URL: ${url}, ignoring null update`);
+                        console.log(`Possible unintended null update for URL: ${url}, investigating further`);
+                        return; // Ignore the null update if there's no explicit deletion intent
+                    }
+
+                    // Proceed with deletion if the flag is set
+                    console.log(`Confirmed deletion for URL: ${url}, ID: ${key}`);
+                    const updatedAnnotations = annotations.filter(a => a.id !== key);
+                    annotations.splice(0, annotations.length, ...updatedAnnotations);
+                    console.log('GunRepository: Real-time deletion for URL:', url, annotations);
+
+                    const callbacks = this.annotationCallbacks.get(url) || [];
+                    callbacks.forEach(cb => cb([...annotations]));
+                } else {
+                    console.log(`Processing update for URL: ${url} with annotation:`, annotation);
                     const comments: Comment[] = await new Promise((resolveComments) => {
                         const commentList: Comment[] = [];
                         annotationNode.get(annotation.id).get('comments').map().once((comment: any) => {
@@ -444,17 +488,11 @@ export class GunRepository {
                         author: annotation.author,
                         timestamp: annotation.timestamp,
                         comments,
+                        isDeleted: annotation.isDeleted || false, // Add isDeleted flag
                     });
 
                     annotations.splice(0, annotations.length, ...updatedAnnotations);
                     console.log('GunRepository: Real-time update for URL:', url, annotations);
-
-                    const callbacks = this.annotationCallbacks.get(url) || [];
-                    callbacks.forEach(cb => cb([...annotations]));
-                } else {
-                    const updatedAnnotations = annotations.filter(a => a.id !== key);
-                    annotations.splice(0, annotations.length, ...updatedAnnotations);
-                    console.log('GunRepository: Real-time deletion for URL:', url, annotations);
 
                     const callbacks = this.annotationCallbacks.get(url) || [];
                     callbacks.forEach(cb => cb([...annotations]));
@@ -506,14 +544,24 @@ export class GunRepository {
 
     async deleteAnnotation(url: string, id: string): Promise<void> {
         return new Promise((resolve, reject) => {
-            this.gun.get('annotations').get(url).get(id).put(null, (ack: any) => {
+            // Step 1: Mark the annotation as deleted
+            this.gun.get('annotations').get(url).get(id).put({ isDeleted: true }, (ack: any) => {
                 if (ack.err) {
-                    console.error('GunRepository: Failed to delete annotation:', ack.err);
+                    console.error('GunRepository: Failed to mark annotation as deleted:', ack.err);
                     reject(new Error(ack.err));
-                } else {
-                    console.log('GunRepository: Deleted annotation:', id);
-                    resolve();
+                    return;
                 }
+
+                // Step 2: Set the annotation to null to tombstone it
+                this.gun.get('annotations').get(url).get(id).put(null, (ack: any) => {
+                    if (ack.err) {
+                        console.error('GunRepository: Failed to delete annotation:', ack.err);
+                        reject(new Error(ack.err));
+                    } else {
+                        console.log('GunRepository: Deleted annotation:', id);
+                        resolve();
+                    }
+                });
             });
         });
     }

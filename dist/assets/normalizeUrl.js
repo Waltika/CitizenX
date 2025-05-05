@@ -1,1 +1,0 @@
-function s(n){let t=n.replace(/^(https?:\/\/)+/,"https://");t=t.replace(/\/+$/,"");const e=new URL(t),r=new URLSearchParams(e.search);for(const a of r.keys())a.startsWith("utm_")&&r.delete(a);return e.search=r.toString(),e.toString()}export{s as n};
