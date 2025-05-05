@@ -1,12 +1,27 @@
-// src/storage/StorageRepository.ts
 import { GunRepository } from './GunRepository';
 import { Annotation, Comment, Profile } from '../types';
 
-export class StorageRepository {
+// Singleton instance
+class StorageRepositorySingleton {
+    private static instance: StorageRepository;
+
+    private constructor() {}
+
+    static getInstance(): StorageRepository {
+        if (!StorageRepositorySingleton.instance) {
+            StorageRepositorySingleton.instance = new StorageRepository();
+        }
+        return StorageRepositorySingleton.instance;
+    }
+}
+
+class StorageRepository {
     private repository: GunRepository;
+    private initialized: boolean = false;
+    private initializing: boolean = false;
+    private initializationPromise: Promise<void> | null = null;
 
     constructor() {
-        // Initial bootstrap node on Render
         const bootstrapPeers = [
             'https://citizen-x-bootsrap.onrender.com/gun',
         ];
@@ -15,71 +30,100 @@ export class StorageRepository {
             peers: bootstrapPeers,
             radisk: false,
         });
+    }
 
-        // Dynamically discover additional peers from knownPeers
-        this.discoverPeers();
+    private normalizeUrl(url: string): string {
+        let cleanUrl = url.replace(/^(https?:\/\/)+/, 'https://');
+        cleanUrl = cleanUrl.replace(/\/+$/, '');
+        const urlObj = new URL(cleanUrl);
+        const params = new URLSearchParams(urlObj.search);
+        for (const key of params.keys()) {
+            if (key.startsWith('utm_')) {
+                params.delete(key);
+            }
+        }
+        urlObj.search = params.toString();
+        return urlObj.toString();
     }
 
     async initialize(): Promise<void> {
-        await this.repository.initialize();
-    }
+        if (this.initialized) {
+            console.log('StorageRepository: Already initialized');
+            return;
+        }
 
-    async discoverPeers(): Promise<void> {
-        const gun = this.repository.getGunInstance();
-        const knownPeers = await new Promise<string[]>((resolve) => {
-            const peers = new Set<string>();
-            gun.get('knownPeers').map().once((peer) => {
-                if (peer && peer.url && peer.timestamp) {
-                    const now = Date.now();
-                    const age = now - peer.timestamp;
-                    if (age <= 10 * 60 * 1000) {
-                        peers.add(peer.url);
-                    }
-                }
-            });
-            setTimeout(() => resolve(Array.from(peers)), 2000);
+        if (this.initializing) {
+            console.log('StorageRepository: Initialization already in progress, waiting...');
+            return this.initializationPromise!;
+        }
+
+        console.log('StorageRepository: Initializing...');
+        this.initializing = true;
+        this.initializationPromise = this.repository.initialize().then(() => {
+            this.initialized = true;
+            this.initializing = false;
+            console.log('StorageRepository: Initialized successfully');
+        }).catch((error) => {
+            console.error('StorageRepository: Initialization failed:', error);
+            this.initialized = false;
+            this.initializing = false;
+            this.initializationPromise = null;
+            throw error;
         });
 
-        console.log('Discovered peers:', knownPeers);
-
-        if (knownPeers.length > 0) {
-            this.repository.addPeers(knownPeers);
-        }
+        return this.initializationPromise;
     }
 
     async getCurrentDID(): Promise<string | null> {
+        await this.initialize();
         return this.repository.getCurrentDID();
     }
 
     async setCurrentDID(did: string): Promise<void> {
+        await this.initialize();
         await this.repository.setCurrentDID(did);
     }
 
     async clearCurrentDID(): Promise<void> {
+        await this.initialize();
         await this.repository.clearCurrentDID();
     }
 
     async saveProfile(profile: Profile): Promise<void> {
+        await this.initialize();
         await this.repository.saveProfile(profile);
     }
 
     async getProfile(did: string): Promise<Profile | null> {
+        await this.initialize();
         return this.repository.getProfile(did);
     }
 
     async getAnnotations(url: string): Promise<Annotation[]> {
-        return this.repository.getAnnotations(url);
+        await this.initialize();
+        const normalizedUrl = this.normalizeUrl(url);
+        console.log('StorageRepository: Fetching annotations for normalized URL:', normalizedUrl);
+        return this.repository.getAnnotations(normalizedUrl);
     }
 
     async saveAnnotation(annotation: Annotation): Promise<void> {
-        await this.repository.saveAnnotation(annotation);
+        await this.initialize();
+        const normalizedAnnotation = { ...annotation, url: this.normalizeUrl(annotation.url) };
+        await this.repository.saveAnnotation(normalizedAnnotation);
     }
 
     async deleteAnnotation(url: string, id: string): Promise<void> {
-        await this.repository.deleteAnnotation(url, id);
+        await this.initialize();
+        const normalizedUrl = this.normalizeUrl(url);
+        await this.repository.deleteAnnotation(normalizedUrl, id);
     }
 
     async saveComment(url: string, annotationId: string, comment: Comment): Promise<void> {
-        await this.repository.saveComment(url, annotationId, comment);
+        await this.initialize();
+        const normalizedUrl = this.normalizeUrl(url);
+        await this.repository.saveComment(normalizedUrl, annotationId, comment);
     }
 }
+
+// Export the singleton instance
+export const storage = StorageRepositorySingleton.getInstance();

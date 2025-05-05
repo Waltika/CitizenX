@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { StorageRepository } from '../storage/StorageRepository';
+import { storage } from '../storage/StorageRepository'; // Import the singleton instance
 
 interface UseStorageReturn {
     storage: StorageRepository | null;
@@ -8,7 +8,6 @@ interface UseStorageReturn {
 }
 
 export function useStorage(): UseStorageReturn {
-    const [storage, setStorage] = useState<StorageRepository | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [isLoading, setIsLoading] = useState<boolean>(true);
 
@@ -16,15 +15,12 @@ export function useStorage(): UseStorageReturn {
         const initRepository = async () => {
             try {
                 console.log('useStorage: Starting storage initialization');
-                const repo = new StorageRepository(); // Use StorageRepository instead of GunRepository
-                await repo.initialize();
+                await storage.initialize(); // Initialize the singleton instance
                 console.log('useStorage: Storage initialized successfully');
-                setStorage(repo);
                 setError(null);
             } catch (err: any) {
                 console.error('useStorage: Failed to initialize storage:', err.message || err);
                 setError('Failed to initialize storage: ' + (err.message || 'Unknown error'));
-                setStorage(null);
             } finally {
                 setIsLoading(false);
             }

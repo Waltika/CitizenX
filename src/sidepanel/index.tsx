@@ -1,98 +1,105 @@
-// src/sidepanel/index.tsx
 import React, { useState, useEffect } from 'react';
-import { createRoot } from 'react-dom/client';
+import ReactDOM from 'react-dom/client';
 import { AnnotationUI } from '../components/AnnotationUI';
-import { normalizeUrl } from '../shared/utils/normalizeUrl';
+import { storage } from '../storage/StorageRepository'; // Import the singleton instance
 
-const App: React.FC = () => {
-    const [url, setUrl] = useState<string | null>(null);
-    const [error, setError] = useState<string | null>(null);
+function App() {
+    const [url, setUrl] = useState<string>('');
+    const [annotations, setAnnotations] = useState<any[]>([]);
+    const [profiles, setProfiles] = useState<Record<string, any>>({});
+    const [loading, setLoading] = useState<boolean>(false);
+    const [storageInitialized, setStorageInitialized] = useState<boolean>(false);
     const [isPopupUrl, setIsPopupUrl] = useState<boolean>(false);
 
-    const fetchCurrentTabUrl = async () => {
-        try {
-            const response = await new Promise<{ url?: string; error?: string }>((resolve, reject) => {
-                const timeout = setTimeout(() => {
-                    reject(new Error('Timeout: No response from background script'));
-                }, 5000); // 5-second timeout
-
-                chrome.runtime.sendMessage({ action: 'getCurrentTabUrl' }, (res: { url?: string; error?: string }) => {
-                    clearTimeout(timeout);
-                    resolve(res);
-                });
-            });
-
-            if (response && response.url) {
-                console.log('index.tsx: Fetched current tab URL:', response.url);
-                const normalizedUrl = normalizeUrl(response.url);
-                if (normalizedUrl) {
-                    setUrl(normalizedUrl);
-                    // Only treat chrome-extension:// URLs as popup URLs
-                    setIsPopupUrl(response.url.startsWith('chrome-extension://'));
-                } else {
-                    setError('Failed to normalize URL');
-                    setUrl('');
-                    setIsPopupUrl(true);
-                }
-            } else {
-                console.log('index.tsx: No URL received from background script:', response?.error || 'Unknown error');
-                setUrl('');
-                setIsPopupUrl(false);
-            }
-        } catch (err) {
-            console.error('index.tsx: Failed to get current tab URL:', err);
-            setUrl('');
-            setIsPopupUrl(false);
-        }
-    };
-
     useEffect(() => {
-        // Initial fetch
-        fetchCurrentTabUrl();
-
-        // Listen for tab changes
-        chrome.tabs.onActivated.addListener(() => {
-            console.log('index.tsx: Tab activated, fetching new URL');
-            fetchCurrentTabUrl();
+        console.log('index.tsx: Initializing storage...');
+        storage.initialize().then(() => {
+            console.log('index.tsx: Storage initialized');
+            setStorageInitialized(true);
+        }).catch((error) => {
+            console.error('index.tsx: Failed to initialize storage:', error);
         });
 
-        // Listen for window focus changes
-        chrome.windows.onFocusChanged.addListener((windowId) => {
-            if (windowId === chrome.windows.WINDOW_ID_NONE) return; // Ignore if no window is focused
-            console.log('index.tsx: Window focus changed, fetching new URL');
-            fetchCurrentTabUrl();
-        });
-
-        // Listen for tab updates (e.g., URL changes in the same tab)
-        chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
-            if (changeInfo.url) {
-                console.log('index.tsx: Tab URL updated, fetching new URL');
-                fetchCurrentTabUrl();
+        const handleMessage = (message: any) => {
+            if (message.url) {
+                console.log('index.tsx: Fetched current tab URL:', message.url);
+                setUrl(message.url);
+                // Determine if the URL is a popup URL (e.g., chrome-extension:// or similar)
+                const popupUrlPatterns = [
+                    /^chrome-extension:\/\//,
+                    /^chrome:\/\//,
+                    /^about:\/\//,
+                ];
+                const isPopup = popupUrlPatterns.some((pattern) => pattern.test(message.url));
+                setIsPopupUrl(isPopup);
             }
-        });
+        };
 
-        // Cleanup listeners on unmount
+        chrome.runtime.onMessage.addListener(handleMessage);
+        chrome.runtime.sendMessage({ action: 'getCurrentTabUrl' });
+
+        const handleTabChange = () => {
+            console.log('index.tsx: Tab activated, fetching new URL');
+            chrome.runtime.sendMessage({ action: 'getCurrentTabUrl' });
+        };
+
+        const handleWindowFocus = () => {
+            console.log('index.tsx: Window focus changed, fetching new URL');
+            chrome.runtime.sendMessage({ action: 'getCurrentTabUrl' });
+        };
+
+        chrome.tabs.onActivated.addListener(handleTabChange);
+        chrome.tabs.onUpdated.addListener(handleTabChange);
+        chrome.windows.onFocusChanged.addListener(handleWindowFocus);
+
         return () => {
-            // Note: Chrome API listeners can't be removed directly in the extension context,
-            // but they will be cleaned up when the side panel is closed.
+            chrome.runtime.onMessage.removeListener(handleMessage);
+            chrome.tabs.onActivated.removeListener(handleTabChange);
+            chrome.tabs.onUpdated.removeListener(handleTabChange);
+            chrome.windows.onFocusChanged.removeListener(handleWindowFocus);
         };
     }, []);
 
-    if (error) {
-        return <div style={{ padding: '1rem', color: '#e11d48' }}>{error}</div>;
-    }
+    useEffect(() => {
+        if (!storageInitialized || !url) {
+            console.log('useAnnotations: Waiting for storage to initialize or URL to be set');
+            return;
+        }
 
-    if (url === null) {
-        return <div style={{ padding: '1rem' }}>Loading...</div>;
-    }
+        console.log('useAnnotations: Fetching annotations for URL:', url);
+        setLoading(true);
+        storage.getAnnotations(url).then((fetchedAnnotations) => {
+            console.log('useAnnotations: Fetched annotations:', fetchedAnnotations);
+            setAnnotations(fetchedAnnotations);
 
-    return <AnnotationUI url={url} isPopupUrl={isPopupUrl} />;
-};
+            const profilePromises = fetchedAnnotations.map((annotation: any) =>
+                storage.getProfile(annotation.author).then((profile) => ({
+                    did: annotation.author,
+                    profile,
+                }))
+            );
 
-// Render the app
-const container = document.getElementById('root');
-if (!container) {
-    throw new Error('Root container not found');
+            Promise.all(profilePromises).then((profileResults) => {
+                const newProfiles = profileResults.reduce((acc: Record<string, any>, { did, profile }) => {
+                    if (profile) {
+                        acc[did] = profile;
+                    }
+                    return acc;
+                }, {});
+                setProfiles((prev) => ({ ...prev, ...newProfiles }));
+            }).finally(() => {
+                setLoading(false);
+            });
+        }).catch((error) => {
+            console.error('useAnnotations: Failed to fetch annotations:', error);
+            setLoading(false);
+        });
+    }, [url, storageInitialized]);
+
+    return (
+        <AnnotationUI url={url} isPopupUrl={isPopupUrl} />
+    );
 }
-const root = createRoot(container);
+
+const root = ReactDOM.createRoot(document.getElementById('root')!);
 root.render(<App />);
