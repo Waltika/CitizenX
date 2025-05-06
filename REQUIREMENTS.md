@@ -34,8 +34,22 @@ A decentralized Chrome extension for annotating websites in order to bring a kno
     - **Status**: Pending.
 
 **Focus for Next Sprint**:
-- **Scalability**: Optimize Gun.js peer connections for faster real-time updates, implement server load monitoring on Render, and explore multi-node setups or pinning services to handle increased user load.
-- **Security**: Prevent hacking of the gun-server, allow only owners of annotations and comments and the admins to delete them
+- **Sharding (Scalability)**:
+    - Implement domain-based sharding (`annotations_<domain>`) in Gun.js to distribute annotations across nodes based on the domain of the annotated page, reducing load on individual nodes.
+    - Add sub-sharding for high-traffic domains (e.g., `annotations_google_com_shard_0`) by hashing the full URL and distributing annotations across shards.
+    - Update `AnnotationManager.ts` to fetch and save annotations from/to the appropriate shard based on the normalized URL.
+    - Test sharding with simulated high-traffic scenarios (e.g., 10,000 annotations on `google.com`) to ensure performance and data consistency.
+    - Explore multi-node setups or pinning services (e.g., a custom pinning service with incentives, as planned in Non-Functional Requirement 1 - Future Versions) to enhance persistence and replication.
+- **Security**:
+    - Prevent hacking of the `gun-server` by securing API endpoints (`/api/annotations`, `/api/comments`):
+        - Implement rate limiting in `gun-server.js` to prevent DoS attacks, using Gun.js `rateLimits/<did>` to track requests per user.
+        - Enhance CORS security by setting a strict CORS policy (e.g., `Access-Control-Allow-Origin: https://citizenx.app`).
+        - Sanitize user inputs (annotations, comments) to prevent XSS attacks using a library like DOMPurify in `useAnnotations.ts` and `gun-server.js`.
+    - Ensure only owners of annotations/comments and admins can delete them:
+        - Extend the existing signature verification in `AnnotationManager.ts` to check the requester’s DID against the `author` field for delete operations.
+        - Define an admin role in Gun.js (`admins/<did>`) with a list of trusted DIDs, allowing admins to delete content after community consensus.
+        - Update `writeRequests` to include delete operations, ensuring servers verify ownership or admin status before applying deletions.
+    - Test security measures by simulating attacks (e.g., unauthorized deletion attempts, XSS injection, DoS attacks) and verifying that protections hold.
 
 ## Non Functional Requirements - v1.0
 1. Except for the Chrome Extension, we want zero installation on the user's device.
@@ -87,22 +101,4 @@ A decentralized Chrome extension for annotating websites in order to bring a kno
     - Create a server-side version of `useAnnotations.ts` (`getAnnotationsServer.ts`) that fetches annotations and comments from Gun.js without React hooks.
     - Update `gun-server.js` to use `ReactDOMServer.renderToString` to render the `AnnotationList` component on the server.
     - Add a new endpoint `/view-annotations` to render annotations as HTML, passing fetched data as props to `AnnotationList`.
-- **Lightweight Client-Side JS**: Include minimal client-side JavaScript (e.g., an inline script) to handle interactivity like toggling comments, ensuring compliance with Requirement 11’s goal of lightweight client-side JavaScript.
-- **Testing**:
-    - Test SSR on the website to ensure annotations render correctly with minimal client-side JavaScript.
-    - Test the Chrome extension to ensure it works with the shared library.
-- **Next Steps**:
-    - Set up the monorepo or private npm package for the shared library.
-    - Implement `getAnnotationsServer.ts` and the `/view-annotations` endpoint in `gun-server.js`.
-    - Add minimal client-side JavaScript for toggling comments.
-    - Test SSR and client-side interactivity.
-
-**Status**: Planned. An attempt to implement this was made by creating `AnnotationListServer.tsx` for SSR and optimizing `AnnotationList.tsx` for client-side rendering, but it was reverted to focus on scalability and security (see "Separate Web and Extension Rendering for Scalability and SSR Compatibility" for details).
-
-### Separate Web and Extension Rendering for Scalability and SSR Compatibility
-**Description**: To address SSR compatibility issues in Requirement 11 (e.g., `TypeError: Cannot read properties of null (reading 'useState')` due to hooks in `AnnotationList.tsx`) and prepare for scalability, we explored separating the rendering logic for the web (server-side rendering via `/view-annotations`) and the extension (client-side rendering in the side panel). This involved creating `AnnotationListServer.tsx` for SSR and keeping `AnnotationList.tsx` for client-side use, with shared logic in `@citizenx/shared`.
-
-**Rationale for Parking**:
-- **User Traction Priority**: The current focus is on attracting early adopters by maintaining a stable, consistent user experience. The unified rendering approach, despite SSR limitations, is sufficient for early beta users.
-- **Complexity vs. Benefit**: Separating web and extension rendering adds development overhead without immediate user growth benefits, as the app is in early beta and not yet facing scalability demands.
-- **New Focus**: Resources are better allocated to improving
+- **Lightweight Client-Side JS**: Include minimal client-side JavaScript (e.g., an inline
