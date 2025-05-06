@@ -5,7 +5,7 @@ import { shortenUrl } from '@/utils/shortenUrl';
 import { stripHtml } from '@/utils/stripHtml';
 import Quill from 'quill';
 import { ShareModal } from './ShareModal';
-import { Toast } from './Toast'; // Import the new Toast component
+import { Toast } from './Toast';
 import './AnnotationList.css';
 
 interface AnnotationListProps {
@@ -31,9 +31,8 @@ export const AnnotationList: React.FC<AnnotationListProps> = ({ annotations, pro
     useEffect(() => {
         const initialExpandedState: Record<string, boolean> = {};
         annotations.forEach((annotation) => {
-            // Only initialize if not already set to preserve state across renders
             if (expandedComments[annotation.id] === undefined) {
-                initialExpandedState[annotation.id] = false; // Collapsed by default
+                initialExpandedState[annotation.id] = false;
             }
         });
         setExpandedComments((prev) => ({
@@ -50,13 +49,11 @@ export const AnnotationList: React.FC<AnnotationListProps> = ({ annotations, pro
                 const editorElement = editorRefs.current[editorId];
                 if (editorElement && !quillInstances.current[editorId]) {
                     console.log(`Initializing Quill editor for annotation ${editorId}`);
-                    // Create a wrapper div to hold the Quill editor and toolbar
                     const wrapper = document.createElement('div');
                     wrapper.className = 'quill-wrapper';
                     editorElement.appendChild(wrapper);
 
                     try {
-                        // Initialize Quill editor
                         quillInstances.current[editorId] = new Quill(wrapper, {
                             theme: 'snow',
                             modules: {
@@ -85,20 +82,16 @@ export const AnnotationList: React.FC<AnnotationListProps> = ({ annotations, pro
             });
         };
 
-        // Delay initialization to ensure DOM is fully rendered
         const timer = setTimeout(initializeQuillEditors, 0);
 
-        // Clean up Quill editors for removed annotations
         const currentAnnotationIds = new Set(annotations.map((annotation) => annotation.id));
         Object.keys(quillInstances.current).forEach((editorId) => {
             if (!currentAnnotationIds.has(editorId) && quillInstances.current[editorId]) {
                 console.log(`Cleaning up Quill editor for removed annotation ${editorId}`);
-                // Remove the Quill editor's DOM elements
                 const editorElement = editorRefs.current[editorId];
                 if (editorElement) {
-                    editorElement.innerHTML = ''; // Clear the DOM
+                    editorElement.innerHTML = '';
                 }
-                // Remove the text-change listener and nullify the instance
                 quillInstances.current[editorId]!.off('text-change');
                 quillInstances.current[editorId] = null;
                 delete quillInstances.current[editorId];
@@ -106,14 +99,13 @@ export const AnnotationList: React.FC<AnnotationListProps> = ({ annotations, pro
             }
         });
 
-        // Cleanup on the 'unmount' event
         return () => {
             clearTimeout(timer);
             Object.keys(quillInstances.current).forEach((editorId) => {
                 console.log(`Cleaning up Quill editor on unmount for annotation ${editorId}`);
                 const editorElement = editorRefs.current[editorId];
                 if (editorElement) {
-                    editorElement.innerHTML = ''; // Clear the DOM
+                    editorElement.innerHTML = '';
                 }
                 if (quillInstances.current[editorId]) {
                     quillInstances.current[editorId]!.off('text-change');
@@ -142,7 +134,6 @@ export const AnnotationList: React.FC<AnnotationListProps> = ({ annotations, pro
         setShareLoading(true);
         setShareError(null);
         try {
-            // Use annotation.url if defined, otherwise fall back to currentUrl
             const urlToNormalize = annotation.url || currentUrl;
             if (!urlToNormalize) {
                 throw new Error('No URL available for sharing');
@@ -159,21 +150,20 @@ export const AnnotationList: React.FC<AnnotationListProps> = ({ annotations, pro
         } catch (err) {
             console.error('AnnotationList: Failed to shorten URL:', err);
             setShareError('Failed to shorten URL');
-            // Use annotation.url if defined, otherwise fall back to currentUrl
             const urlToNormalize = annotation.url || currentUrl;
             let longUrl: string;
             if (urlToNormalize) {
                 const normalizedUrl = normalizeUrl(urlToNormalize);
                 longUrl = `https://citizenx.app/check-extension?annotationId=${annotation.id}&url=${encodeURIComponent(normalizedUrl)}`;
             } else {
-                longUrl = 'https://citizenx.app'; // Fallback to a generic URL if no URL is available
+                longUrl = 'https://citizenx.app';
             }
             const plainContent = stripHtml(annotation.content);
             const truncatedContent = plainContent.trim()
                 ? (plainContent.length > 100 ? plainContent.substring(0, 100) + "..." : plainContent)
                 : "No content available";
             const shareText = `Check out this annotation: "${truncatedContent}" by ${profiles[annotation.author]?.handle || 'Unknown'} #CitizenX`;
-            setShowShareModal(`${shareText} ${longUrl}`); // Fallback to long URL
+            setShowShareModal(`${shareText} ${longUrl}`);
         } finally {
             setShareLoading(false);
         }
@@ -182,7 +172,7 @@ export const AnnotationList: React.FC<AnnotationListProps> = ({ annotations, pro
     const handleCopyLink = async (shareContent: string) => {
         await navigator.clipboard.writeText(shareContent);
         setToastMessage('Link copied to clipboard!');
-        setShowToast(true);
+        setShowToast(true); // This should trigger the toast
         setShowShareModal(null);
     };
 
@@ -200,7 +190,6 @@ export const AnnotationList: React.FC<AnnotationListProps> = ({ annotations, pro
                 const authorHandle = authorProfile ? authorProfile.handle : 'Unknown';
                 console.log('AnnotationList: Rendering annotation:', annotation, 'Author handle:', authorHandle);
 
-                // Sort comments by timestamp in ascending order (oldest to newest)
                 const sortedComments = annotation.comments ? [...annotation.comments].sort((a, b) => a.timestamp - b.timestamp) : [];
                 const isExpanded = expandedComments[annotation.id] || false;
 
@@ -284,7 +273,11 @@ export const AnnotationList: React.FC<AnnotationListProps> = ({ annotations, pro
                 />
             )}
 
-            <Toast message={toastMessage} isVisible={showToast} />
+            <Toast
+                message={toastMessage}
+                isVisible={showToast}
+                setIsVisible={setShowToast} // Pass the setter to reset visibility
+            />
         </div>
     );
 };

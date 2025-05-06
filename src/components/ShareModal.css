@@ -11,20 +11,40 @@
     display: flex;
     justify-content: center;
     align-items: center;
-    z-index: 1000;
+    z-index: 1000; /* Note: Ensure this is below Toast (z-index: 2000) */
     backdrop-filter: blur(3px);
+}
+
+@supports not (backdrop-filter: blur(3px)) {
+    .share-modal {
+        background: rgba(0, 0, 0, 0.85); /* Slightly darker background as a fallback */
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .share-modal {
+        backdrop-filter: none; /* Disable blur for users who prefer reduced motion */
+    }
 }
 
 .share-modal-content {
     background: #ffffff;
     padding: 2rem;
-    border-radius: 16px;
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
-    width: 320px;
+    border-radius: 1rem;
+    box-shadow: 0 0.5rem 2rem rgba(0, 0, 0, 0.1);
+    width: 90%;
+    max-width: 20rem;
     position: relative;
     display: flex;
     flex-direction: column;
     align-items: center;
+    animation: modalFadeIn 0.3s ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .share-modal-content {
+        animation: none;
+    }
 }
 
 .share-modal-content h3 {
@@ -32,6 +52,13 @@
     font-size: 1.5rem;
     margin: 0 0 2rem 0;
     font-weight: 600;
+}
+
+.error-text {
+    color: #e53e3e;
+    font-size: 0.875rem;
+    margin-bottom: 1rem;
+    text-align: center;
 }
 
 .share-buttons {
@@ -63,9 +90,14 @@
     transform: translateY(-2px);
 }
 
+.share-button-social:focus {
+    outline: 2px solid #2c7a7b;
+    outline-offset: 2px;
+}
+
 .share-button-social svg {
-    width: 24px;
-    height: 24px;
+    width: 1.5rem;
+    height: 1.5rem;
     transition: transform 0.2s ease;
 }
 
@@ -76,7 +108,7 @@
 .share-button-social span {
     font-size: 0.75rem;
     font-weight: 500;
-    color: #4a5568;
+    color: #2d3748; /* Darker gray for better contrast */
 }
 
 /* Platform-specific colors on hover */
@@ -113,7 +145,7 @@
 .share-modal-close {
     padding: 0.75rem 2rem;
     background: #e2e8f0;
-    color: #4a5568;
+    color: #1a202c; /* Darker color for better contrast */
     border: none;
     border-radius: 8px;
     cursor: pointer;
@@ -124,6 +156,11 @@
 
 .share-modal-close:hover {
     background: #cbd5e0;
+}
+
+.share-modal-close:focus {
+    outline: 2px solid #2c7a7b;
+    outline-offset: 2px;
 }
 
 /* Animation for modal */
@@ -138,6 +175,29 @@
     }
 }
 
-.share-modal-content {
-    animation: modalFadeIn 0.3s ease-out;
+/* Responsive adjustments */
+@media (max-width: 480px) {
+    .share-modal-content {
+        padding: 1.5rem;
+    }
+
+    .share-buttons {
+        grid-template-columns: 1fr;
+        gap: 0.75rem;
+    }
+
+    .share-button-social {
+        flex-direction: row;
+        gap: 0.75rem;
+        padding: 0.75rem;
+    }
+
+    .share-button-social svg {
+        width: 1.25rem; /* 20px */
+        height: 1.25rem;
+    }
+
+    .share-button-social span {
+        font-size: 0.85rem;
+    }
 }

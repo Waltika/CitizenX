@@ -1,10 +1,8 @@
-/* src/components/Toast.css */
-
 .toast {
     position: fixed;
     bottom: 20px;
     right: 20px;
-    background: #2c7a7b; /* Match the primary color used in the app */
+    background: #2c7a7b;
     color: #fff;
     padding: 0.75rem 1.5rem;
     border-radius: 8px;

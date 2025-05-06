@@ -1,5 +1,13 @@
+// StorageRepository.ts
 import { GunRepository } from './GunRepository';
-import { Annotation, Comment, Profile } from '../types';
+import { Annotation, Comment, Profile } from '@/types';
+
+// Define PeerStatus interface to match the one in GunRepository and PeerManager
+interface PeerStatus {
+    url: string;
+    connected: boolean;
+    lastSeen?: number;
+}
 
 // Singleton instance
 export class StorageRepositorySingleton {
@@ -20,15 +28,36 @@ export class StorageRepository {
     private initialized: boolean = false;
     private initializing: boolean = false;
     private initializationPromise: Promise<void> | null = null;
+    private STORAGE_KEY = 'storage_repository_state';
 
     constructor() {
         const bootstrapPeers = [
+            'http://localhost:8765/gun',
             'https://citizen-x-bootsrap.onrender.com/gun',
+            'https://gun-manhattan.herokuapp.com/gun',
+            'https://relay.peer.ooo/gun',
         ];
 
         this.repository = new GunRepository({
             peers: bootstrapPeers,
             radisk: false,
+        });
+    }
+
+    private async getStoredState(): Promise<{ initialized: boolean }> {
+        return new Promise((resolve) => {
+            chrome.storage.local.get([this.STORAGE_KEY], (result) => {
+                const state = result[this.STORAGE_KEY] || { initialized: false };
+                resolve(state);
+            });
+        });
+    }
+
+    private async updateStoredState(state: { initialized: boolean }): Promise<void> {
+        return new Promise((resolve) => {
+            chrome.storage.local.set({ [this.STORAGE_KEY]: state }, () => {
+                resolve();
+            });
         });
     }
 
@@ -47,8 +76,10 @@ export class StorageRepository {
     }
 
     async initialize(): Promise<void> {
-        if (this.initialized) {
-            console.log('StorageRepository: Already initialized');
+        const storedState = await this.getStoredState();
+        if (storedState.initialized) {
+            console.log('StorageRepository: Already initialized, using stored state');
+            this.initialized = true;
             return;
         }
 
@@ -62,13 +93,14 @@ export class StorageRepository {
         this.initializationPromise = this.repository.initialize().then(() => {
             this.initialized = true;
             this.initializing = false;
+            this.updateStoredState({ initialized: true });
             console.log('StorageRepository: Initialized successfully');
         }).catch((error) => {
-            console.error('StorageRepository: Initialization failed:', error);
-            this.initialized = false;
+            console.warn('StorageRepository: Initialization failed, proceeding with local storage:', error);
+            this.initialized = true;
             this.initializing = false;
             this.initializationPromise = null;
-            throw error;
+            this.updateStoredState({ initialized: true });
         });
 
         return this.initializationPromise;
@@ -99,6 +131,11 @@ export class StorageRepository {
         return this.repository.getProfile(did);
     }
 
+    async getPeerStatus(): Promise<PeerStatus[]> {
+        await this.initialize();
+        return this.repository.getPeerStatus();
+    }
+
     async getAnnotations(url: string, callback?: (annotations: Annotation[]) => void): Promise<Annotation[]> {
         await this.initialize();
         const normalizedUrl = this.normalizeUrl(url);
@@ -124,11 +161,9 @@ export class StorageRepository {
         await this.repository.saveComment(normalizedUrl, annotationId, comment);
     }
 
-    // Expose cleanup method to delegate to GunRepository
     cleanupAnnotationsListeners(url: string): void {
         this.repository.cleanupAnnotationsListeners(url);
     }
 }
 
-// Export the singleton instance
 export const storage = StorageRepositorySingleton.getInstance();

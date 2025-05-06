@@ -1,7 +1,8 @@
+// index.tsx
 import React, { useState, useEffect } from 'react';
 import ReactDOM from 'react-dom/client';
 import { AnnotationUI } from '../components/AnnotationUI';
-import { storage } from '../storage/StorageRepository'; // Import the singleton instance
+import { storage } from '../storage/StorageRepository';
 
 function App() {
     const [url, setUrl] = useState<string>('');
@@ -9,6 +10,7 @@ function App() {
     const [annotations, setAnnotations] = useState<any[]>([]);
     const [profiles, setProfiles] = useState<Record<string, any>>({});
     const [loading, setLoading] = useState<boolean>(false);
+    const [error, setError] = useState<string | null>(null);
     const [storageInitialized, setStorageInitialized] = useState<boolean>(false);
 
     const fetchCurrentTabUrl = async () => {
@@ -26,16 +28,80 @@ function App() {
         }
     };
 
+    const fetchAnnotationsAndProfiles = async () => {
+        if (!storageInitialized || !url) {
+            console.log('useAnnotations: Waiting for storage to initialize or URL to be set');
+            setAnnotations([]);
+            setProfiles({});
+            setError(null);
+            return;
+        }
+
+        console.log('useAnnotations: Fetching annotations for URL:', url);
+        setAnnotations([]);
+        setProfiles({});
+        setLoading(true);
+        setError(null);
+
+        const timeout = setTimeout(() => {
+            setError('Request timed out. Please check your network and try again.');
+            setLoading(false);
+        }, 30000);
+
+        try {
+            const fetchedAnnotations = await storage.getAnnotations(url);
+            console.log('useAnnotations: Fetched annotations:', fetchedAnnotations);
+            setAnnotations(fetchedAnnotations);
+
+            const profilePromises = fetchedAnnotations.map((annotation: any) =>
+                storage.getProfile(annotation.author).then((profile) => ({
+                    did: annotation.author,
+                    profile,
+                }))
+            );
+
+            const profileResults = await Promise.all(profilePromises);
+            const newProfiles = profileResults.reduce((acc: Record<string, any>, { did, profile }) => {
+                if (profile) {
+                    acc[did] = profile;
+                }
+                return acc;
+            }, {});
+            setProfiles((prev) => ({ ...prev, ...newProfiles }));
+        } catch (error: any) {
+            console.error('useAnnotations: Failed to fetch annotations:', error);
+            setError('Failed to fetch annotations. Please check your network connection and try again.');
+            const peerStatus = await storage.getPeerStatus();
+            console.log('index.tsx: Peer status after error:', peerStatus);
+        } finally {
+            clearTimeout(timeout);
+            setLoading(false);
+        }
+    };
+
     useEffect(() => {
-        console.log('index.tsx: Initializing storage...');
-        storage.initialize().then(() => {
-            console.log('index.tsx: Storage initialized');
-            setStorageInitialized(true);
-        }).catch((error) => {
-            console.error('index.tsx: Failed to initialize storage:', error);
+        // Check if storage was already initialized in a previous session
+        chrome.storage.local.get(['storage_initialized'], (result) => {
+            if (result.storage_initialized) {
+                console.log('index.tsx: Storage already initialized in a previous session');
+                setStorageInitialized(true);
+                return;
+            }
+
+            console.log('index.tsx: Initializing storage...');
+            storage.initialize()
+                .then(() => {
+                    console.log('index.tsx: Storage initialized');
+                    setStorageInitialized(true);
+                    chrome.storage.local.set({ storage_initialized: true });
+                })
+                .catch((error) => {
+                    console.warn('index.tsx: Failed to initialize storage, proceeding with local storage:', error);
+                    setStorageInitialized(true); // Proceed even if initialization fails
+                    chrome.storage.local.set({ storage_initialized: true });
+                });
         });
 
-        // Check for redirect on mount
         chrome.storage.local.get(['citizenx_redirect'], (result) => {
             const redirect = result.citizenx_redirect;
             if (redirect) {
@@ -46,12 +112,11 @@ function App() {
                     chrome.storage.local.remove(['citizenx_redirect']);
                 } catch (error) {
                     console.error('index.tsx: Failed to parse citizenx_redirect:', error);
-                    chrome.storage.local.remove(['citizenx_redirect']); // Clean up invalid data
+                    chrome.storage.local.remove(['citizenx_redirect']);
                 }
             }
         });
 
-        // Fetch initial URL
         fetchCurrentTabUrl();
 
         const handleTabChange = () => {
@@ -81,56 +146,19 @@ function App() {
     }, []);
 
     useEffect(() => {
-        if (!storageInitialized || !url) {
-            console.log('useAnnotations: Waiting for storage to initialize or URL to be set');
-            setAnnotations([]); // Clear annotations when there's no URL
-            setProfiles({}); // Clear profiles as well
-            return;
-        }
-
-        console.log('useAnnotations: Fetching annotations for URL:', url);
-        // Clear annotations and profiles before fetching new ones
-        setAnnotations([]);
-        setProfiles({});
-        setLoading(true);
-
-        // Force a re-render by awaiting a microtask
-        const fetchAnnotations = async () => {
-            // Wait for the state updates to be applied and the UI to re-render
-            await new Promise(resolve => setTimeout(resolve, 0));
-
-            try {
-                const fetchedAnnotations = await storage.getAnnotations(url);
-                console.log('useAnnotations: Fetched annotations:', fetchedAnnotations);
-                setAnnotations(fetchedAnnotations);
-
-                const profilePromises = fetchedAnnotations.map((annotation: any) =>
-                    storage.getProfile(annotation.author).then((profile) => ({
-                        did: annotation.author,
-                        profile,
-                    }))
-                );
-
-                const profileResults = await Promise.all(profilePromises);
-                const newProfiles = profileResults.reduce((acc: Record<string, any>, { did, profile }) => {
-                    if (profile) {
-                        acc[did] = profile;
-                    }
-                    return acc;
-                }, {});
-                setProfiles((prev) => ({ ...prev, ...newProfiles }));
-            } catch (error) {
-                console.error('useAnnotations: Failed to fetch annotations:', error);
-            } finally {
-                setLoading(false);
-            }
-        };
-
-        fetchAnnotations();
+        fetchAnnotationsAndProfiles();
     }, [url, storageInitialized]);
 
     return (
-        <AnnotationUI url={url} isUrlLoading={isUrlLoading} />
+        <div className="app-container">
+            {error && (
+                <div className="error-message">
+                    <p>{error}</p>
+                    <button onClick={fetchAnnotationsAndProfiles}>Retry</button>
+                </div>
+            )}
+            <AnnotationUI url={url} isUrlLoading={isUrlLoading} />
+        </div>
     );
 }
 
