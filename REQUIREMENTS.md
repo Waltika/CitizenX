@@ -35,7 +35,7 @@ A decentralized Chrome extension for annotating websites in order to bring a kno
 
 **Focus for Next Sprint**:
 - **Scalability**: Optimize Gun.js peer connections for faster real-time updates, implement server load monitoring on Render, and explore multi-node setups or pinning services to handle increased user load.
-- **Security**: Secure JWT secrets with environment variables, sanitize user inputs (annotations, comments) to prevent XSS, implement rate limiting on API endpoints (`/api/annotations`, `/api/comments`), and enhance CORS security.
+- **Security**: Prevent hacking of the gun-server, allow only owners of annotations and comments and the admins to delete them
 
 ## Non Functional Requirements - v1.0
 1. Except for the Chrome Extension, we want zero installation on the user's device.
