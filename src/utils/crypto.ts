@@ -84,7 +84,7 @@ export async function exportKeyPair(data: string, passphrase: string): Promise<s
 
         console.log('crypto: Exported data:', exportData);
         return JSON.stringify(exportData);
-    } catch (err) {
+    } catch (err : any) {
         console.error('crypto: Failed to export data:', err);
         throw new Error('Failed to export data: ' + (err.message || 'Unknown error'));
     }
@@ -128,7 +128,7 @@ export async function importKeyPair(encryptedData: string, passphrase: string): 
         const decryptedString = arrayBufferToString(decryptedData);
         console.log('crypto: Decrypted data:', decryptedString);
         return decryptedString;
-    } catch (err) {
+    } catch (err : any) {
         console.error('crypto: Failed to import data:', err);
         throw new Error('Failed to decrypt data: ' + (err.message || 'Unknown error'));
     }

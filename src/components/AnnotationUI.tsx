@@ -1,34 +1,28 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useUserProfile } from '../hooks/useUserProfile';
-import { useAnnotations } from '../hooks/useAnnotations';
+import { useUserProfile } from '@/hooks/useUserProfile';
+import { useAnnotations } from '@/hooks/useAnnotations';
 import { AnnotationList } from './AnnotationList';
+import { SettingsPanel } from './SettingsPanel';
 import './AnnotationUI.css';
 
 import Quill from 'quill';
-import 'quill/dist/quill.snow.css'; // Import Quill styles (bundle this in production)
+import 'quill/dist/quill.snow.css';
 
-import citizenxLogo from './../assets/citizenx-logo.png';
-import { normalizeUrl } from "../shared/utils/normalizeUrl";
+import citizenxLogo from '../assets/citizenx-logo.png';
+import { normalizeUrl } from "@/shared/utils/normalizeUrl";
 
 interface AnnotationUIProps {
     url: string;
-    isPopupUrl: boolean;
+    isUrlLoading: boolean;
 }
 
-export const AnnotationUI: React.FC<AnnotationUIProps> = ({ url, isPopupUrl }) => {
+export const AnnotationUI: React.FC<AnnotationUIProps> = ({ url, isUrlLoading }) => {
     const { did, profile, loading: profileLoading, error: profileError, authenticate, signOut, exportIdentity, importIdentity, createProfile, updateProfile } = useUserProfile();
     const { annotations, profiles, error: annotationsError, loading: annotationsLoading, handleSaveAnnotation, handleDeleteAnnotation, handleSaveComment } = useAnnotations({ url, did });
     const [annotationText, setAnnotationText] = useState('');
     const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
     const [profileHandle, setProfileHandle] = useState('');
     const [profilePicture, setProfilePicture] = useState<string | undefined>(undefined);
-    const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-    const [importIdentityData, setImportIdentityData] = useState('');
-    const [isExportModalOpen, setIsExportModalOpen] = useState(false);
-    const [exportedIdentity, setExportedIdentity] = useState('');
-    const [passphrase, setPassphrase] = useState('');
-    const [passphraseModalOpen, setPassphraseModalOpen] = useState<'export' | 'import' | null>(null);
-    const [importPassphrase, setImportPassphrase] = useState('');
 
     const editorRef = useRef<HTMLDivElement>(null);
     const quillRef = useRef<Quill | null>(null);
@@ -77,7 +71,7 @@ export const AnnotationUI: React.FC<AnnotationUIProps> = ({ url, isPopupUrl }) =
     }, [annotationsLoading]);
 
     const handleSave = async () => {
-        if (annotationText.trim() && !isPopupUrl) {
+        if (annotationText.trim()) {
             await handleSaveAnnotation(annotationText);
             setAnnotationText('');
             if (quillRef.current) {
@@ -96,66 +90,6 @@ export const AnnotationUI: React.FC<AnnotationUIProps> = ({ url, isPopupUrl }) =
             setIsProfileModalOpen(false);
             setProfileHandle('');
             setProfilePicture(undefined);
-        }
-    };
-
-    const handleAuthenticate = async () => {
-        await authenticate();
-        setIsSettingsOpen(false);
-    };
-
-    const handleSignOut = async () => {
-        await signOut();
-        setIsSettingsOpen(false);
-    };
-
-    const handleExportIdentity = async () => {
-        setPassphraseModalOpen('export');
-    };
-
-    const handleExportWithPassphrase = async () => {
-        if (!passphrase) {
-            alert('Please enter a passphrase');
-            return;
-        }
-
-        try {
-            const identity = await exportIdentity(passphrase);
-            setExportedIdentity(identity);
-            setIsExportModalOpen(true);
-            setPassphraseModalOpen(null);
-            setPassphrase('');
-            setIsSettingsOpen(false);
-        } catch (err) {
-            console.error('Failed to export identity:', err);
-            alert(err.message || 'Failed to export identity');
-        }
-    };
-
-    const handleImportIdentity = async () => {
-        if (!importIdentityData.trim()) {
-            alert('Please paste the identity data');
-            return;
-        }
-
-        setPassphraseModalOpen('import');
-    };
-
-    const handleImportWithPassphrase = async () => {
-        if (!importPassphrase) {
-            alert('Please enter the passphrase');
-            return;
-        }
-
-        try {
-            await importIdentity(importIdentityData, importPassphrase);
-            setImportIdentityData('');
-            setImportPassphrase('');
-            setPassphraseModalOpen(null);
-            setIsSettingsOpen(false);
-        } catch (err) {
-            console.error('Failed to import identity:', err);
-            alert(err.message || 'Failed to import identity');
         }
     };
 
@@ -199,90 +133,51 @@ export const AnnotationUI: React.FC<AnnotationUIProps> = ({ url, isPopupUrl }) =
                             <p className="connected-text">Not connected</p>
                         )}
                     </div>
-                    <div className="settings-menu-container">
-                        <button
-                            className="settings-button"
-                            onClick={() => setIsSettingsOpen(!isSettingsOpen)}
-                        >
-                            ⚙️
-                        </button>
-                        {isSettingsOpen && (
-                            <div className="settings-menu">
-                                {!did ? (
-                                    <div className="auth-section">
-                                        <button
-                                            className="authenticate-button"
-                                            onClick={handleAuthenticate}
-                                        >
-                                            Authenticate
-                                        </button>
-                                        <div className="import-section">
-                                            <textarea
-                                                className="import-textarea"
-                                                value={importIdentityData}
-                                                onChange={(e) => setImportIdentityData(e.target.value)}
-                                                placeholder="Paste identity to import..."
-                                            />
-                                            <button
-                                                className="import-button"
-                                                onClick={handleImportIdentity}
-                                                disabled={!importIdentityData.trim()}
-                                            >
-                                                Import Identity
-                                            </button>
-                                        </div>
-                                    </div>
-                                ) : (
-                                    <>
-                                        <button
-                                            className="settings-menu-button"
-                                            onClick={handleExportIdentity}
-                                        >
-                                            Export Identity
-                                        </button>
-                                        <button
-                                            className="settings-menu-button sign-out-button"
-                                            onClick={handleSignOut}
-                                        >
-                                            Sign Out
-                                        </button>
-                                    </>
-                                )}
-                            </div>
-                        )}
-                    </div>
+                    <SettingsPanel
+                        did={did}
+                        authenticate={authenticate}
+                        signOut={signOut}
+                        exportIdentity={exportIdentity}
+                        importIdentity={importIdentity}
+                    />
                 </div>
             </div>
-            {annotationsLoading && (
+            <div className="annotation-input">
+                <div ref={editorRef} className="quill-editor"></div>
+                <button
+                    onClick={handleSave}
+                    className="annotation-save-button"
+                    disabled={!annotationText.trim() || !did || annotationsLoading || !url || isUrlLoading}
+                >
+                    Save
+                </button>
+            </div>
+            {annotationsLoading ? (
                 <div className="loading-spinner">
                     <span>Loading annotations...</span>
                 </div>
-            )}
-            {!isPopupUrl && (
-                <div className="annotation-input">
-                    <div ref={editorRef} className="quill-editor"></div>
-                    <button
-                        onClick={handleSave}
-                        className="annotation-save-button"
-                        disabled={!annotationText.trim() || !did || annotationsLoading}
-                    >
-                        Save
-                    </button>
+            ) : (
+                <div className="annotation-list-wrapper">
+                    <AnnotationList
+                        annotations={annotations}
+                        profiles={profiles}
+                        onDelete={handleDeleteAnnotation}
+                        onSaveComment={!did || annotationsLoading ? undefined : handleSaveComment}
+                        currentUrl={url}
+                    />
                 </div>
             )}
-            <div className="annotation-list-wrapper">
-                <AnnotationList
-                    annotations={annotations}
-                    profiles={profiles}
-                    onDelete={handleDeleteAnnotation}
-                    onSaveComment={isPopupUrl || !did || annotationsLoading ? undefined : handleSaveComment}
-                    currentUrl={url} // Pass the current URL as a prop
-                />
-            </div>
-            <div className="logo-container">
-                <a href="https://citizenx.app" target="_blank" rel="noopener noreferrer">
-                    <img src={citizenxLogo} alt="CitizenX Logo" className="citizenx-logo" />
-                </a>
+            <div className="footer-container">
+                <div className="logo-container">
+                    <a href="https://citizenx.app" target="_blank" rel="noopener noreferrer">
+                        <img src={citizenxLogo} alt="CitizenX Logo" className="citizenx-logo" />
+                    </a>
+                </div>
+                <div className="url-footer">
+                    <p className="url-text">
+                        Annotating: <span className="url">{isUrlLoading || !url ? 'Loading URL...' : url}</span>
+                    </p>
+                </div>
             </div>
             {isProfileModalOpen && (
                 <div className="profile-modal">
@@ -313,64 +208,6 @@ export const AnnotationUI: React.FC<AnnotationUIProps> = ({ url, isPopupUrl }) =
                     <div className="profile-modal-buttons">
                         <button onClick={handleProfileSave} className="profile-modal-save-button">Save Profile</button>
                         <button onClick={() => setIsProfileModalOpen(false)} className="profile-modal-cancel-button">Cancel</button>
-                    </div>
-                </div>
-            )}
-            {isExportModalOpen && (
-                <div className="export-modal">
-                    <h2 className="export-modal-title">Export Identity</h2>
-                    <textarea
-                        className="export-modal-textarea"
-                        value={exportedIdentity}
-                        readOnly
-                    />
-                    <button
-                        className="export-modal-button"
-                        onClick={() => navigator.clipboard.writeText(exportedIdentity)}
-                    >
-                        Copy to Clipboard
-                    </button>
-                    <button
-                        className="export-modal-close-button"
-                        onClick={() => setIsExportModalOpen(false)}
-                    >
-                        Close
-                    </button>
-                </div>
-            )}
-            {passphraseModalOpen && (
-                <div className="profile-modal">
-                    <h2 className="profile-modal-title">{passphraseModalOpen === 'export' ? 'Export Identity' : 'Import Identity'}</h2>
-                    <input
-                        type="password"
-                        value={passphraseModalOpen === 'export' ? passphrase : importPassphrase}
-                        onChange={(e) => {
-                            if (passphraseModalOpen === 'export') {
-                                setPassphrase(e.target.value);
-                            } else {
-                                setImportPassphrase(e.target.value);
-                            }
-                        }}
-                        placeholder="Enter passphrase"
-                        className="profile-modal-input"
-                    />
-                    <div className="profile-modal-buttons">
-                        <button
-                            onClick={passphraseModalOpen === 'export' ? handleExportWithPassphrase : handleImportWithPassphrase}
-                            className="profile-modal-save-button"
-                        >
-                            {passphraseModalOpen === 'export' ? 'Export' : 'Import'}
-                        </button>
-                        <button
-                            onClick={() => {
-                                setPassphraseModalOpen(null);
-                                setPassphrase('');
-                                setImportPassphrase('');
-                            }}
-                            className="profile-modal-cancel-button"
-                        >
-                            Cancel
-                        </button>
                     </div>
                 </div>
             )}

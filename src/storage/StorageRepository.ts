@@ -2,7 +2,7 @@ import { GunRepository } from './GunRepository';
 import { Annotation, Comment, Profile } from '../types';
 
 // Singleton instance
-class StorageRepositorySingleton {
+export class StorageRepositorySingleton {
     private static instance: StorageRepository;
 
     private constructor() {}
@@ -15,7 +15,7 @@ class StorageRepositorySingleton {
     }
 }
 
-class StorageRepository {
+export class StorageRepository {
     private repository: GunRepository;
     private initialized: boolean = false;
     private initializing: boolean = false;

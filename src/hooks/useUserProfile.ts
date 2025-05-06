@@ -10,7 +10,7 @@ interface UseUserProfileReturn {
     loading: boolean;
     error: string | null;
     authenticate: () => Promise<void>;
-    signOut: () => void;
+    signOut: () => Promise<void>;
     exportIdentity: (passphrase: string) => Promise<string>;
     importIdentity: (data: string, passphrase: string) => Promise<void>;
     createProfile: (handle: string, profilePicture?: string) => Promise<void>;
@@ -172,7 +172,7 @@ export const useUserProfile = (): UseUserProfileReturn => {
             const exportedData = await exportKeyPair(dataString, passphrase);
             console.log('useUserProfile: Exported identity:', exportedData);
             return exportedData;
-        } catch (err) {
+        } catch (err : any) {
             console.error('useUserProfile: Export identity failed:', err);
             throw new Error('Failed to export identity: ' + (err.message || 'Unknown error'));
         }
@@ -213,7 +213,7 @@ export const useUserProfile = (): UseUserProfileReturn => {
                     console.log('useUserProfile: Loaded profile after import:', userProfile);
                 }
             }
-        } catch (err) {
+        } catch (err : any) {
             console.error('useUserProfile: Import identity failed:', err);
             let errorMessage = 'Failed to import identity';
             if (err.message.includes('OperationError') || err.message.includes('Failed to decrypt')) {

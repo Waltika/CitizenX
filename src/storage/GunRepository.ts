@@ -1,7 +1,6 @@
 import Gun from 'gun';
 import 'gun/lib/webrtc';
-import { Annotation, Comment } from '../shared/types/annotation';
-import { Profile } from '../shared/types/userProfile';
+import { Annotation, Comment, Profile } from '@/types';
 
 type AnnotationUpdateCallback = (annotations: Annotation[]) => void;
 
@@ -15,17 +14,22 @@ interface KnownPeer {
     timestamp: number;
 }
 
+interface CallbackEntry {
+    callbacks: AnnotationUpdateCallback[];
+    cleanup?: () => void;
+}
+
 export class GunRepository {
     private gun: any;
     private options: GunRepositoryOptions;
-    private annotationCallbacks: Map<string, AnnotationUpdateCallback[]> = new Map();
-    private currentPeers: string[] = [];
+    private annotationCallbacks: Map<string, CallbackEntry> = new Map();
+    private currentPeers: string[] | undefined = [];
     private isConnected: boolean = false;
-    private lastLogTime: Map<string, number> = new Map(); // For throttling logs
+    private lastLogTime: Map<string, number> = new Map();
     private fetchAttempts: number = 0;
-    private maxFetchAttempts: number = 10; // Limit total fetch attempts
+    private maxFetchAttempts: number = 10;
     private initializationResolve: ((value?: void | PromiseLike<void>) => void) | null = null;
-    private initialPeers: string[] = ['https://citizen-x-bootsrap.onrender.com/gun']; // Store initial peers for fallback
+    private initialPeers: string[] = ['https://citizen-x-bootsrap.onrender.com/gun'];
 
     constructor(options: GunRepositoryOptions = {}) {
         this.options = {
@@ -36,15 +40,12 @@ export class GunRepository {
         this.gun = Gun({
             peers: this.currentPeers,
             radisk: this.options.radisk,
-            localStorage: false,
+            localStorage: true,
             file: 'gun-data',
             webrtc: true,
         });
 
-        // Start periodic connection check
         this.startConnectionCheck();
-
-        // Start periodic cleanup job for tombstones
         this.startCleanupJob();
     }
 
@@ -73,7 +74,7 @@ export class GunRepository {
             const onHi = (peer: any) => {
                 console.log('GunRepository: Connected to peer:', peer);
                 this.isConnected = true;
-                this.cleanupListeners();
+                this.cleanupListeners?.();
                 this.initializationResolve?.();
                 this.initializationResolve = null;
             };
@@ -86,11 +87,10 @@ export class GunRepository {
             this.gun.on('hi', onHi);
             this.gun.on('bye', onBye);
 
-            // Fallback in case no connection is established
             const timeout = setTimeout(() => {
                 if (!this.isConnected) {
                     console.warn('GunRepository: No connection established after timeout, proceeding anyway');
-                    this.cleanupListeners();
+                    this.cleanupListeners?.();
                     this.initializationResolve?.();
                     this.initializationResolve = null;
                 }
@@ -104,10 +104,9 @@ export class GunRepository {
 
             this.cleanupListeners = cleanup;
 
-            // Handle errors
             this.gun.on('error', (err: any) => {
                 console.error('GunRepository: Error during initialization:', err);
-                this.cleanupListeners();
+                this.cleanupListeners?.();
                 reject(err);
                 this.initializationResolve = null;
             });
@@ -120,25 +119,21 @@ export class GunRepository {
     private cleanupListeners: (() => void) | null = null;
 
     private startConnectionCheck(): void {
-        // Check connection every 30 seconds
         setInterval(() => {
             if (!this.isConnected) {
                 console.log('GunRepository: Connection lost, attempting to reconnect...');
-                // Ensure initial peers are always included
-                const updatedPeers = [...new Set([...this.currentPeers, ...this.initialPeers])];
+                const updatedPeers = [...new Set([...(this.currentPeers ?? []), ...this.initialPeers])];
                 if (!this.arraysEqual(updatedPeers, this.currentPeers)) {
                     this.currentPeers = updatedPeers;
                     console.log('GunRepository: Reverted to initial peers:', this.currentPeers);
                     this.gun.opt({ peers: this.currentPeers });
                 }
-                // Trigger peer discovery to find new peers
                 this.discoverPeers();
             }
         }, 30 * 1000);
     }
 
     private startCleanupJob(): void {
-        // Run cleanup every hour
         setInterval(async () => {
             console.log('GunRepository: Running cleanup job for tombstones');
             const annotationNodes = this.gun.get('annotations');
@@ -148,16 +143,16 @@ export class GunRepository {
                 annotations.map().once((annotation: any, id: string) => {
                     if (annotation === null && !annotation?.isDeleted) {
                         console.log(`GunRepository: Cleaning up tombstone without deletion flag for URL: ${url}, ID: ${id}`);
-                        annotations.get(id).put(null); // Ensure tombstone is removed or handled appropriately
+                        annotations.get(id).put(null);
                     }
                 });
             });
-        }, 60 * 60 * 1000); // Run every hour
+        }, 60 * 60 * 1000);
     }
 
     private discoverPeers(): void {
         this.fetchKnownPeers().then((peers) => {
-            const updatedPeers = [...new Set([...this.currentPeers, ...peers, ...this.initialPeers])]; // Always include initial peers
+            const updatedPeers = [...new Set([...(this.currentPeers ?? []), ...peers, ...this.initialPeers])];
             if (this.arraysEqual(updatedPeers, this.currentPeers)) {
                 console.log('GunRepository: Initial peer list unchanged:', this.currentPeers);
                 return;
@@ -191,7 +186,7 @@ export class GunRepository {
             }
 
             this.fetchKnownPeers().then((peers) => {
-                const updatedPeers = [...new Set([...this.currentPeers, ...peers, ...this.initialPeers])]; // Always include initial peers
+                const updatedPeers = [...new Set([...(this.currentPeers ?? []), ...peers, ...this.initialPeers])];
                 if (this.arraysEqual(updatedPeers, this.currentPeers)) {
                     if (this.throttleLog('Peer list unchanged after update')) {
                         console.log('GunRepository: Peer list unchanged after update:', this.currentPeers);
@@ -249,7 +244,7 @@ export class GunRepository {
             });
 
             if (peers.length > 0) {
-                this.fetchAttempts = 0; // Reset attempts on success
+                this.fetchAttempts = 0;
                 return peers;
             }
 
@@ -268,7 +263,9 @@ export class GunRepository {
         return [];
     }
 
-    private arraysEqual(arr1: string[], arr2: string[]): boolean {
+    private arraysEqual(arr1: string[] | undefined, arr2: string[] | undefined): boolean {
+        if (arr1 === undefined && arr2 === undefined) return true;
+        if (arr1 === undefined || arr2 === undefined) return false;
         if (arr1.length !== arr2.length) return false;
         return arr1.every((value, index) => value === arr2[index]);
     }
@@ -278,7 +275,7 @@ export class GunRepository {
     }
 
     addPeers(newPeers: string[]): void {
-        const updatedPeers = [...new Set([...this.currentPeers, ...newPeers, ...this.initialPeers])];
+        const updatedPeers = [...new Set([...(this.currentPeers ?? []), ...newPeers, ...this.initialPeers])];
         if (this.arraysEqual(updatedPeers, this.currentPeers)) {
             console.log('GunRepository: No new peers to add:', this.currentPeers);
             return;
@@ -290,47 +287,55 @@ export class GunRepository {
 
     async getCurrentDID(): Promise<string | null> {
         return new Promise((resolve) => {
-            const cachedDID = localStorage.getItem('currentDID');
-            console.log('GunRepository: Retrieved cached DID from localStorage:', cachedDID);
-            if (cachedDID) {
-                this.gun.get(`user_${cachedDID}`).get('did').once((data: any) => {
-                    if (data && data.did === cachedDID) {
-                        console.log('GunRepository: Confirmed DID in user-specific namespace:', cachedDID);
+            chrome.storage.local.get(['currentDID'], (result) => {
+                const cachedDID = result.currentDID || null;
+                console.log('GunRepository: Retrieved cached DID from chrome.storage.local:', cachedDID);
+                if (cachedDID) {
+                    this.gun.get(`user_${cachedDID}`).get('did').once((data: any) => {
+                        if (data && data.did === cachedDID) {
+                            console.log('GunRepository: Confirmed DID in user-specific namespace:', cachedDID);
+                            resolve(cachedDID);
+                        } else {
+                            console.warn('GunRepository: DID not found in user-specific namespace, but retaining in chrome.storage.local');
+                            resolve(cachedDID);
+                        }
+                    });
+
+                    setTimeout(() => {
+                        console.warn('GunRepository: Gun.js did not respond, using cached DID as fallback');
                         resolve(cachedDID);
-                    } else {
-                        console.log('GunRepository: DID not found in user-specific namespace, clearing localStorage');
-                        localStorage.removeItem('currentDID');
-                        resolve(null);
-                    }
-                });
-            } else {
-                resolve(null);
-            }
+                    }, 5000);
+                } else {
+                    resolve(null);
+                }
+            });
         });
     }
 
     async setCurrentDID(did: string): Promise<void> {
         return new Promise((resolve, reject) => {
-            localStorage.setItem('currentDID', did);
-            console.log('GunRepository: Set current DID in localStorage:', did);
+            chrome.storage.local.set({ currentDID: did }, () => {
+                console.log('GunRepository: Set current DID in chrome.storage.local:', did);
 
-            this.gun.get(`user_${did}`).get('did').put({ did }, (ack: any) => {
-                if (ack.err) {
-                    console.error('GunRepository: Failed to set user-specific DID:', ack.err);
-                    reject(new Error(ack.err));
-                } else {
-                    console.log('GunRepository: Set user-specific DID in Gun.js:', did);
-                    resolve();
-                }
+                this.gun.get(`user_${did}`).get('did').put({ did }, (ack: any) => {
+                    if (ack.err) {
+                        console.error('GunRepository: Failed to set user-specific DID:', ack.err);
+                        reject(new Error(ack.err));
+                    } else {
+                        console.log('GunRepository: Set user-specific DID in Gun.js:', did);
+                        resolve();
+                    }
+                });
             });
         });
     }
 
     async clearCurrentDID(): Promise<void> {
         return new Promise((resolve) => {
-            localStorage.removeItem('currentDID');
-            console.log('GunRepository: Cleared current DID from localStorage');
-            resolve();
+            chrome.storage.local.remove('currentDID', () => {
+                console.log('GunRepository: Cleared current DID from chrome.storage.local');
+                resolve();
+            });
         });
     }
 
@@ -399,21 +404,22 @@ export class GunRepository {
                                     content: comment.content,
                                     author: comment.author,
                                     timestamp: comment.timestamp,
-                                });
+                                } as Comment);
                             }
                         });
                         setTimeout(() => resolveComments(commentList), 500);
                     });
 
-                    const annotationData = {
+                    const annotationData: Annotation = {
                         id: annotation.id,
-                        url: annotation.url || url, // Fallback to the queried URL if url is missing
+                        url: annotation.url || url,
                         content: annotation.content,
                         author: annotation.author,
                         timestamp: annotation.timestamp,
                         comments,
-                        isDeleted: annotation.isDeleted || false, // Add isDeleted flag
-                    };
+                        isDeleted: annotation.isDeleted || false,
+                    } as Annotation;
+
                     annotations.push(annotationData);
                     console.log('GunRepository: Loaded annotation:', annotationData);
                 };
@@ -436,9 +442,10 @@ export class GunRepository {
 
         if (callback) {
             if (!this.annotationCallbacks.has(url)) {
-                this.annotationCallbacks.set(url, []);
+                this.annotationCallbacks.set(url, { callbacks: [] });
             }
-            this.annotationCallbacks.get(url)!.push(callback);
+            const entry = this.annotationCallbacks.get(url)!;
+            entry.callbacks.push(callback);
 
             const onUpdate = async (annotation: any, key: string) => {
                 console.log('Real-time update received for URL:', url, 'Annotation:', annotation);
@@ -446,23 +453,23 @@ export class GunRepository {
                 if (annotation === null) {
                     console.log(`Received null annotation for URL: ${url}, verifying deletion intent`);
 
-                    // Check for deletion intent
                     const hasDeletionFlag = annotations.some(ann => ann.id === key && ann.isDeleted === true);
 
                     if (!hasDeletionFlag) {
                         console.log(`No deletion flag found for URL: ${url}, ignoring null update`);
                         console.log(`Possible unintended null update for URL: ${url}, investigating further`);
-                        return; // Ignore the null update if there's no explicit deletion intent
+                        return;
                     }
 
-                    // Proceed with deletion if the flag is set
                     console.log(`Confirmed deletion for URL: ${url}, ID: ${key}`);
                     const updatedAnnotations = annotations.filter(a => a.id !== key);
                     annotations.splice(0, annotations.length, ...updatedAnnotations);
                     console.log('GunRepository: Real-time deletion for URL:', url, annotations);
 
-                    const callbacks = this.annotationCallbacks.get(url) || [];
-                    callbacks.forEach(cb => cb([...annotations]));
+                    const entry = this.annotationCallbacks.get(url);
+                    if (entry) {
+                        entry.callbacks.forEach(cb => cb([...annotations]));
+                    }
                 } else {
                     console.log(`Processing update for URL: ${url} with annotation:`, annotation);
                     const comments: Comment[] = await new Promise((resolveComments) => {
@@ -474,7 +481,7 @@ export class GunRepository {
                                     content: comment.content,
                                     author: comment.author,
                                     timestamp: comment.timestamp,
-                                });
+                                } as Comment);
                             }
                         });
                         setTimeout(() => resolveComments(commentList), 500);
@@ -483,26 +490,27 @@ export class GunRepository {
                     const updatedAnnotations = annotations.filter(a => a.id !== annotation.id);
                     updatedAnnotations.push({
                         id: annotation.id,
-                        url: annotation.url || url, // Fallback to the queried URL
+                        url: annotation.url || url,
                         content: annotation.content,
                         author: annotation.author,
                         timestamp: annotation.timestamp,
                         comments,
-                        isDeleted: annotation.isDeleted || false, // Add isDeleted flag
-                    });
+                        isDeleted: annotation.isDeleted || false,
+                    } as Annotation);
 
                     annotations.splice(0, annotations.length, ...updatedAnnotations);
                     console.log('GunRepository: Real-time update for URL:', url, annotations);
 
-                    const callbacks = this.annotationCallbacks.get(url) || [];
-                    callbacks.forEach(cb => cb([...annotations]));
+                    const entry = this.annotationCallbacks.get(url);
+                    if (entry) {
+                        entry.callbacks.forEach(cb => cb([...annotations]));
+                    }
                 }
             };
 
             annotationNode.map().on(onUpdate);
 
-            // Store the listener cleanup function
-            this.annotationCallbacks.get(url)!.cleanup = () => {
+            entry.cleanup = () => {
                 annotationNode.map().off();
             };
         }
@@ -510,11 +518,10 @@ export class GunRepository {
         return [...annotations];
     }
 
-    // Cleanup method to remove listeners for a specific URL
     cleanupAnnotationsListeners(url: string): void {
-        const callbacks = this.annotationCallbacks.get(url);
-        if (callbacks && callbacks.cleanup) {
-            callbacks.cleanup();
+        const entry = this.annotationCallbacks.get(url);
+        if (entry && entry.cleanup) {
+            entry.cleanup();
             this.annotationCallbacks.delete(url);
             console.log('GunRepository: Cleaned up listeners for URL:', url);
         }
@@ -523,7 +530,7 @@ export class GunRepository {
     async saveAnnotation(annotation: Annotation): Promise<void> {
         const { comments, ...annotationWithoutComments } = annotation;
 
-        await new Promise((resolve, reject) => {
+        await new Promise<void>((resolve, reject) => {
             this.gun.get('annotations').get(annotation.url).get(annotation.id).put(annotationWithoutComments, (ack: any) => {
                 if (ack.err) {
                     console.error('GunRepository: Failed to save annotation:', ack.err);
@@ -544,7 +551,6 @@ export class GunRepository {
 
     async deleteAnnotation(url: string, id: string): Promise<void> {
         return new Promise((resolve, reject) => {
-            // Step 1: Mark the annotation as deleted
             this.gun.get('annotations').get(url).get(id).put({ isDeleted: true }, (ack: any) => {
                 if (ack.err) {
                     console.error('GunRepository: Failed to mark annotation as deleted:', ack.err);
@@ -552,7 +558,6 @@ export class GunRepository {
                     return;
                 }
 
-                // Step 2: Set the annotation to null to tombstone it
                 this.gun.get('annotations').get(url).get(id).put(null, (ack: any) => {
                     if (ack.err) {
                         console.error('GunRepository: Failed to delete annotation:', ack.err);

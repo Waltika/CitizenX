@@ -33,6 +33,7 @@
 │   ├── index.html
 │   ├── manifest.json
 │   └── sidepanel.js
+├── dist.zip
 ├── icons
 │   ├── icon120.ico
 │   ├── icon120.png
@@ -31890,7 +31891,11 @@
 │   │   ├── AnnotationList.tsx
 │   │   ├── AnnotationUI.css
 │   │   ├── AnnotationUI.tsx
-│   │   └── Comment.tsx
+│   │   ├── Comment.tsx
+│   │   ├── ShareModal.css
+│   │   ├── ShareModal.tsx
+│   │   ├── Toast.css
+│   │   └── Toast.tsx
 │   ├── config
 │   │   └── boostrap.ts
 │   ├── content
@@ -31905,7 +31910,6 @@
 │   │   ├── useAnnotations.ts
 │   │   ├── useCommentInput.ts
 │   │   ├── useIdentityExportImport.ts
-│   │   ├── useOrbitDB.ts
 │   │   ├── useProfileModal.ts
 │   │   ├── useStorage.ts
 │   │   └── useUserProfile.ts
@@ -31920,7 +31924,6 @@
 │   │   └── index.tsx
 │   ├── storage
 │   │   ├── GunRepository.ts
-│   │   ├── OrbitDBRepository.ts
 │   │   └── StorageRepository.ts
 │   ├── types
 │   │   ├── index.ts
@@ -31930,14 +31933,16 @@
 │   │   ├── __tests__
 │   │   │   └── did.test.ts
 │   │   ├── crypto.ts
-│   │   └── did.ts
+│   │   ├── did.ts
+│   │   ├── shortenUrl.ts
+│   │   └── stripHtml.ts
 │   └── web
 │       ├── check-extension.js
 │       ├── view-annotations.js
-│       └── view-annotations.tsx
+│       └── view-annotations.js
 ├── tree.txt
 ├── tsconfig.json
 ├── vite.config.extension.js
 └── vite.config.web.js
 
-4271 directories, 27670 files
+4271 directories, 27675 files

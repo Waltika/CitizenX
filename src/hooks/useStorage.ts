@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { storage } from '../storage/StorageRepository'; // Import the singleton instance
+import { storage, StorageRepository } from '../storage/StorageRepository'; // Import the singleton instance
 
 interface UseStorageReturn {
     storage: StorageRepository | null;

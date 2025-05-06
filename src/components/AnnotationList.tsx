@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Annotation, Profile } from '../types';
-import { normalizeUrl } from '../shared/utils/normalizeUrl';
-import { shortenUrl } from '../utils/shortenUrl';
-import { stripHtml } from '../utils/stripHtml';
+import { Annotation, Profile } from '@/types';
+import { normalizeUrl } from '@/shared/utils/normalizeUrl';
+import { shortenUrl } from '@/utils/shortenUrl';
+import { stripHtml } from '@/utils/stripHtml';
 import Quill from 'quill';
 import { ShareModal } from './ShareModal';
 import { Toast } from './Toast'; // Import the new Toast component
@@ -27,7 +27,7 @@ export const AnnotationList: React.FC<AnnotationListProps> = ({ annotations, pro
     const quillInstances = useRef<Record<string, Quill | null>>({});
     const [expandedComments, setExpandedComments] = useState<Record<string, boolean>>({});
 
-    // Initialize collapsed state for each annotation's comments
+    // Initialize a collapsed state for each annotation's comments
     useEffect(() => {
         const initialExpandedState: Record<string, boolean> = {};
         annotations.forEach((annotation) => {
@@ -106,7 +106,7 @@ export const AnnotationList: React.FC<AnnotationListProps> = ({ annotations, pro
             }
         });
 
-        // Cleanup on unmount
+        // Cleanup on the 'unmount' event
         return () => {
             clearTimeout(timer);
             Object.keys(quillInstances.current).forEach((editorId) => {
@@ -161,7 +161,7 @@ export const AnnotationList: React.FC<AnnotationListProps> = ({ annotations, pro
             setShareError('Failed to shorten URL');
             // Use annotation.url if defined, otherwise fall back to currentUrl
             const urlToNormalize = annotation.url || currentUrl;
-            let longUrl = '';
+            let longUrl: string;
             if (urlToNormalize) {
                 const normalizedUrl = normalizeUrl(urlToNormalize);
                 longUrl = `https://citizenx.app/check-extension?annotationId=${annotation.id}&url=${encodeURIComponent(normalizedUrl)}`;

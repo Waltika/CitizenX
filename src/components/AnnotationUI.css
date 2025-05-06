@@ -2,14 +2,13 @@
 
 /* Container for the entire component */
 .annotation-ui-container {
-    padding: 1rem;
-    width: 100%;
-    background-color: #f5f7fa;
-    min-height: 100vh;
-    font-family: Arial, sans-serif;
     display: flex;
     flex-direction: column;
-    overflow: hidden; /* Prevent container from scrolling */
+    height: 100%; /* Ensure it takes the full height of the side panel */
+    background-color: #f9f9f9;
+    font-family: Arial, sans-serif;
+    position: relative;
+    box-sizing: border-box;
 }
 
 /* Connected user section */
@@ -398,19 +397,51 @@
 .annotation-list-wrapper {
     flex: 1;
     overflow-y: auto;
-    padding-bottom: 60px; /* Add padding to avoid overlap with fixed logo */
+    padding-bottom: 60px; /* Space for the fixed footer */
 }
 
-/* Logo container at the bottom right */
-.logo-container {
+/* Footer container styles */
+.footer-container {
     position: fixed;
-    bottom: 1rem;
-    right: 1rem;
-    z-index: 1000; /* Ensure logo stays above other content */
+    bottom: 0;
+    left: 0;
+    right: 0;
+    display: flex;
+    justify-content: space-between; /* Space logo and URL text apart */
+    align-items: center;
+    padding: 0.5rem 1rem;
+    background-color: #f9f9f9;
+    border-top: 1px solid #e5e7eb;
+    z-index: 1000; /* Ensure it stays above other content */
+}
+
+/* Logo container within the footer */
+.logo-container {
+    flex-shrink: 0; /* Prevent logo from shrinking */
 }
 
 .citizenx-logo {
     width: 3rem;
     height: auto;
     display: block;
+}
+
+/* URL footer styles */
+.url-footer {
+    flex-grow: 1; /* Allow URL text to take remaining space */
+    text-align: right; /* Align URL text to the right */
+}
+
+.url-text {
+    margin: 0;
+    font-size: 0.8rem;
+    color: #666;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.url {
+    color: #2c7a7b;
+    word-break: break-all;
 }

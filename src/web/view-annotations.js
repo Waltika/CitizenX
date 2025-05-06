@@ -1,33 +1,23 @@
-<meta property="og:title" content="CitizenX Annotations" />
-<meta property="og:description" content="View these insightful annotations on CitizenX!" />
-<meta property="og:url" content="https://citizenx.app/view-annotations" />
-<meta property="og:image" content="https://citizenx.app/assets/citizenx-preview.jpg" />
-<meta name="twitter:card" content="summary_large_image" />
-<meta name="twitter:title" content="CitizenX Annotations" />
-<meta name="twitter:description" content="View these insightful annotations on CitizenX!" />
-<meta name="twitter:image" content="https://citizenx.app/assets/citizenx-preview.jpg" />
+// src/web/view-annotations.tsx
+import React from 'react';
+import { createRoot } from 'react-dom/client';
+import { AnnotationUI } from '../components/AnnotationUI';
 
-<script>
-    const urlParams = new URLSearchParams(window.location.search);
-    const annotationId = urlParams.get('annotationId');
-    const targetUrl = urlParams.get('url');
-    const homepageUrl = 'https://citizenx.app';
+const { annotationId, targetUrl } = window.CitizenX || {};
 
-    if (!annotationId || !targetUrl) {
-    window.location.href = homepageUrl;
+if (annotationId && targetUrl) {
+    const container = document.getElementById('annotation-ui');
+    if (container) {
+        const root = createRoot(container);
+        root.render(
+            <AnnotationUI
+                url={targetUrl}
+                isPopupUrl={false}
+            />
+        );
+    } else {
+        console.error('Annotation UI container not found');
+    }
 } else {
-    // Set the annotated page link
-    const linkElement = document.getElementById('annotated-page-link');
-    if (linkElement) {
-    linkElement.href = targetUrl;
-    linkElement.textContent = targetUrl;
+    console.error('Required parameters (annotationId, targetUrl) not found');
 }
-
-    // Set global variables for the React app
-    window.CitizenX = {
-    annotationId: annotationId,
-    targetUrl: targetUrl
-};
-}
-</script>
-<script src="/assets/annotation-ui.bundle.js"></script>

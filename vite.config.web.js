@@ -19,7 +19,7 @@ export default defineConfig({
         emptyOutDir: true,
         rollupOptions: {
             input: {
-                viewAnnotations: resolve(process.cwd(), 'src/web/view-annotations.tsx'),
+                viewAnnotations: resolve(process.cwd(), 'src/web/view-annotations.js'),
             },
             output: {
                 format: 'es', // ES format to allow code-splitting

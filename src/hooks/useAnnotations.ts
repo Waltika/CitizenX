@@ -108,6 +108,8 @@ export const useAnnotations = ({ url, did }: UseAnnotationsProps): UseAnnotation
             author: did,
             timestamp: Date.now(),
             comments: [],
+            text: '',
+            isDeleted: false,
         };
 
         await storage.saveAnnotation(annotation);
@@ -145,6 +147,8 @@ export const useAnnotations = ({ url, did }: UseAnnotationsProps): UseAnnotation
             content,
             author: did,
             timestamp: Date.now(),
+            isDeleted: false,
+            text: ''
         };
 
         await storage.saveComment(normalizeUrl(url), annotationId, comment);
