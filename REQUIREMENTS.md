@@ -41,6 +41,16 @@ A decentralized Chrome extension for annotating websites in order to bring a kno
         - Update the CitizenX extension's build process (e.g., Vite configuration) to include the shared library.
         - Test the shared library to ensure consistent behavior (e.g., identical hash outputs for `simpleHash`, consistent URL normalization) across both projects.
         - Document the shared library's API and usage in a `README.md` within the library directory.
+14. We want a collaborative deletion and moderation system for annotations and comments to ensure fair and secure content management.
+    - **Status**: Pending.
+    - **Description**: Implement a system where only the author can delete their own annotations or comments, any user can hide content locally, and moderators can delete illegal content via a collaborative voting process. This ensures a balance between user control, community moderation, and legal compliance.
+    - **Implementation Details**:
+        - **Ownership-Based Deletion**: Only the author (identified by their DID) can delete their annotations or comments. Update `AnnotationManager.ts` and `gun-server.js` to verify the requester’s DID against the `author` field. Add a "Delete" button for comments in `AnnotationList.tsx`, visible only to the comment’s author.
+        - **Hiding Content**: Allow any user to hide annotations or comments locally by storing hidden content IDs in `chrome.storage.local` (`hiddenAnnotations`, `hiddenComments`). Add "Hide" and "Unhide" buttons in `AnnotationList.tsx`, affecting only the user’s view. Filter hidden content from the UI with an option to toggle visibility.
+        - **Moderator-Driven Deletion**: Define moderators in a Gun.js `admins` node with trusted DIDs. Moderators can initiate deletion of illegal content (e.g., content violating laws or community guidelines) via a voting process stored in `deletionVotes/<contentId>`. Require at least 3 moderator approvals to delete, using signed votes to ensure authenticity. Implement a `reportContent` function to flag content, storing reports in `reportedContent/<contentId>`. Moderators review and vote via a new `ModeratorPanel.tsx` component.
+        - **Security**: Use Gun.js SEA for signing deletion and vote requests. Validate signatures in `AnnotationManager.ts` and `gun-server.js`. Log deletions and votes in a `deletionLog` node for transparency.
+        - **UI and Notifications**: Add "Report" buttons for annotations and comments in `AnnotationList.tsx`. Notify users via the extension’s UI (leveraging future notification system from Requirements 5 or 6) when their content is deleted or reported. Style buttons to match the UI (teal `#2c7a7b`, hover `#4a999a`).
+        - **Testing**: Simulate deletion scenarios (e.g., unauthorized attempts, moderator voting, hiding/unhiding) to ensure permissions and voting work as expected.
 
 **Focus for Next Sprint**:
 - **Sharding (Scalability)**:
@@ -54,7 +64,7 @@ A decentralized Chrome extension for annotating websites in order to bring a kno
         - Implement rate limiting in `gun-server.js` to prevent DoS attacks, using Gun.js `rateLimits/<did>` to track requests per user.
         - Enhance CORS security by setting a strict CORS policy (e.g., `Access-Control-Allow-Origin: https://citizenx.app`).
         - Sanitize user inputs (annotations, comments) to prevent XSS attacks using a library like DOMPurify in `useAnnotations.ts` and `gun-server.js`.
-    - Ensure only owners of annotations/comments and admins can delete them:
+    - Ensure only owners of annotations/comments and admins can delete them (Requirement 14):
         - Extend the existing signature verification in `AnnotationManager.ts` to check the requester’s DID against the `author` field for delete operations.
         - Define an admin role in Gun.js (`admins/<did>`) with a list of trusted DIDs, allowing admins to delete content after community consensus.
         - Update `writeRequests` to include delete operations, ensuring servers verify ownership or admin status before applying deletions.
@@ -63,6 +73,11 @@ A decentralized Chrome extension for annotating websites in order to bring a kno
     - Begin implementing the shared library (`@citizenx/shared`) as per Requirement 13, starting with `normalizeUrl` and `simpleHash`.
     - Update `gun-server.js` and relevant extension files (`AnnotationManager.ts`, `CleanupManager.ts`) to import from the shared library.
     - Test the integration to ensure no regressions in sharding or URL normalization.
+- **Collaborative Deletion and Moderation**:
+    - Implement ownership-based deletion for annotations and comments (Requirement 14), updating `AnnotationManager.ts` and `gun-server.js` to enforce DID-based permissions.
+    - Add "Delete" button for comments and "Hide"/"Unhide"/"Report" buttons for both annotations and comments in `AnnotationList.tsx`.
+    - Develop the moderator voting system in Gun.js (`deletionVotes`, `reportedContent`) and create `ModeratorPanel.tsx` for reviewing and voting on reported content.
+    - Test deletion, hiding, and moderation workflows to ensure compliance with collaborative requirements.
 
 ## Non Functional Requirements - v1.0
 1. Except for the Chrome Extension, we want zero installation on the user's device.
@@ -79,7 +94,7 @@ A decentralized Chrome extension for annotating websites in order to bring a kno
     - **Status**: Not applicable for JWT tokens (not used). Implemented security for annotations:
         - Signed annotations and write requests to prevent unauthorized changes.
         - Immutable versioning with tombstones for deletions.
-        - Protection against malicious peers, data injection, DID spoofing, replay attacks, and DoS attacks through signature verification, rate-limiting, timestamp checks, and logging.
+        - Protection against malicious peers, data injection, DID spoofing, replay attacks, and DoS attacks through signature verification, rate-limiting, timestamp checks, and logging (enhanced by Requirement 14 for deletion security).
 7. Add privacy policy to manifest.json once we have a website: "privacy_policy": "https://yourwebsite.com/privacy-policy"
     - **Status**: Pending. Awaiting website and `manifest.json`.
 
