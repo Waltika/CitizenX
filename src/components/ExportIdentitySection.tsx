@@ -1,4 +1,3 @@
-// src/components/ExportIdentitySection.tsx
 import React, { useState } from 'react';
 import { PassphraseModal } from './PassphraseModal';
 
@@ -32,11 +31,16 @@ export const ExportIdentitySection: React.FC<ExportIdentitySectionProps> = ({
             setIsExportModalOpen(true);
             setPassphraseModalOpen(false);
             setPassphrase('');
-            onCloseSettings();
-        } catch (err : any) {
+            // Do NOT call onCloseSettings here; wait until the export modal is closed
+        } catch (err: any) {
             console.error('Failed to export identity:', err);
             alert(err.message || 'Failed to export identity');
         }
+    };
+
+    const handleCloseExportModal = () => {
+        setIsExportModalOpen(false);
+        onCloseSettings(); // Close the settings menu after the export modal is closed
     };
 
     return (
@@ -75,7 +79,7 @@ export const ExportIdentitySection: React.FC<ExportIdentitySectionProps> = ({
                     </button>
                     <button
                         className="export-modal-close-button"
-                        onClick={() => setIsExportModalOpen(false)}
+                        onClick={handleCloseExportModal}
                     >
                         Close
                     </button>

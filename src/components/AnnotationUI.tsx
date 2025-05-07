@@ -114,6 +114,10 @@ export const AnnotationUI: React.FC<AnnotationUIProps> = ({ url, isUrlLoading })
         setJustImported(true);
     };
 
+    const handleResetJustImported = () => {
+        setJustImported(false);
+    };
+
     useEffect(() => {
         const setupChromeMessageListener = () => {
             const handleMessage = (message: any) => {
@@ -162,6 +166,7 @@ export const AnnotationUI: React.FC<AnnotationUIProps> = ({ url, isUrlLoading })
                         importIdentity={importIdentity}
                         onCloseSettings={handleCloseSettings}
                         onBeforeImport={handleBeforeImport}
+                        onResetJustImported={handleResetJustImported}
                     />
                 </div>
             </div>

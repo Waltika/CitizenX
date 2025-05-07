@@ -9,7 +9,8 @@ interface SettingsPanelProps {
     exportIdentity: (passphrase: string) => Promise<string>;
     importIdentity: (data: string, passphrase: string) => Promise<void>;
     onCloseSettings: (justImported?: boolean) => void;
-    onBeforeImport?: () => void; // New prop to signal before import
+    onBeforeImport?: () => void;
+    onResetJustImported?: () => void; // New prop to reset justImported
 }
 
 export const SettingsPanel: React.FC<SettingsPanelProps> = ({
@@ -20,15 +21,18 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
                                                                 importIdentity,
                                                                 onCloseSettings,
                                                                 onBeforeImport,
+                                                                onResetJustImported,
                                                             }) => {
     const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
     const handleAuthenticate = async () => {
+        onResetJustImported?.(); // Reset justImported before authenticating
         await authenticate();
         setIsSettingsOpen(false);
     };
 
     const handleSignOut = async () => {
+        onResetJustImported?.(); // Reset justImported before signing out
         await signOut();
         setIsSettingsOpen(false);
     };
