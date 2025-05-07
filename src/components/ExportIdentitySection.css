@@ -2,6 +2,7 @@
 @import './styles/variables.css';
 @import './styles/common.css';
 
+/* Only keeping specific styles for export identity section */
 .settings-menu-button {
     display: block;
     padding: var(--spacing-sm) var(--spacing-md);
@@ -16,67 +17,4 @@
 
 .settings-menu-button:hover {
     background-color: #f5f7fa;
-}
-
-.export-modal {
-    position: fixed;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    background: var(--color-white);
-    padding: var(--spacing-md);
-    border-radius: var(--border-radius);
-    box-shadow: var(--shadow-md);
-    z-index: 1000;
-    width: 90%;
-    max-width: 400px;
-}
-
-.export-modal-title {
-    font-size: var(--font-size-lg);
-    margin: 0 0 var(--spacing-sm) 0;
-    color: var(--color-text);
-}
-
-.export-modal-textarea {
-    width: 100%;
-    margin-bottom: var(--spacing-sm);
-    padding: var(--spacing-sm);
-    border: 1px solid var(--color-border);
-    border-radius: var(--border-radius);
-    font-size: var(--font-size-xs);
-    color: var(--color-text);
-    background-color: var(--color-white);
-    height: 3.75rem;
-}
-
-.export-modal-button {
-    padding: var(--spacing-sm) var(--spacing-md);
-    background: var(--color-primary);
-    color: var(--color-white);
-    border: none;
-    border-radius: var(--border-radius);
-    cursor: pointer;
-    width: 100%;
-    font-size: var(--font-size-sm);
-    margin-bottom: var(--spacing-sm);
-}
-
-.export-modal-button:hover {
-    background-color: var(--color-primary-hover);
-}
-
-.export-modal-close-button {
-    padding: var(--spacing-sm) var(--spacing-md);
-    background: var(--color-secondary);
-    color: var(--color-white);
-    border: none;
-    border-radius: var(--border-radius);
-    cursor: pointer;
-    width: 100%;
-    font-size: var(--font-size-sm);
-}
-
-.export-modal-close-button:hover {
-    background-color: var(--color-secondary-hover);
 }

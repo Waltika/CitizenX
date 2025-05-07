@@ -14,7 +14,9 @@
 }
 
 .error-text {
-    composes: error-text from './styles/common.css';
+    color: var(--color-error);
+    margin: var(--spacing-xs) 0 0 0;
+    font-size: var(--font-size-xs);
 }
 
 /* Wrapper for the annotation list to make it scrollable */

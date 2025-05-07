@@ -1,7 +1,6 @@
 // src/components/PassphraseModal.tsx
 import React from 'react';
-import './PassphraseModal.css';
-import './PassphraseModal.css';
+import './styles/common.css';
 
 interface PassphraseModalProps {
     action: 'export' | 'import';
@@ -19,8 +18,8 @@ export const PassphraseModal: React.FC<PassphraseModalProps> = ({
                                                                     onCancel,
                                                                 }) => {
     return (
-        <div className="profile-modal">
-            <h2 className="profile-modal-title">
+        <div className="modal">
+            <h2 className="modal-title">
                 {action === 'export' ? 'Export Identity' : 'Import Identity'}
             </h2>
             <input
@@ -28,18 +27,18 @@ export const PassphraseModal: React.FC<PassphraseModalProps> = ({
                 value={passphrase}
                 onChange={(e) => onPassphraseChange(e.target.value)}
                 placeholder="Enter passphrase"
-                className="profile-modal-input"
+                className="modal-input"
             />
-            <div className="profile-modal-buttons">
+            <div className="modal-buttons">
                 <button
                     onClick={onConfirm}
-                    className="profile-modal-save-button"
+                    className="modal-save-button"
                 >
                     {action === 'export' ? 'Export' : 'Import'}
                 </button>
                 <button
                     onClick={onCancel}
-                    className="profile-modal-cancel-button"
+                    className="modal-cancel-button"
                 >
                     Cancel
                 </button>

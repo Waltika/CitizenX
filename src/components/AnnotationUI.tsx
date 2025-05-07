@@ -14,6 +14,7 @@ import './LoadingSpinner.css';
 import './ConnectedUser.css';
 import './ExportIdentitySection.css';
 import './SettingsPanel.css';
+import './Comment.css';
 
 import Quill from 'quill';
 import 'quill/dist/quill.snow.css';

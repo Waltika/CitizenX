@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { PassphraseModal } from './PassphraseModal';
+import './styles/common.css';
 import './ExportIdentitySection.css';
 
 interface ExportIdentitySectionProps {
@@ -84,27 +85,27 @@ export const ExportIdentitySection: React.FC<ExportIdentitySectionProps> = ({
                 />
             )}
             {isExportModalOpen && (
-                <div className="export-modal">
-                    <h2 className="export-modal-title">Export Identity</h2>
+                <div className="modal">
+                    <h2 className="modal-title">Export Identity</h2>
                     <textarea
-                        className="export-modal-textarea"
+                        className="modal-textarea"
                         value={exportedIdentity}
                         readOnly
                     />
                     <button
-                        className="export-modal-button"
+                        className="modal-save-button"
                         onClick={() => navigator.clipboard.writeText(exportedIdentity)}
                     >
                         Copy to Clipboard
                     </button>
                     <button
-                        className="export-modal-button"
+                        className="modal-save-button"
                         onClick={handleDownloadIdentity}
                     >
                         Download
                     </button>
                     <button
-                        className="export-modal-close-button"
+                        className="modal-cancel-button"
                         onClick={handleCloseExportModal}
                     >
                         Close

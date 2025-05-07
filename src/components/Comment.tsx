@@ -1,6 +1,7 @@
 // src/components/Comment.tsx
 import React from 'react';
 import { Comment } from '@/types';
+import './Comment.css';
 
 interface CommentProps {
     comment: Comment;
@@ -13,18 +14,18 @@ const Comment: React.FC<CommentProps> = ({ comment, profiles }) => {
     const profile = profiles[comment.author] || { handle: 'Unknown', profilePicture: '' };
 
     return (
-        <div style={{ marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+        <div className="comment-container">
             {profile.profilePicture && (
                 <img
                     src={profile.profilePicture}
                     alt="Profile"
-                    style={{ width: '1.25rem', height: '1.25rem', borderRadius: '50%' }}
+                    className="comment-profile-picture"
                 />
             )}
-            <p style={{ margin: '0', fontSize: '0.8rem', color: '#666' }}>
+            <p className="comment-metadata">
                 {profile.handle} • {new Date(comment.timestamp).toLocaleString()}
             </p>
-            <p style={{ margin: '0 0 0 0.5rem', fontSize: '0.8rem', color: '#333' }}>{comment.text}</p>
+            <p className="comment-text">{comment.text}</p>
         </div>
     );
 };
