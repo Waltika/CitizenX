@@ -32,6 +32,15 @@ A decentralized Chrome extension for annotating websites in order to bring a kno
     - **SSR Limitation**: The `/view-annotations` endpoint currently fails to render due to `AnnotationList` using React hooks (`useState`), which are not supported in server-side rendering. A temporary workaround was implemented by creating `AnnotationListServer.tsx`, but this refactoring was reverted to focus on scalability and security.
 12. Both on the annotation feature under 11 and on the sharing functionality, provide a screenshot of the top of the page being annotated (I guess store it along the annotations but only once).
     - **Status**: Pending.
+13. We want to factor out common functions between the CitizenX Chrome extension and the `gun-server` project to avoid code duplication and ensure consistency.
+    - **Status**: Pending.
+    - **Description**: Common utility functions (e.g., `normalizeUrl`, `simpleHash`) and shared logic (e.g., sharding calculations, data validation) should be extracted into a shared library (e.g., `@citizenx/shared`) to be used by both the Chrome extension and the `gun-server` project. This library should be maintained in a monorepo structure (e.g., using `pnpm` workspaces) or published as a private npm package to ensure both projects use the same implementation, reducing maintenance overhead and preventing inconsistencies.
+    - **Implementation Details**:
+        - Identify and extract shared functions from `src/shared/utils/normalizeUrl.ts`, `AnnotationManager.ts`, `CleanupManager.ts`, and `gun-server.js` into `@citizenx/shared`.
+        - Update `gun-server.js` to use ES modules or TypeScript to import the shared library, ensuring compatibility with the Render.com deployment.
+        - Update the CitizenX extension's build process (e.g., Vite configuration) to include the shared library.
+        - Test the shared library to ensure consistent behavior (e.g., identical hash outputs for `simpleHash`, consistent URL normalization) across both projects.
+        - Document the shared library's API and usage in a `README.md` within the library directory.
 
 **Focus for Next Sprint**:
 - **Sharding (Scalability)**:
@@ -50,6 +59,10 @@ A decentralized Chrome extension for annotating websites in order to bring a kno
         - Define an admin role in Gun.js (`admins/<did>`) with a list of trusted DIDs, allowing admins to delete content after community consensus.
         - Update `writeRequests` to include delete operations, ensuring servers verify ownership or admin status before applying deletions.
     - Test security measures by simulating attacks (e.g., unauthorized deletion attempts, XSS injection, DoS attacks) and verifying that protections hold.
+- **Code Factorization**:
+    - Begin implementing the shared library (`@citizenx/shared`) as per Requirement 13, starting with `normalizeUrl` and `simpleHash`.
+    - Update `gun-server.js` and relevant extension files (`AnnotationManager.ts`, `CleanupManager.ts`) to import from the shared library.
+    - Test the integration to ensure no regressions in sharding or URL normalization.
 
 ## Non Functional Requirements - v1.0
 1. Except for the Chrome Extension, we want zero installation on the user's device.
@@ -93,12 +106,12 @@ A decentralized Chrome extension for annotating websites in order to bring a kno
 - **Status**: Completed.
 
 ### Reusing Node.js Code for SSR on the Website
-**Description**: To support rendering annotations on the website (`https://citizenx.app`) for non-Chrome browsers (Requirement 11), we plan to reuse the Node.js code from the Chrome extension's side panel (e.g., `useAnnotations.ts`, `useStorage.ts`, `AnnotationList.tsx`) as the Node.js backend for server-side rendering (SSR) on the website server (`gun-server.js`). The goal is to render the `AnnotationList` component on the server, minimizing client-side JavaScript while maintaining the same UI and functionality as the extension.
+**Description**: To support rendering annotations on the website (`https://citizenx.app`) for non-Chrome browsers (Requirement 11), we plan to reuse the Node.js code from the Chrome extension's side panel (e.g., `useAnnotations.ts`, `useStorage.ts`, `AnnotationList.tsx`) as the Node.js backend for server-side rendering (SSR) on the website server (`gun-server.js`). The goal is to render the `AnnotationList` component on the server, minimizing client-side JavaScript while maintaining the same UI and functionality as the extension. Common utilities and logic will be shared via the `@citizenx/shared` library (Requirement 13) to ensure consistency.
 
 **Plan**:
-- **Shared Library**: Extract common logic and components (e.g., `useAnnotations.ts`, `useStorage.ts`, `AnnotationList.tsx`, `AnnotationUI.tsx`, `Comment.tsx`, `types/`, `shared/utils/normalizeUrl.ts`, `styles/`) into a shared library (`@citizenx/shared`) that both the Chrome extension and website server can use. Use a monorepo structure (e.g., with `pnpm` workspaces) or publish the library as a private npm package.
+- **Shared Library**: Extract common logic and components (e.g., `useAnnotations.ts`, `useStorage.ts`, `AnnotationList.tsx`, `AnnotationUI.tsx`, `Comment.tsx`, `types/`, `shared/utils/normalizeUrl.ts`, `shared/utils/hash.ts`, `styles/`) into a shared library (`@citizenx/shared`) that both the Chrome extension and website server can use. Use a monorepo structure (e.g., with `pnpm` workspaces) or publish the library as a private npm package.
 - **Server-Side Rendering**:
-    - Create a server-side version of `useAnnotations.ts` (`getAnnotationsServer.ts`) that fetches annotations and comments from Gun.js without React hooks.
+    - Create a server-side version of `useAnnotations.ts` (`getAnnotationsServer.ts`) that fetches annotations and comments from Gun.js without React hooks, using utilities from `@citizenx/shared`.
     - Update `gun-server.js` to use `ReactDOMServer.renderToString` to render the `AnnotationList` component on the server.
     - Add a new endpoint `/view-annotations` to render annotations as HTML, passing fetched data as props to `AnnotationList`.
-- **Lightweight Client-Side JS**: Include minimal client-side JavaScript (e.g., an inline
+- **Lightweight Client-Side JS**: Include minimal client-side JavaScript (e.g., an inline script for interactivity) to hydrate the server-rendered content, leveraging `@citizenx/shared` for shared logic.
