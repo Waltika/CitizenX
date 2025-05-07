@@ -1,4 +1,3 @@
-// GunRepository.ts
 import Gun from 'gun';
 import 'gun/lib/webrtc';
 import { PeerManager } from './PeerManager';
@@ -7,7 +6,6 @@ import { ProfileManager } from './ProfileManager';
 import { CleanupManager } from './CleanupManager';
 import { Annotation, Profile, Comment } from '@/types';
 
-// Define PeerStatus interface to fix TS2304 error
 interface PeerStatus {
     url: string;
     connected: boolean;
@@ -80,6 +78,7 @@ export class GunRepository {
         if (storedState.initialized) {
             console.log('GunRepository: Already initialized, using stored state');
             this.peerManager.setConnected(storedState.peerConnected);
+            await this.cleanupManager.migrateAnnotations(); // Run migration on startup
             return;
         }
 
@@ -127,9 +126,10 @@ export class GunRepository {
             };
 
             this.cleanupListeners = cleanup;
-        }).then(() => {
+        }).then(async () => {
             console.log('GunRepository: Initialization complete, starting peer discovery');
             this.peerManager.discoverPeers();
+            await this.cleanupManager.migrateAnnotations(); // Run migration after initialization
         });
     }
 

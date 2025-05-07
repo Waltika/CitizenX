@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useStorage } from './useStorage';
 import { Annotation, Comment } from '../types';
 import { normalizeUrl } from '../shared/utils/normalizeUrl';
@@ -24,17 +24,21 @@ export const useAnnotations = ({ url, did }: UseAnnotationsProps): UseAnnotation
     const [profiles, setProfiles] = useState<Record<string, any>>({});
     const [error, setError] = useState<string | null>(null);
     const [loading, setLoading] = useState<boolean>(false);
+    const currentUrlRef = useRef<string | null>(null);
+    const abortControllerRef = useRef<AbortController | null>(null);
 
     useEffect(() => {
         if (!url) {
             console.log('useAnnotations: No URL provided, skipping fetch');
             setLoading(false);
+            setAnnotations([]);
+            setProfiles({});
             return;
         }
 
         if (storageLoading) {
             console.log('useAnnotations: Waiting for storage to initialize');
-            setLoading(true); // Show loading while waiting for storage
+            setLoading(true);
             return;
         }
 
@@ -46,15 +50,29 @@ export const useAnnotations = ({ url, did }: UseAnnotationsProps): UseAnnotation
         }
 
         const normalizedUrl = normalizeUrl(url);
+        currentUrlRef.current = normalizedUrl;
         console.log('useAnnotations: Fetching annotations for URL:', normalizedUrl);
         setLoading(true);
         setError(null);
 
+        // Create a new AbortController for this fetch
+        abortControllerRef.current = new AbortController();
+        const signal = abortControllerRef.current.signal;
+
         const updateAnnotations = (newAnnotations: Annotation[]) => {
+            if (signal.aborted || currentUrlRef.current !== normalizedUrl) {
+                console.log('useAnnotations: Ignoring update for stale URL:', normalizedUrl);
+                return;
+            }
             setAnnotations(newAnnotations);
         };
 
         storage.getAnnotations(normalizedUrl, updateAnnotations).then((fetchedAnnotations) => {
+            if (signal.aborted || currentUrlRef.current !== normalizedUrl) {
+                console.log('useAnnotations: Ignoring fetch result for stale URL:', normalizedUrl);
+                return;
+            }
+
             console.log('useAnnotations: Fetched annotations:', fetchedAnnotations);
             setAnnotations(fetchedAnnotations);
 
@@ -66,6 +84,11 @@ export const useAnnotations = ({ url, did }: UseAnnotationsProps): UseAnnotation
             );
 
             Promise.all(profilePromises).then((profileResults) => {
+                if (signal.aborted || currentUrlRef.current !== normalizedUrl) {
+                    console.log('useAnnotations: Ignoring profile results for stale URL:', normalizedUrl);
+                    return;
+                }
+
                 const newProfiles = profileResults.reduce((acc: Record<string, any>, { did, profile }) => {
                     if (profile) {
                         acc[did] = profile;
@@ -75,16 +98,27 @@ export const useAnnotations = ({ url, did }: UseAnnotationsProps): UseAnnotation
                 setProfiles((prev) => ({ ...prev, ...newProfiles }));
             });
         }).catch((err) => {
+            if (signal.aborted || currentUrlRef.current !== normalizedUrl) {
+                console.log('useAnnotations: Ignoring error for stale URL:', normalizedUrl);
+                return;
+            }
             console.error('useAnnotations: Failed to fetch annotations:', err);
             setError(err.message || 'Failed to fetch annotations');
         }).finally(() => {
-            setLoading(false);
+            if (currentUrlRef.current === normalizedUrl) {
+                setLoading(false);
+            }
         });
 
-        // Cleanup listeners on unmount or URL change
+        // Cleanup function
         return () => {
-            console.log('useAnnotations: Cleaning up listeners for URL:', normalizedUrl);
+            console.log('useAnnotations: Cleaning up for URL:', normalizedUrl);
             storage.cleanupAnnotationsListeners(normalizedUrl);
+            if (abortControllerRef.current) {
+                abortControllerRef.current.abort();
+                abortControllerRef.current = null;
+            }
+            currentUrlRef.current = null;
         };
     }, [url, storage, storageLoading, storageError]);
 
@@ -113,7 +147,9 @@ export const useAnnotations = ({ url, did }: UseAnnotationsProps): UseAnnotation
         };
 
         await storage.saveAnnotation(annotation);
-        setAnnotations((prev) => [...prev, annotation]);
+        if (currentUrlRef.current === normalizeUrl(url)) {
+            setAnnotations((prev) => [...prev, annotation]);
+        }
     }, [did, url, storage]);
 
     const handleDeleteAnnotation = useCallback(async (annotationId: string) => {
@@ -126,7 +162,9 @@ export const useAnnotations = ({ url, did }: UseAnnotationsProps): UseAnnotation
         }
 
         await storage.deleteAnnotation(normalizeUrl(url), annotationId);
-        setAnnotations((prev) => prev.filter((annotation) => annotation.id !== annotationId));
+        if (currentUrlRef.current === normalizeUrl(url)) {
+            setAnnotations((prev) => prev.filter((annotation) => annotation.id !== annotationId));
+        }
     }, [url, storage]);
 
     const handleSaveComment = useCallback(async (annotationId: string, content: string) => {
@@ -152,13 +190,15 @@ export const useAnnotations = ({ url, did }: UseAnnotationsProps): UseAnnotation
         };
 
         await storage.saveComment(normalizeUrl(url), annotationId, comment);
-        setAnnotations((prev) =>
-            prev.map((annotation) =>
-                annotation.id === annotationId
-                    ? { ...annotation, comments: [...(annotation.comments || []), comment] }
-                    : annotation
-            )
-        );
+        if (currentUrlRef.current === normalizeUrl(url)) {
+            setAnnotations((prev) =>
+                prev.map((annotation) =>
+                    annotation.id === annotationId
+                        ? { ...annotation, comments: [...(annotation.comments || []), comment] }
+                        : annotation
+                )
+            );
+        }
     }, [did, url, storage]);
 
     return {

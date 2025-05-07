@@ -1,8 +1,20 @@
-// index.tsx
 import React, { useState, useEffect } from 'react';
 import ReactDOM from 'react-dom/client';
 import { AnnotationUI } from '../components/AnnotationUI';
 import { storage } from '../storage/StorageRepository';
+
+function debounce<T extends (...args: any[]) => void>(func: T, wait: number): (...args: Parameters<T>) => void {
+    let timeout: NodeJS.Timeout | null = null;
+    return (...args: Parameters<T>) => {
+        if (timeout) {
+            clearTimeout(timeout);
+        }
+        timeout = setTimeout(() => {
+            func(...args);
+            timeout = null;
+        }, wait);
+    };
+}
 
 function App() {
     const [url, setUrl] = useState<string>('');
@@ -27,6 +39,9 @@ function App() {
             setIsUrlLoading(false);
         }
     };
+
+    // Debounced version of fetchCurrentTabUrl
+    const debouncedFetchCurrentTabUrl = debounce(fetchCurrentTabUrl, 300);
 
     const fetchAnnotationsAndProfiles = async () => {
         if (!storageInitialized || !url) {
@@ -121,13 +136,13 @@ function App() {
 
         const handleTabChange = () => {
             console.log('index.tsx: Tab activated or updated, fetching new URL');
-            fetchCurrentTabUrl();
+            debouncedFetchCurrentTabUrl();
         };
 
         const handleWindowFocus = (windowId: number) => {
             if (windowId === chrome.windows.WINDOW_ID_NONE) return;
             console.log('index.tsx: Window focus changed, fetching new URL');
-            fetchCurrentTabUrl();
+            debouncedFetchCurrentTabUrl();
         };
 
         chrome.tabs.onActivated.addListener(handleTabChange);

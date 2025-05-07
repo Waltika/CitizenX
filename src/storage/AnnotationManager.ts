@@ -1,5 +1,5 @@
-// AnnotationManager.ts
 import { Annotation, Comment } from '@/types';
+import { normalizeUrl } from '@/shared/utils/normalizeUrl';
 
 type AnnotationUpdateCallback = (annotations: Annotation[]) => void;
 
@@ -16,58 +16,94 @@ export class AnnotationManager {
         this.gun = gun;
     }
 
+    private getShardKey(url: string): { domainShard: string; subShard?: string } {
+        const normalizedUrl = normalizeUrl(url);
+        const urlObj = new URL(normalizedUrl);
+        const domain = urlObj.hostname.replace(/\./g, '_');
+        const domainShard = `annotations_${domain}`;
+
+        // Sub-sharding for high-traffic domains
+        const highTrafficDomains = ['google_com', 'facebook_com', 'twitter_com'];
+        if (highTrafficDomains.includes(domain)) {
+            const hash = this.simpleHash(normalizedUrl);
+            const subShardIndex = hash % 10; // 10 sub-shards
+            return { domainShard, subShard: `${domainShard}_shard_${subShardIndex}` };
+        }
+
+        return { domainShard };
+    }
+
+    private simpleHash(str: string): number {
+        let hash = 0;
+        for (let i = 0; i < str.length; i++) {
+            const char = str.charCodeAt(i);
+            hash = ((hash << 5) - hash) + char;
+            hash = hash & hash; // Convert to 32-bit integer
+        }
+        return Math.abs(hash);
+    }
+
     async getAnnotations(url: string, callback?: AnnotationUpdateCallback): Promise<Annotation[]> {
         const annotations: Annotation[] = [];
-        const annotationNode = this.gun.get('annotations').get(url);
+        const { domainShard, subShard } = this.getShardKey(url);
+        const annotationNodes = [
+            this.gun.get('annotations').get(url), // Legacy non-sharded node
+            this.gun.get(domainShard).get(url), // Primary shard
+        ];
+        if (subShard) {
+            annotationNodes.push(this.gun.get(subShard).get(url)); // Sub-shard for high-traffic domains
+        }
 
         const maxRetries = 3;
         for (let attempt = 1; attempt <= maxRetries; attempt++) {
             const loadedAnnotations: Set<string> = new Set();
             let hasNewData = false;
 
-            await new Promise<void>((resolve) => {
-                const onData = async (annotation: any) => {
-                    if (!annotation) return;
-                    if (loadedAnnotations.has(annotation.id)) return;
-                    loadedAnnotations.add(annotation.id);
-                    hasNewData = true;
+            for (const annotationNode of annotationNodes) {
+                await new Promise<void>((resolve) => {
+                    const onData = async (annotation: any) => {
+                        if (!annotation) return;
+                        if (loadedAnnotations.has(annotation.id)) return;
+                        loadedAnnotations.add(annotation.id);
+                        hasNewData = true;
 
-                    const comments: Comment[] = await new Promise((resolveComments) => {
-                        const commentList: Comment[] = [];
-                        annotationNode.get(annotation.id).get('comments').map().once((comment: any) => {
-                            if (comment) {
-                                commentList.push({
-                                    id: comment.id,
-                                    content: comment.content,
-                                    author: comment.author,
-                                    timestamp: comment.timestamp,
-                                } as Comment);
-                            }
+                        const comments: Comment[] = await new Promise((resolveComments) => {
+                            const commentList: Comment[] = [];
+                            annotationNode.get(annotation.id).get('comments').map().once((comment: any) => {
+                                if (comment) {
+                                    commentList.push({
+                                        id: comment.id,
+                                        content: comment.content,
+                                        author: comment.author,
+                                        timestamp: comment.timestamp,
+                                    } as Comment);
+                                }
+                            });
+                            setTimeout(() => resolveComments(commentList), 500);
                         });
-                        setTimeout(() => resolveComments(commentList), 500);
-                    });
 
-                    const annotationData: Annotation = {
-                        id: annotation.id,
-                        url: annotation.url || url,
-                        content: annotation.content,
-                        author: annotation.author,
-                        timestamp: annotation.timestamp,
-                        comments,
-                        isDeleted: annotation.isDeleted || false,
-                    } as Annotation;
+                        const annotationData: Annotation = {
+                            id: annotation.id,
+                            url: annotation.url || url,
+                            content: annotation.content,
+                            author: annotation.author,
+                            timestamp: annotation.timestamp,
+                            comments,
+                            isDeleted: annotation.isDeleted || false,
+                        } as Annotation;
 
-                    annotations.push(annotationData);
-                    console.log('AnnotationManager: Loaded annotation:', annotationData);
-                };
+                        annotations.push(annotationData);
+                        console.log('AnnotationManager: Loaded annotation:', annotationData);
+                    };
 
-                annotationNode.map().once(onData);
+                    annotationNode.map().once(onData);
 
-                setTimeout(() => {
-                    console.log('AnnotationManager: Initial annotations loaded for URL:', url, annotations, 'Has new data:', hasNewData, 'Attempt:', attempt);
-                    resolve();
-                }, 2000);
-            });
+                    setTimeout(() => {
+                        console.log('AnnotationManager: Initial annotations loaded for URL:', url, annotations, 'Has new data:', hasNewData, 'Attempt:', attempt);
+                        resolve();
+                    }, 2000);
+                });
+            }
 
             if (hasNewData || attempt === maxRetries) {
                 break;
@@ -90,7 +126,6 @@ export class AnnotationManager {
 
                 if (annotation === null) {
                     console.log(`[${timestamp}] Received null annotation for URL: ${url}, Key: ${key}, verifying deletion intent`);
-
                     const matchingAnnotation = annotations.find(ann => ann.id === key);
                     const hasDeletionFlag = matchingAnnotation?.isDeleted === true;
 
@@ -98,21 +133,17 @@ export class AnnotationManager {
 
                     if (!hasDeletionFlag) {
                         console.log(`[${timestamp}] No deletion flag found for URL: ${url}, Key: ${key}, ignoring null update`);
-                        console.log(`[${timestamp}] Possible unintended null update for URL: ${url}, Key: ${key}, investigating further`);
-                        console.log(`[${timestamp}] Current annotations before ignoring update:`, annotations);
                         return;
                     }
 
                     console.log(`[${timestamp}] Confirmed deletion for URL: ${url}, ID: ${key}`);
-                    console.log(`[${timestamp}] Annotations before deletion:`, annotations);
                     const updatedAnnotations = annotations.filter(a => a.id !== key);
                     annotations.splice(0, annotations.length, ...updatedAnnotations);
-                    console.log(`[${timestamp}] Annotations after deletion:`, annotations);
                 } else {
                     console.log(`[${timestamp}] Processing update for URL: ${url} with annotation:`, annotation);
                     const comments: Comment[] = await new Promise((resolveComments) => {
                         const commentList: Comment[] = [];
-                        annotationNode.get(annotation.id).get('comments').map().once((comment: any) => {
+                        annotationNodes[1].get(annotation.id).get('comments').map().once((comment: any) => {
                             if (comment) {
                                 commentList.push({
                                     id: comment.id,
@@ -129,7 +160,6 @@ export class AnnotationManager {
                         console.log(`[${timestamp}] Skipping update for deleted annotation for URL: ${url}, ID: ${annotation.id}`);
                         const updatedAnnotations = annotations.filter(a => a.id !== annotation.id);
                         annotations.splice(0, annotations.length, ...updatedAnnotations);
-                        console.log(`[${timestamp}] Annotations after skipping deleted update:`, annotations);
                     } else {
                         const updatedAnnotations = annotations.filter(a => a.id !== annotation.id);
                         updatedAnnotations.push({
@@ -143,20 +173,16 @@ export class AnnotationManager {
                         } as Annotation);
 
                         annotations.splice(0, annotations.length, ...updatedAnnotations);
-                        console.log(`[${timestamp}] Annotations after update:`, annotations);
                     }
                 }
 
-                const entry = this.annotationCallbacks.get(url);
-                if (entry) {
-                    entry.callbacks.forEach(cb => cb([...annotations]));
-                }
+                entry.callbacks.forEach(cb => cb([...annotations]));
             };
 
-            annotationNode.map().on(onUpdate);
+            annotationNodes.forEach(node => node.map().on(onUpdate));
 
             entry.cleanup = () => {
-                annotationNode.map().off();
+                annotationNodes.forEach(node => node.map().off());
             };
         }
 
@@ -174,9 +200,11 @@ export class AnnotationManager {
 
     async saveAnnotation(annotation: Annotation): Promise<void> {
         const { comments, ...annotationWithoutComments } = annotation;
+        const { domainShard, subShard } = this.getShardKey(annotation.url);
+        const targetNode = subShard ? this.gun.get(subShard).get(annotation.url) : this.gun.get(domainShard).get(annotation.url);
 
         await new Promise<void>((resolve, reject) => {
-            this.gun.get('annotations').get(annotation.url).get(annotation.id).put(annotationWithoutComments, (ack: any) => {
+            targetNode.get(annotation.id).put(annotationWithoutComments, (ack: any) => {
                 if (ack.err) {
                     console.error('AnnotationManager: Failed to save annotation:', ack.err);
                     reject(new Error(ack.err));
@@ -195,39 +223,32 @@ export class AnnotationManager {
     }
 
     async deleteAnnotation(url: string, id: string): Promise<void> {
+        const { domainShard, subShard } = this.getShardKey(url);
+        const targetNode = subShard ? this.gun.get(subShard).get(url) : this.gun.get(domainShard).get(url);
+
         return new Promise((resolve, reject) => {
             const timestamp = new Date().toISOString();
             console.log(`[${timestamp}] Starting deletion for URL: ${url}, ID: ${id}`);
 
-            console.log(`[${timestamp}] Marking annotation as deleted for URL: ${url}, ID: ${id}`);
-            this.gun.get('annotations').get(url).get(id).put({ isDeleted: true }, (ack: any) => {
+            targetNode.get(id).put({ isDeleted: true }, (ack: any) => {
                 const markTimestamp = new Date().toISOString();
                 if (ack.err) {
                     console.error(`[${markTimestamp}] Failed to mark annotation as deleted for URL: ${url}, ID: ${id}, Error:`, ack.err);
                     reject(new Error(ack.err));
-                    return;
+                } else {
+                    console.log(`[${markTimestamp}] Successfully marked annotation as deleted for URL: ${url}, ID: ${id}`);
+                    resolve();
                 }
-
-                console.log(`[${markTimestamp}] Successfully marked annotation as deleted for URL: ${url}, ID: ${id}`);
-
-                console.log(`[${markTimestamp}] Tombstoning annotation for URL: ${url}, ID: ${id}`);
-                this.gun.get('annotations').get(url).get(id).put(null, (ack: any) => {
-                    const tombstoneTimestamp = new Date().toISOString();
-                    if (ack.err) {
-                        console.error(`[${tombstoneTimestamp}] Failed to tombstone annotation for URL: ${url}, ID: ${id}, Error:`, ack.err);
-                        reject(new Error(ack.err));
-                    } else {
-                        console.log(`[${tombstoneTimestamp}] Successfully tombstoned annotation for URL: ${url}, ID: ${id}`);
-                        resolve();
-                    }
-                });
             });
         });
     }
 
     async saveComment(url: string, annotationId: string, comment: Comment): Promise<void> {
+        const { domainShard, subShard } = this.getShardKey(url);
+        const targetNode = subShard ? this.gun.get(subShard).get(url) : this.gun.get(domainShard).get(url);
+
         return new Promise((resolve, reject) => {
-            this.gun.get('annotations').get(url).get(annotationId).get('comments').get(comment.id).put(comment, (ack: any) => {
+            targetNode.get(annotationId).get('comments').get(comment.id).put(comment, (ack: any) => {
                 if (ack.err) {
                     console.error('AnnotationManager: Failed to save comment:', ack.err);
                     reject(new Error(ack.err));
