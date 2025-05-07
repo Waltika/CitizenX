@@ -5,7 +5,6 @@ import { shortenUrl } from '@/utils/shortenUrl';
 import { stripHtml } from '@/utils/stripHtml';
 import Quill from 'quill';
 import { ShareModal } from './ShareModal';
-import { Toast } from './Toast';
 import './AnnotationList.css';
 
 interface AnnotationListProps {
@@ -14,15 +13,14 @@ interface AnnotationListProps {
     onDelete: (id: string) => Promise<void>;
     onSaveComment?: (annotationId: string, content: string) => Promise<void>;
     currentUrl: string;
+    onShowToast: (message: string) => void;
 }
 
-export const AnnotationList: React.FC<AnnotationListProps> = ({ annotations, profiles, onDelete, onSaveComment, currentUrl }) => {
+export const AnnotationList: React.FC<AnnotationListProps> = ({ annotations, profiles, onDelete, onSaveComment, currentUrl, onShowToast }) => {
     const [commentInputs, setCommentInputs] = useState<Record<string, string>>({});
     const [showShareModal, setShowShareModal] = useState<string | null>(null);
     const [shareLoading, setShareLoading] = useState<boolean>(false);
     const [shareError, setShareError] = useState<string | null>(null);
-    const [toastMessage, setToastMessage] = useState<string>('');
-    const [showToast, setShowToast] = useState<boolean>(false);
     const editorRefs = useRef<Record<string, HTMLDivElement | null>>({});
     const quillInstances = useRef<Record<string, Quill | null>>({});
     const [expandedComments, setExpandedComments] = useState<Record<string, boolean>>({});
@@ -170,9 +168,10 @@ export const AnnotationList: React.FC<AnnotationListProps> = ({ annotations, pro
     };
 
     const handleCopyLink = async (shareContent: string) => {
+        console.log('AnnotationList: Copying share content:', shareContent);
         await navigator.clipboard.writeText(shareContent);
-        setToastMessage('Link copied to clipboard!');
-        setShowToast(true); // This should trigger the toast
+        onShowToast('Link copied to clipboard!');
+        console.log('AnnotationList: Triggered toast with message: Link copied to clipboard!');
         setShowShareModal(null);
     };
 
@@ -272,12 +271,6 @@ export const AnnotationList: React.FC<AnnotationListProps> = ({ annotations, pro
                     onCopyLink={handleCopyLink}
                 />
             )}
-
-            <Toast
-                message={toastMessage}
-                isVisible={showToast}
-                setIsVisible={setShowToast} // Pass the setter to reset visibility
-            />
         </div>
     );
 };

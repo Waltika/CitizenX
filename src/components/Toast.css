@@ -9,7 +9,7 @@
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
     font-size: 0.9rem;
     font-weight: 500;
-    z-index: 1000;
+    z-index: 2000;
     animation: fadeInOut 3s ease-in-out forwards;
 }
 

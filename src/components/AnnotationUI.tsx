@@ -3,6 +3,7 @@ import { useUserProfile } from '@/hooks/useUserProfile';
 import { useAnnotations } from '@/hooks/useAnnotations';
 import { AnnotationList } from './AnnotationList';
 import { SettingsPanel } from './SettingsPanel';
+import { Toast } from './Toast';
 import './AnnotationUI.css';
 
 import Quill from 'quill';
@@ -23,6 +24,8 @@ export const AnnotationUI: React.FC<AnnotationUIProps> = ({ url, isUrlLoading })
     const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
     const [profileHandle, setProfileHandle] = useState('');
     const [profilePicture, setProfilePicture] = useState<string | undefined>(undefined);
+    const [toastMessage, setToastMessage] = useState<string>('');
+    const [showToast, setShowToast] = useState<boolean>(false);
 
     const editorRef = useRef<HTMLDivElement>(null);
     const quillRef = useRef<Quill | null>(null);
@@ -91,6 +94,12 @@ export const AnnotationUI: React.FC<AnnotationUIProps> = ({ url, isUrlLoading })
             setProfileHandle('');
             setProfilePicture(undefined);
         }
+    };
+
+    const handleShowToast = (message: string) => {
+        console.log('AnnotationUI: Showing toast with message:', message);
+        setToastMessage(message);
+        setShowToast(true);
     };
 
     useEffect(() => {
@@ -164,9 +173,15 @@ export const AnnotationUI: React.FC<AnnotationUIProps> = ({ url, isUrlLoading })
                         onDelete={handleDeleteAnnotation}
                         onSaveComment={!did || annotationsLoading ? undefined : handleSaveComment}
                         currentUrl={url}
+                        onShowToast={handleShowToast}
                     />
                 </div>
             )}
+            <Toast
+                message={toastMessage}
+                isVisible={showToast}
+                setIsVisible={setShowToast}
+            />
             <div className="footer-container">
                 <div className="logo-container">
                     <a href="https://citizenx.app" target="_blank" rel="noopener noreferrer">
