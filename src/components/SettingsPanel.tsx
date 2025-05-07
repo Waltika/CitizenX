@@ -1,4 +1,3 @@
-// src/components/SettingsPanel.tsx
 import React, { useState } from 'react';
 import { ImportIdentitySection } from './ImportIdentitySection';
 import { ExportIdentitySection } from './ExportIdentitySection';
@@ -9,6 +8,8 @@ interface SettingsPanelProps {
     signOut: () => Promise<void>;
     exportIdentity: (passphrase: string) => Promise<string>;
     importIdentity: (data: string, passphrase: string) => Promise<void>;
+    onCloseSettings: (justImported?: boolean) => void;
+    onBeforeImport?: () => void; // New prop to signal before import
 }
 
 export const SettingsPanel: React.FC<SettingsPanelProps> = ({
@@ -17,6 +18,8 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
                                                                 signOut,
                                                                 exportIdentity,
                                                                 importIdentity,
+                                                                onCloseSettings,
+                                                                onBeforeImport,
                                                             }) => {
     const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
@@ -28,6 +31,11 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
     const handleSignOut = async () => {
         await signOut();
         setIsSettingsOpen(false);
+    };
+
+    const handleCloseSettings = (justImported?: boolean) => {
+        setIsSettingsOpen(false);
+        onCloseSettings(justImported);
     };
 
     return (
@@ -50,14 +58,15 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
                             </button>
                             <ImportIdentitySection
                                 importIdentity={importIdentity}
-                                onCloseSettings={() => setIsSettingsOpen(false)}
+                                onCloseSettings={handleCloseSettings}
+                                onBeforeImport={onBeforeImport}
                             />
                         </div>
                     ) : (
                         <>
                             <ExportIdentitySection
                                 exportIdentity={exportIdentity}
-                                onCloseSettings={() => setIsSettingsOpen(false)}
+                                onCloseSettings={handleCloseSettings}
                             />
                             <button
                                 className="settings-menu-button sign-out-button"

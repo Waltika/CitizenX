@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useUserProfile } from '@/hooks/useUserProfile';
-import { useAnnotations } from '@/hooks/useAnnotations';
+import { useUserProfile } from '../hooks/useUserProfile';
+import { useAnnotations } from '../hooks/useAnnotations';
 import { AnnotationList } from './AnnotationList';
 import { SettingsPanel } from './SettingsPanel';
 import { Toast } from './Toast';
@@ -10,7 +10,7 @@ import Quill from 'quill';
 import 'quill/dist/quill.snow.css';
 
 import citizenxLogo from '../assets/citizenx-logo.png';
-import { normalizeUrl } from "@/shared/utils/normalizeUrl";
+import { normalizeUrl } from "../shared/utils/normalizeUrl";
 
 interface AnnotationUIProps {
     url: string;
@@ -26,6 +26,7 @@ export const AnnotationUI: React.FC<AnnotationUIProps> = ({ url, isUrlLoading })
     const [profilePicture, setProfilePicture] = useState<string | undefined>(undefined);
     const [toastMessage, setToastMessage] = useState<string>('');
     const [showToast, setShowToast] = useState<boolean>(false);
+    const [justImported, setJustImported] = useState(false);
 
     const editorRef = useRef<HTMLDivElement>(null);
     const quillRef = useRef<Quill | null>(null);
@@ -61,13 +62,14 @@ export const AnnotationUI: React.FC<AnnotationUIProps> = ({ url, isUrlLoading })
     }, []);
 
     useEffect(() => {
-        if (!profileLoading && did && !profile) {
-            console.log('AnnotationUI: Opening Update Profile modal');
-            setIsProfileModalOpen(true);
-        } else {
-            console.log('AnnotationUI: Profile modal conditions - loading:', profileLoading, 'did:', did, 'profile:', profile);
+        console.log('AnnotationUI: Profile modal conditions - loading:', profileLoading, 'did:', did, 'profile:', profile);
+        if (!profileLoading && did && !justImported) {
+            if (!profile || !profile.handle) {
+                console.log('AnnotationUI: Opening Update Profile modal');
+                setIsProfileModalOpen(true);
+            }
         }
-    }, [profileLoading, did, profile]);
+    }, [profileLoading, did, profile, justImported]);
 
     useEffect(() => {
         console.log('AnnotationUI: annotationsLoading changed:', annotationsLoading);
@@ -100,6 +102,16 @@ export const AnnotationUI: React.FC<AnnotationUIProps> = ({ url, isUrlLoading })
         console.log('AnnotationUI: Showing toast with message:', message);
         setToastMessage(message);
         setShowToast(true);
+    };
+
+    const handleCloseSettings = (justImported?: boolean) => {
+        if (justImported) {
+            setJustImported(true);
+        }
+    };
+
+    const handleBeforeImport = () => {
+        setJustImported(true);
     };
 
     useEffect(() => {
@@ -148,6 +160,8 @@ export const AnnotationUI: React.FC<AnnotationUIProps> = ({ url, isUrlLoading })
                         signOut={signOut}
                         exportIdentity={exportIdentity}
                         importIdentity={importIdentity}
+                        onCloseSettings={handleCloseSettings}
+                        onBeforeImport={handleBeforeImport}
                     />
                 </div>
             </div>

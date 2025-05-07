@@ -1,0 +1,44 @@
+.import-section {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 10px;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.import-textarea,
+.passphrase-input {
+    width: 100%;
+    padding: 8px;
+    border-radius: 8px;
+    border: 1px solid #ccc;
+    background-color: #fff;
+    font-size: 14px;
+    box-sizing: border-box;
+}
+
+.import-textarea {
+    height: 60px;
+    resize: none;
+}
+
+.passphrase-input {
+    height: 36px;
+}
+
+.import-button {
+    width: 100%;
+    padding: 10px;
+    border-radius: 8px;
+    background-color: #4a4a4a;
+    color: white;
+    border: none;
+    font-size: 14px;
+    cursor: pointer;
+}
+
+.import-button:disabled {
+    background-color: #d3d3d3;
+    cursor: not-allowed;
+}

@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Annotation, Profile } from '@/types';
-import { normalizeUrl } from '@/shared/utils/normalizeUrl';
-import { shortenUrl } from '@/utils/shortenUrl';
-import { stripHtml } from '@/utils/stripHtml';
+import { normalizeUrl } from '../shared/utils/normalizeUrl';
+import { shortenUrl } from '../utils/shortenUrl';
+import { stripHtml } from '../utils/stripHtml';
 import Quill from 'quill';
 import { ShareModal } from './ShareModal';
 import './AnnotationList.css';
