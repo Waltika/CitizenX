@@ -1,5 +1,5 @@
 import { Annotation, Comment } from '@/types';
-import { normalizeUrl } from '@/shared/utils/normalizeUrl';
+import { normalizeUrl } from '../shared/utils/normalizeUrl';
 
 type AnnotationUpdateCallback = (annotations: Annotation[]) => void;
 

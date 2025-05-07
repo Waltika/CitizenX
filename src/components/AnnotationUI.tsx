@@ -167,6 +167,7 @@ export const AnnotationUI: React.FC<AnnotationUIProps> = ({ url, isUrlLoading })
                         onCloseSettings={handleCloseSettings}
                         onBeforeImport={handleBeforeImport}
                         onResetJustImported={handleResetJustImported}
+                        onShowToast={handleShowToast} // Pass the toast callback
                     />
                 </div>
             </div>

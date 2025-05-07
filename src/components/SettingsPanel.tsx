@@ -10,7 +10,8 @@ interface SettingsPanelProps {
     importIdentity: (data: string, passphrase: string) => Promise<void>;
     onCloseSettings: (justImported?: boolean) => void;
     onBeforeImport?: () => void;
-    onResetJustImported?: () => void; // New prop to reset justImported
+    onResetJustImported?: () => void;
+    onShowToast?: (message: string) => void; // New prop for toast
 }
 
 export const SettingsPanel: React.FC<SettingsPanelProps> = ({
@@ -22,17 +23,18 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
                                                                 onCloseSettings,
                                                                 onBeforeImport,
                                                                 onResetJustImported,
+                                                                onShowToast,
                                                             }) => {
     const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
     const handleAuthenticate = async () => {
-        onResetJustImported?.(); // Reset justImported before authenticating
+        onResetJustImported?.();
         await authenticate();
         setIsSettingsOpen(false);
     };
 
     const handleSignOut = async () => {
-        onResetJustImported?.(); // Reset justImported before signing out
+        onResetJustImported?.();
         await signOut();
         setIsSettingsOpen(false);
     };
@@ -71,6 +73,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
                             <ExportIdentitySection
                                 exportIdentity={exportIdentity}
                                 onCloseSettings={handleCloseSettings}
+                                onShowToast={onShowToast} // Pass the toast callback
                             />
                             <button
                                 className="settings-menu-button sign-out-button"

@@ -1,5 +1,5 @@
-import {normalizeUrl} from '@/shared/utils/normalizeUrl';
-import {Comment} from '@/types';
+import {normalizeUrl} from '../shared/utils/normalizeUrl';
+import {Comment} from '../types';
 
 export class CleanupManager {
     private gun: any;

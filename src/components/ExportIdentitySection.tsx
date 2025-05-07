@@ -4,11 +4,13 @@ import { PassphraseModal } from './PassphraseModal';
 interface ExportIdentitySectionProps {
     exportIdentity: (passphrase: string) => Promise<string>;
     onCloseSettings: () => void;
+    onShowToast?: (message: string) => void; // New prop for toast
 }
 
 export const ExportIdentitySection: React.FC<ExportIdentitySectionProps> = ({
                                                                                 exportIdentity,
                                                                                 onCloseSettings,
+                                                                                onShowToast,
                                                                             }) => {
     const [passphrase, setPassphrase] = useState('');
     const [passphraseModalOpen, setPassphraseModalOpen] = useState(false);
@@ -31,7 +33,6 @@ export const ExportIdentitySection: React.FC<ExportIdentitySectionProps> = ({
             setIsExportModalOpen(true);
             setPassphraseModalOpen(false);
             setPassphrase('');
-            // Do NOT call onCloseSettings here; wait until the export modal is closed
         } catch (err: any) {
             console.error('Failed to export identity:', err);
             alert(err.message || 'Failed to export identity');
@@ -40,7 +41,25 @@ export const ExportIdentitySection: React.FC<ExportIdentitySectionProps> = ({
 
     const handleCloseExportModal = () => {
         setIsExportModalOpen(false);
-        onCloseSettings(); // Close the settings menu after the export modal is closed
+        onCloseSettings();
+    };
+
+    const handleDownloadIdentity = () => {
+        // Create a Blob with the exported identity string
+        const blob = new Blob([exportedIdentity], { type: 'text/plain' });
+        // Create a temporary URL for the Blob
+        const url = URL.createObjectURL(blob);
+        // Create a temporary link element to trigger the download
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = 'identity-export.txt';
+        document.body.appendChild(link);
+        link.click();
+        // Clean up
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+        // Show toast confirmation
+        onShowToast?.('Identity downloaded successfully');
     };
 
     return (
@@ -76,6 +95,12 @@ export const ExportIdentitySection: React.FC<ExportIdentitySectionProps> = ({
                         onClick={() => navigator.clipboard.writeText(exportedIdentity)}
                     >
                         Copy to Clipboard
+                    </button>
+                    <button
+                        className="export-modal-button"
+                        onClick={handleDownloadIdentity}
+                    >
+                        Download
                     </button>
                     <button
                         className="export-modal-close-button"
