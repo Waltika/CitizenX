@@ -43,6 +43,7 @@
     cursor: pointer;
     width: 100%;
     font-size: var(--font-size-sm);
+    margin-bottom: var(--spacing-sm); /* Add this to create space below the button */
 }
 
 .authenticate-button:hover {

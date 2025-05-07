@@ -51,17 +51,25 @@
 
 /* Delete button */
 .delete-button {
-    padding: 0.25rem 0.5rem;
-    background: #f97316;
-    color: #fff;
+    padding: 0.25rem;
+    background: none;
+    color: #f97316;
     border: none;
     border-radius: 5px;
     cursor: pointer;
     font-size: 0.8rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
 .delete-button:hover {
-    background-color: #fb923c;
+    color: #fb923c;
+}
+
+.delete-icon {
+    width: 1rem;
+    height: 1rem;
 }
 
 /* Comments container */
@@ -155,18 +163,31 @@
 
 /* Share button */
 .share-button {
-    padding: 0.25rem 0.5rem;
-    background: #2c7a7b;
-    color: #fff;
+    padding: 0.25rem;
+    background: none;
+    color: #2c7a7b;
     border: none;
     border-radius: 5px;
     cursor: pointer;
     font-size: 0.8rem;
     margin-left: 0.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
 .share-button:hover {
-    background-color: #4a999a;
+    color: #4a999a;
+}
+
+.share-button:disabled {
+    color: #d1d5db;
+    cursor: not-allowed;
+}
+
+.share-icon {
+    width: 1rem;
+    height: 1rem;
 }
 
 .annotation-item.highlight {
