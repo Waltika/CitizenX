@@ -1,12 +1,11 @@
 /* src/components/ConnectedUser.css */
+@import './styles/variables.css';
+@import './styles/common.css';
 
 /* Connected user section */
 .connected-section {
-    margin-bottom: 1rem;
-    background-color: #fff;
-    padding: 0.5rem;
-    border-radius: 5px;
-    border: 1px solid #e5e7eb;
+    composes: card;
+    margin-bottom: var(--spacing-md);
 }
 
 .connected-section-content {
@@ -26,12 +25,12 @@
     width: 2rem;
     height: 2rem;
     border-radius: 50%;
-    margin-right: 0.5rem;
+    margin-right: var(--spacing-sm);
 }
 
 .connected-text {
     margin: 0;
-    font-size: 0.9rem;
-    color: #333;
+    font-size: var(--font-size-sm);
+    color: var(--color-text);
     white-space: nowrap;
 }

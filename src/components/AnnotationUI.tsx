@@ -4,12 +4,16 @@ import { useAnnotations } from '../hooks/useAnnotations';
 import { AnnotationList } from './AnnotationList';
 import { SettingsPanel } from './SettingsPanel';
 import { Toast } from './Toast';
+import './styles/variables.css';
+import './styles/common.css';
 import './AnnotationUI.css';
 import './ProfileModal.css';
 import './annotation-input.css';
 import './Footer.css';
 import './LoadingSpinner.css';
 import './ConnectedUser.css';
+import './ExportIdentitySection.css';
+import './SettingsPanel.css';
 
 import Quill from 'quill';
 import 'quill/dist/quill.snow.css';

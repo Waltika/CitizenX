@@ -1,13 +1,17 @@
+/* src/components/Toast.css */
+@import './styles/variables.css';
+@import './styles/common.css';
+
 .toast {
     position: fixed;
     bottom: 20px;
     right: 20px;
-    background: #2c7a7b;
-    color: #fff;
+    background: var(--color-primary);
+    color: var(--color-white);
     padding: 0.75rem 1.5rem;
     border-radius: 8px;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-    font-size: 0.9rem;
+    box-shadow: var(--shadow-lg);
+    font-size: var(--font-size-sm);
     font-weight: 500;
     z-index: 2000;
     animation: fadeInOut 3s ease-in-out forwards;

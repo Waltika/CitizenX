@@ -1,15 +1,17 @@
 /* src/components/ExportIdentitySection.css */
+@import './styles/variables.css';
+@import './styles/common.css';
 
 .settings-menu-button {
     display: block;
-    padding: 0.5rem 1rem;
+    padding: var(--spacing-sm) var(--spacing-md);
     background: none;
     border: none;
     width: 100%;
     text-align: left;
     cursor: pointer;
-    color: #333;
-    font-size: 0.9rem;
+    color: var(--color-text);
+    font-size: var(--font-size-sm);
 }
 
 .settings-menu-button:hover {
@@ -21,60 +23,60 @@
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);
-    background: #fff;
-    padding: 1rem;
-    border-radius: 5px;
-    box-shadow: 0 0 10px rgba(0, 0, 0, 0.3);
+    background: var(--color-white);
+    padding: var(--spacing-md);
+    border-radius: var(--border-radius);
+    box-shadow: var(--shadow-md);
     z-index: 1000;
     width: 90%;
     max-width: 400px;
 }
 
 .export-modal-title {
-    font-size: 1.2rem;
-    margin: 0 0 0.5rem 0;
-    color: #333;
+    font-size: var(--font-size-lg);
+    margin: 0 0 var(--spacing-sm) 0;
+    color: var(--color-text);
 }
 
 .export-modal-textarea {
     width: 100%;
+    margin-bottom: var(--spacing-sm);
+    padding: var(--spacing-sm);
+    border: 1px solid var(--color-border);
+    border-radius: var(--border-radius);
+    font-size: var(--font-size-xs);
+    color: var(--color-text);
+    background-color: var(--color-white);
     height: 3.75rem;
-    margin-bottom: 0.5rem;
-    font-size: 0.8rem;
-    border: 1px solid #e5e7eb;
-    border-radius: 5px;
-    padding: 0.5rem;
-    color: #333;
-    background-color: #fff;
 }
 
 .export-modal-button {
-    padding: 0.5rem 1rem;
-    background: #2c7a7b;
-    color: #fff;
+    padding: var(--spacing-sm) var(--spacing-md);
+    background: var(--color-primary);
+    color: var(--color-white);
     border: none;
-    border-radius: 5px;
+    border-radius: var(--border-radius);
     cursor: pointer;
     width: 100%;
-    font-size: 0.9rem;
-    margin-bottom: 0.5rem;
+    font-size: var(--font-size-sm);
+    margin-bottom: var(--spacing-sm);
 }
 
 .export-modal-button:hover {
-    background-color: #4a999a;
+    background-color: var(--color-primary-hover);
 }
 
 .export-modal-close-button {
-    padding: 0.5rem 1rem;
-    background: #f97316;
-    color: #fff;
+    padding: var(--spacing-sm) var(--spacing-md);
+    background: var(--color-secondary);
+    color: var(--color-white);
     border: none;
-    border-radius: 5px;
+    border-radius: var(--border-radius);
     cursor: pointer;
     width: 100%;
-    font-size: 0.9rem;
+    font-size: var(--font-size-sm);
 }
 
 .export-modal-close-button:hover {
-    background-color: #fb923c;
+    background-color: var(--color-secondary-hover);
 }

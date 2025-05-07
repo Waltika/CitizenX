@@ -1,4 +1,6 @@
 /* src/components/Footer.css */
+@import './styles/variables.css';
+@import './styles/common.css';
 
 /* Footer container styles */
 .footer-container {
@@ -7,17 +9,17 @@
     left: 0;
     right: 0;
     display: flex;
-    justify-content: space-between; /* Space logo and URL text apart */
+    justify-content: space-between;
     align-items: center;
-    padding: 0.5rem 1rem;
-    background-color: #f9f9f9;
-    border-top: 1px solid #e5e7eb;
-    z-index: 1000; /* Ensure it stays above other content */
+    padding: var(--spacing-sm) var(--spacing-md);
+    background-color: var(--color-background);
+    border-top: 1px solid var(--color-border);
+    z-index: 1000;
 }
 
 /* Logo container within the footer */
 .logo-container {
-    flex-shrink: 0; /* Prevent logo from shrinking */
+    flex-shrink: 0;
 }
 
 .citizenx-logo {
@@ -28,20 +30,20 @@
 
 /* URL footer styles */
 .url-footer {
-    flex-grow: 1; /* Allow URL text to take remaining space */
-    text-align: right; /* Align URL text to the right */
+    flex-grow: 1;
+    text-align: right;
 }
 
 .url-text {
     margin: 0;
-    font-size: 0.8rem;
-    color: #666;
+    font-size: var(--font-size-xs);
+    color: var(--color-text-light);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
 }
 
 .url {
-    color: #2c7a7b;
+    color: var(--color-primary);
     word-break: break-all;
 }

@@ -1,0 +1,35 @@
+/* src/components/styles/variables.css */
+:root {
+  /* Colors */
+  --color-primary: #2c7a7b;
+  --color-primary-hover: #4a999a;
+  --color-secondary: #f97316;
+  --color-secondary-hover: #fb923c;
+  --color-background: #f9f9f9;
+  --color-white: #fff;
+  --color-error: #e11d48;
+  --color-text: #333;
+  --color-text-light: #666;
+  --color-border: #e5e7eb;
+  
+  /* Spacing */
+  --spacing-xs: 0.25rem;
+  --spacing-sm: 0.5rem;
+  --spacing-md: 1rem;
+  --spacing-lg: 1.5rem;
+  --spacing-xl: 2rem;
+  
+  /* Font sizes */
+  --font-size-xs: 0.8rem;
+  --font-size-sm: 0.9rem;
+  --font-size-md: 1rem;
+  --font-size-lg: 1.2rem;
+  
+  /* Border radius */
+  --border-radius: 5px;
+  
+  /* Shadows */
+  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.1);
+  --shadow-md: 0 0 10px rgba(0, 0, 0, 0.3);
+  --shadow-lg: 0 4px 12px rgba(0, 0, 0, 0.15);
+}

@@ -1,57 +1,52 @@
 /* src/components/annotation-input.css */
+@import './styles/variables.css';
+@import './styles/common.css';
 
 .annotation-input {
-    margin-bottom: 1rem;
+    margin-bottom: var(--spacing-md);
 }
 
 .annotation-textarea {
-    width: 100%;
+    composes: input;
     height: 5rem;
-    margin-bottom: 0.5rem;
-    font-size: 0.9rem;
-    border: 1px solid #e5e7eb;
-    border-radius: 5px;
-    padding: 0.5rem;
-    color: #333;
-    background-color: #fff;
 }
 
 /* Quill editor styles */
 .quill-editor {
     width: 100%;
-    margin-bottom: 0.5rem;
-    font-size: 0.9rem;
-    color: #333;
-    background-color: #fff;
+    margin-bottom: var(--spacing-sm);
+    font-size: var(--font-size-sm);
+    color: var(--color-text);
+    background-color: var(--color-white);
 }
 
 .quill-editor .ql-toolbar {
-    border: 1px solid #e5e7eb;
-    border-radius: 5px 5px 0 0;
+    border: 1px solid var(--color-border);
+    border-radius: var(--border-radius) var(--border-radius) 0 0;
     background-color: #f5f7fa;
 }
 
 .quill-editor .ql-container {
-    border: 1px solid #e5e7eb;
+    border: 1px solid var(--color-border);
     border-top: none;
-    border-radius: 0 0 5px 5px;
-    height: 5rem; /* Match the height of annotation-textarea */
+    border-radius: 0 0 var(--border-radius) var(--border-radius);
+    height: 5rem;
 }
 
 .annotation-save-button {
-    padding: 0.5rem 1rem;
-    background: #2c7a7b;
-    color: #fff;
+    padding: var(--spacing-sm) var(--spacing-md);
+    background: var(--color-primary);
+    color: var(--color-white);
     border: none;
-    border-radius: 5px;
+    border-radius: var(--border-radius);
     cursor: pointer;
-    margin-bottom: 1rem;
+    margin-bottom: var(--spacing-md);
     width: 100%;
-    font-size: 0.9rem;
+    font-size: var(--font-size-sm);
 }
 
 .annotation-save-button:hover {
-    background-color: #4a999a;
+    background-color: var(--color-primary-hover);
 }
 
 .annotation-save-button:disabled {

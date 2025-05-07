@@ -62,6 +62,17 @@ export default defineConfig({
             'events': 'events',
         },
     },
+    css: {
+        modules: {
+            localsConvention: 'camelCase',
+            scopeBehaviour: 'local'
+        },
+        preprocessorOptions: {
+            scss: {
+                additionalData: '@use "sass:math";'
+            }
+        }
+    },
     build: {
         outDir,
         emptyOutDir: true,
