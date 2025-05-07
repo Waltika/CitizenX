@@ -1,0 +1,47 @@
+/* src/components/Footer.css */
+
+/* Footer container styles */
+.footer-container {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    display: flex;
+    justify-content: space-between; /* Space logo and URL text apart */
+    align-items: center;
+    padding: 0.5rem 1rem;
+    background-color: #f9f9f9;
+    border-top: 1px solid #e5e7eb;
+    z-index: 1000; /* Ensure it stays above other content */
+}
+
+/* Logo container within the footer */
+.logo-container {
+    flex-shrink: 0; /* Prevent logo from shrinking */
+}
+
+.citizenx-logo {
+    width: 3rem;
+    height: auto;
+    display: block;
+}
+
+/* URL footer styles */
+.url-footer {
+    flex-grow: 1; /* Allow URL text to take remaining space */
+    text-align: right; /* Align URL text to the right */
+}
+
+.url-text {
+    margin: 0;
+    font-size: 0.8rem;
+    color: #666;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.url {
+    color: #2c7a7b;
+    word-break: break-all;
+}

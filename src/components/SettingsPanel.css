@@ -1,0 +1,51 @@
+/* src/components/SettingsPanel.css */
+
+.settings-menu-container {
+    position: relative;
+    flex-shrink: 0;
+}
+
+.settings-button {
+    padding: 0.5rem;
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 1rem;
+}
+
+.settings-menu {
+    position: absolute;
+    right: 0;
+    top: 100%;
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 5px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    z-index: 1000;
+}
+
+.auth-section {
+    padding: 0.5rem;
+    background-color: #fff;
+    border-radius: 5px;
+    border: 1px solid #e5e7eb;
+}
+
+.authenticate-button {
+    padding: 0.5rem 1rem;
+    background: #2c7a7b;
+    color: #fff;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    width: 100%;
+    font-size: 0.9rem;
+}
+
+.authenticate-button:hover {
+    background-color: #4a999a;
+}
+
+.sign-out-button {
+    color: #f97316;
+}

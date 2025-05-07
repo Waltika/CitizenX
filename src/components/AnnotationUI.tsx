@@ -5,6 +5,11 @@ import { AnnotationList } from './AnnotationList';
 import { SettingsPanel } from './SettingsPanel';
 import { Toast } from './Toast';
 import './AnnotationUI.css';
+import './ProfileModal.css';
+import './annotation-input.css';
+import './Footer.css';
+import './LoadingSpinner.css';
+import './ConnectedUser.css';
 
 import Quill from 'quill';
 import 'quill/dist/quill.snow.css';

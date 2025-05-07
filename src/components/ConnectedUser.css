@@ -1,0 +1,37 @@
+/* src/components/ConnectedUser.css */
+
+/* Connected user section */
+.connected-section {
+    margin-bottom: 1rem;
+    background-color: #fff;
+    padding: 0.5rem;
+    border-radius: 5px;
+    border: 1px solid #e5e7eb;
+}
+
+.connected-section-content {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+}
+
+.connected-user-info {
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+}
+
+.profile-picture {
+    width: 2rem;
+    height: 2rem;
+    border-radius: 50%;
+    margin-right: 0.5rem;
+}
+
+.connected-text {
+    margin: 0;
+    font-size: 0.9rem;
+    color: #333;
+    white-space: nowrap;
+}

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { ImportIdentitySection } from './ImportIdentitySection';
 import { ExportIdentitySection } from './ExportIdentitySection';
+import './SettingsPanel.css';
 
 interface SettingsPanelProps {
     did: string | null;

@@ -1,0 +1,31 @@
+/* src/components/LoadingSpinner.css */
+
+/* Loading spinner */
+.loading-spinner {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 0.5rem;
+    background-color: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 5px;
+    margin-bottom: 1rem;
+}
+
+.loading-spinner span {
+    font-size: 0.9rem;
+    color: #2c7a7b;
+    display: inline-flex;
+    align-items: center;
+}
+
+.loading-spinner span::before {
+    content: '⏳';
+    margin-right: 0.5rem;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}

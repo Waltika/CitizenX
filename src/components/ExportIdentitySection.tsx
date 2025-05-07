@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { PassphraseModal } from './PassphraseModal';
+import './ExportIdentitySection.css';
 
 interface ExportIdentitySectionProps {
     exportIdentity: (passphrase: string) => Promise<string>;

@@ -1,5 +1,6 @@
 // src/components/PassphraseModal.tsx
 import React from 'react';
+import './PassphraseModal.css';
 
 interface PassphraseModalProps {
     action: 'export' | 'import';

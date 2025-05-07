@@ -1,0 +1,67 @@
+/* src/components/PassphraseModal.css */
+
+.profile-modal {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: #fff;
+    padding: 1rem;
+    border-radius: 5px;
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.3);
+    z-index: 1000;
+    width: 90%;
+    max-width: 400px;
+}
+
+.profile-modal-title {
+    font-size: 1.2rem;
+    margin: 0 0 0.5rem 0;
+    color: #333;
+}
+
+.profile-modal-input {
+    width: 100%;
+    margin-bottom: 0.5rem;
+    padding: 0.5rem;
+    border: 1px solid #e5e7eb;
+    border-radius: 5px;
+    font-size: 0.9rem;
+    color: #333;
+    background-color: #fff;
+}
+
+.profile-modal-buttons {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.profile-modal-save-button {
+    background: #2c7a7b;
+    color: #fff;
+    padding: 0.5rem 1rem;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 0.9rem;
+    flex: 1;
+}
+
+.profile-modal-save-button:hover {
+    background-color: #4a999a;
+}
+
+.profile-modal-cancel-button {
+    background: #f97316;
+    color: #fff;
+    padding: 0.5rem 1rem;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 0.9rem;
+    flex: 1;
+}
+
+.profile-modal-cancel-button:hover {
+    background-color: #fb923c;
+}
