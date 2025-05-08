@@ -9,7 +9,7 @@ A decentralized Chrome extension for annotating websites in order to bring a kno
 2. We want the user to have a profile picture and a handle.
     - **Status**: Implemented. Users can create profiles with a handle and profile picture, stored in Gun.js (`user_<did>/profile` and `profiles` nodes). Profiles are included in the import/export process.
 3. We want pages from different languages and with non-functional parameters (like UTM parameters) to be considered the same page.
-    - **Status**: Implemented via `normalizeUrl` in `src/shared/utils/normalizeUrl.ts`, which removes UTM parameters and normal - **Status**: Implemented via `normalizeUrl` in `src/shared/utils/normalizeUrl.ts`, which removes UTM parameters and normalizes URLs.
+    - **Status**: Implemented via `normalizeUrl` in `src/shared/utils/normalizeUrl.ts`, which removes UTM parameters and normalizes URLs.
 4. We want the Chrome extension to maintain a list of the history of pages visited by the user.
     - **Status**: Pending.
 5. We want the user to be notified through the extension when annotations are made by someone else on the pages he visited.
@@ -28,7 +28,7 @@ A decentralized Chrome extension for annotating websites in order to bring a kno
 11. When a user clicks an annotation sharing URL on a browser that cannot install the Chrome extension (e.g., mobile browsers, Safari, Firefox), they should be redirected to a page on `https://citizenx.app` that displays the annotated page’s URL as a clickable link (opening in a new tab). This page should reuse the extension’s UI, DID, and existing code to allow viewing and interacting with annotations on the website, mimicking the extension’s functionality.
     - **Status**: Implemented. The `/view-annotations` page displays annotations, with a clickable link to the annotated page (opens in a new tab). Styled to match the CitizenX design (white `#fff`, teal `#2c7a7b`, Inter font), with a loading spinner.
     - **Mobile Detection**: Added a mobile check (`/android|iphone|ipad|ipod|mobile/i.test(userAgent)`) in `check-extension.js` to redirect mobile browsers (e.g., Chrome on Android) to `/view-annotations`, as they cannot install extensions.
-    - **Author Display Fix**: Fixed an issue where authors were displayed as "Unknown" by updating the `/api/annotations` endpoint on the Render server to fetch user profiles from Gun.js with retries (up to 5 attempts) and in-memory caching (5-minute TTL), ensuring the correct `authorHandle` is included in the response.
+    - **Author Display Fix**: Fixed an issue where authors were displayed as "Unknown" by updating the `/api/annotations` endpoint on the Render server to fetch user profiles from Gun.js with retries (up to 5 attempts) and in-memory caching (5-minute TTL), ensuring the correct `authorHandle` is included in the response. This fix was extended to the extension by improving profile fetching in `useAnnotations.ts` to handle real-time updates, ensuring author handles (e.g., "Waltika") are displayed correctly.
     - **SSR Limitation**: The `/view-annotations` endpoint currently fails to render due to `AnnotationList` using React hooks (`useState`), which are not supported in server-side rendering. A temporary workaround was implemented by creating `AnnotationListServer.tsx`, but this refactoring was reverted to focus on scalability and security.
 12. Both on the annotation feature under 11 and on the sharing functionality, provide a screenshot of the top of the page being annotated (I guess store it along the annotations but only once).
     - **Status**: Pending.
@@ -121,6 +121,21 @@ A decentralized Chrome extension for annotating websites in order to bring a kno
     - **Status**: Pending.
 8. At some stage, we need to discuss how to structure the project so that all functionalities of the extension version are also available on the web version from the same code base but without having bloated JavaScript running on the client side (so having the node rendering happening on the server and lightweight JavaScript on the website).
     - **Status**: Planned. See "Reusing Node.js Code for SSR on the Website" for details.
+9. We want to enhance real-time updates using Gun.js subscriptions to ensure the UI updates seamlessly as changes arrive, without relying on an initial fetch.
+    - **Status**: Planned.
+    - **Description**: Improve the subscription logic in `useAnnotations.ts` to rely entirely on Gun.js `map().on()` for real-time updates, removing the dependency on the initial `storage.getAnnotations` fetch. This ensures the `annotations` state is populated incrementally as data arrives, avoiding an initial empty state and reducing UI flickering. Implement debouncing to batch updates and reduce re-renders, and pre-fetch profiles for known authors to minimize delays in displaying author handles.
+    - **Implementation Details**:
+        - Update `useAnnotations.ts` to initialize `annotations` as an empty array and rely on the `updateAnnotations` callback to populate it via `map().on()`.
+        - Use `lodash/debounce` to batch real-time updates (e.g., 100ms delay) and reduce unnecessary re-renders.
+        - Pre-fetch profiles for known authors upfront and update them as new authors are discovered.
+        - Test with multiple simultaneous updates to ensure the UI updates smoothly without flickering.
+    - **Benefits**:
+        - Eliminates the initial empty state (`Array(0)`), ensuring annotations appear as soon as they arrive.
+        - Reduces UI flickering by debouncing state updates.
+        - Minimizes delays in displaying author handles by pre-fetching profiles.
+    - **Challenges**:
+        - May require additional handling for initial loading states (e.g., a "Loading..." placeholder) to improve UX.
+        - Debouncing delay must be tuned to balance responsiveness and performance.
 
 ### Comment Collapsing Mechanism
 - **Description**: Add a collapse/expand mechanism to the comments section under each annotation to save space. Display comments collapsed by default with a toggle button (e.g., "+ Show X comments" to expand, "− Hide comments" to collapse).
