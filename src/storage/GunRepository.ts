@@ -190,6 +190,10 @@ export class GunRepository {
         return this.commentManager.saveComment(url, annotationId, comment);
     }
 
+    async deleteComment(url: string, annotationId: string, commentId: string, requesterDID: string): Promise<void> {
+        return this.commentManager.deleteComment(url, annotationId, commentId, requesterDID);
+    }
+
     async inspectAnnotations(): Promise<void> {
         return this.cleanupManager.inspectAnnotations();
     }

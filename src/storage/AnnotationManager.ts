@@ -156,10 +156,43 @@ export class AnnotationManager {
                 entry.callbacks.forEach(cb => cb([...annotations]));
             };
 
+            const onCommentUpdate = async (comment: any, commentId: string, _unused: any, node: any) => {
+                const timestamp = new Date().toISOString();
+                console.log(`[${timestamp}] Real-time comment update received for URL: ${url}, Comment ID: ${commentId}, Comment:`, comment);
+
+                // Find the annotation containing this comment
+                const annotationId = node._.get('id'); // Get annotation ID from Gun node context
+                const annotation = annotations.find(a => a.id === annotationId);
+                if (!annotation) {
+                    console.log(`[${timestamp}] No matching annotation found for comment update, URL: ${url}, Annotation ID: ${annotationId}`);
+                    return;
+                }
+
+                // Refetch comments for the affected annotation
+                const comments = await this.commentManager.getComments(url, annotationId, annotationNodes[1]);
+                const updatedAnnotations = annotations.filter(a => a.id !== annotationId);
+                updatedAnnotations.push({
+                    ...annotation,
+                    comments,
+                });
+
+                annotations.splice(0, annotations.length, ...updatedAnnotations);
+                entry.callbacks.forEach(cb => cb([...annotations]));
+            };
+
+            // Subscribe to annotation updates
             annotationNodes.forEach(node => node.map().on(onUpdate));
 
+            // Subscribe to comment updates for each annotation
+            annotationNodes.forEach(node => {
+                node.map().get('comments').map().on(onCommentUpdate);
+            });
+
             entry.cleanup = () => {
-                annotationNodes.forEach(node => node.map().off());
+                annotationNodes.forEach(node => {
+                    node.map().off();
+                    node.map().get('comments').map().off();
+                });
             };
         }
 

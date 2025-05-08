@@ -147,6 +147,16 @@ export class StorageRepository {
         await this.repository.saveComment(normalizedUrl, annotationId, comment);
     }
 
+    async deleteComment(url: string, annotationId: string, commentId: string): Promise<void> {
+        await this.initialize();
+        const normalizedUrl = normalizeUrl(url);
+        const requesterDID = await this.getCurrentDID();
+        if (!requesterDID) {
+            throw new Error('No user DID found. Please authenticate.');
+        }
+        await this.repository.deleteComment(normalizedUrl, annotationId, commentId, requesterDID);
+    }
+
     cleanupAnnotationsListeners(url: string): void {
         this.repository.cleanupAnnotationsListeners(url);
     }

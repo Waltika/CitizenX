@@ -39,7 +39,7 @@ export class CommentManager {
         const comments: Comment[] = [];
         await new Promise<void>((resolve) => {
             annotationNode.get(annotationId).get('comments').map().once((comment: any) => {
-                if (comment) {
+                if (comment && !comment.isDeleted) {
                     comments.push({
                         id: comment.id,
                         content: comment.content,
@@ -66,6 +66,52 @@ export class CommentManager {
                     console.log('CommentManager: Saved comment:', comment);
                     resolve();
                 }
+            });
+        });
+    }
+
+    async deleteComment(url: string, annotationId: string, commentId: string, requesterDID: string): Promise<void> {
+        const { domainShard, subShard } = this.getShardKey(url);
+        const targetNode = subShard ? this.gun.get(subShard).get(url) : this.gun.get(domainShard).get(url);
+
+        return new Promise((resolve, reject) => {
+            const timestamp = new Date().toISOString();
+            console.log(`[${timestamp}] Starting comment deletion for URL: ${url}, Annotation ID: ${annotationId}, Comment ID: ${commentId}`);
+
+            // Fetch comment to verify author
+            targetNode.get(annotationId).get('comments').get(commentId).once((comment: any) => {
+                if (!comment) {
+                    console.error(`[${timestamp}] Comment not found for URL: ${url}, Annotation ID: ${annotationId}, Comment ID: ${commentId}`);
+                    reject(new Error('Comment not found'));
+                    return;
+                }
+
+                if (comment.author !== requesterDID) {
+                    console.error(`[${timestamp}] Unauthorized deletion attempt for URL: ${url}, Annotation ID: ${annotationId}, Comment ID: ${commentId}, Requester DID: ${requesterDID}`);
+                    reject(new Error('Unauthorized: Only the comment author can delete it'));
+                    return;
+                }
+
+                // Mark comment as deleted
+                targetNode.get(annotationId).get('comments').get(commentId).put({ isDeleted: true }, (ack: any) => {
+                    const markTimestamp = new Date().toISOString();
+                    if (ack.err) {
+                        console.error(`[${markTimestamp}] Failed to mark comment as deleted for URL: ${url}, Annotation ID: ${annotationId}, Comment ID: ${commentId}, Error:`, ack.err);
+                        reject(new Error(ack.err));
+                    } else {
+                        console.log(`[${markTimestamp}] Successfully marked comment as deleted for URL: ${url}, Annotation ID: ${annotationId}, Comment ID: ${commentId}`);
+                        // Log deletion for transparency
+                        this.gun.get('deletionLog').get(`${timestamp}_${commentId}`).put({
+                            type: 'comment',
+                            url,
+                            annotationId,
+                            commentId,
+                            requesterDID,
+                            timestamp,
+                        });
+                        resolve();
+                    }
+                });
             });
         });
     }
