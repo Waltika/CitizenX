@@ -3,29 +3,48 @@
 ## Overview
 CitizenX is a browser extension that enables users to annotate web pages and share those annotations in a decentralized manner using Gun.js. The project leverages React for the UI, TypeScript for type safety, and Vite as the build tool. The current focus is on ensuring annotations and user profiles are persisted and displayed correctly across devices and browsers, with plans to implement page history tracking and notifications in the future.
 
-As of May 2, 2025, the core functionality of creating, storing, and sharing annotations is working, along with displaying annotations on non-Chrome browsers. We’ve designed a sharding and replication strategy to improve scalability, added support for advanced users to specify their primary server, outlined security measures to protect annotations from unauthorized changes, and resolved an issue with author names displaying as "Unknown" on the web version by updating the `/api/annotations` endpoint. However, there are still scalability and persistence concerns with the current Gun.js setup that need to be addressed in future iterations.
+As of May 8, 2025, the core functionality of creating, storing, and sharing annotations is working, along with displaying annotations on non-Chrome browsers. We’ve designed a sharding and replication strategy to improve scalability, added support for advanced users to specify their primary server, outlined security measures to protect annotations from unauthorized changes, and resolved issues with author names displaying as "Unknown" and comment deletion. However, there are still scalability and persistence concerns with the current Gun.js setup that need to be addressed in future iterations.
 
 ## Current Status
-- **Annotations and Comments**: Users can create annotations and comments on web pages (e.g., `https://www.aaa.com/International/`). These are stored in a Gun.js database (`annotations`) with replication across peers when available.
-  - **Implementation**: Annotations are stored in Gun.js under the `annotations` node, keyed by URL, with comments stored as sub-nodes (`annotations/<url>/<annotationId>/comments`). The `useAnnotations` hook manages annotation creation, retrieval, and real-time updates.
-- **User Profiles and Authentication**: Users authenticate via a DID (Decentralized Identifier) and create profiles with a handle and profile picture, stored in Gun.js under a user-specific namespace (`user_<did>/profile`) and mirrored in the global `profiles` node for lookup.
-  - **Change**: Shifted from OrbitDB to Gun.js, with user-specific namespaces to isolate DID and profile data, resolving conflicts across users. The `currentDID` is cached in `localStorage` to persist on the same device, with import/export functionality for cross-device use.
-  - **Import/Export**: Fixed DID import/export to include profiles, with improved error handling for user-friendly feedback (e.g., "Incorrect passphrase or corrupted data").
-  - **Primary Server for Advanced Users**: Advanced users can deploy their own Gun.js server and set it as their "primary server" by specifying its URL (e.g., `https://user123-server.example.com/gun`) in the settings menu. The URL is stored in `user_<did>/primaryServer`, and the extension prioritizes this server for the user’s data interactions, falling back to other peers if offline.
-- **Build Issue**: A previous build failure due to a default import mismatch in `AnnotationUI.tsx` was resolved by ensuring proper import syntax and TypeScript configuration.
-- **Scalability Concern**: All annotations are currently stored in a single Gun.js node (`annotations`), which won’t scale to trillions of annotations across millions of users.
-  - **Proposed Solution**: Use domain-based sharding, creating one Gun.js node per domain (e.g., `annotations_example_com`, `annotations_aaa_com`). Servers replicate only the shards (domains) relevant to their users’ activity (e.g., pages visited or annotated).
-  - **Sub-Sharding for Popular Domains**: For high-traffic domains (e.g., `google.com`), sub-shard by hashing the full URL (e.g., `annotations_google_com_shard_0`).
-- **Non-Chrome Browsers (Req 11)**: Implemented the `/view-annotations` page on `https://citizenx.app` to display annotations for non-Chrome browsers. The page shows all annotations for a given URL, with a clickable link to the annotated page (opens in a new tab). Added a loading spinner with proper show/hide logic, styled to match the CitizenX design (white `#fff`, teal `#2c7a7b`, Inter font).
-  - **Chrome on Android Issue**: Chrome on Android (e.g., on Samsung devices) was incorrectly identified as non-Chrome due to the `!userAgent.includes('samsung')` check in `check-extension.js`. Fixed by using `!userAgent.includes('samsungbrowser')` and adding a mobile check (`/android|iphone|ipad|ipod|mobile/i.test(userAgent)`) to redirect mobile browsers to `/view-annotations`, as they cannot install extensions.
-  - **Author Display Issue**: Authors were displaying as "Unknown" on the `/view-annotations` page due to the Render server’s `/api/annotations` endpoint not fetching user profiles. Fixed by updating the endpoint to fetch profiles from Gun.js (`profiles/<did>` or `user_<did>/profile`) with retries (up to 5 attempts) and in-memory caching (5-minute TTL), ensuring the correct `authorHandle` is included in the response.
-- **Sharing (Req 10)**: Users can share annotations via a custom share modal (macOS) or `navigator.share` (other platforms). The sharing link format is `https://citizenx.app/check-extension?annotationId=<id>&url=<encoded-url>`. Considered URL shortening with Bitly but deferred due to ad-supported preview pages in the free plan.
-- **Persistence**: Attempted to store Gun.js data at `/var/data/gun-data` on the Render server, but storage is ephemeral due to the free plan. A paid plan upgrade is needed for persistence.
-- **Security for Annotations**: Designed a security model to ensure annotations can only be modified or deleted by their creator and to protect against hacking:
+
+### Annotations and Comments
+- **Functionality**: Users can create annotations and comments on web pages (e.g., `https://x.com/DrNeilStone/status/1918363323982332114`). These are stored in a Gun.js database (`annotations`) with replication across peers when available.
+- **Implementation**: Annotations are stored in Gun.js under the `annotations` node, keyed by URL, with comments stored as sub-nodes (`annotations/<url>/<annotationId>/comments`). The `useAnnotations` hook manages annotation creation, retrieval, and real-time updates.
+- **Comment Deletion**: Fixed an issue where clicking the delete button for a comment (`CommentList.tsx`) accidentally deleted the entire annotation by ensuring `onDeleteComment` is passed correctly from `AnnotationUI.tsx` to `AnnotationList.tsx` to `CommentList.tsx`. Added a guard clause in `AnnotationList.tsx` to render `CommentList` only when `onDeleteComment` is available, resolving the `undefined` prop error. Deletion now works correctly, but further testing is needed to ensure the comment is removed from the UI and persisted in Gun.js.
+- **Comment Collapsing**: Implemented a collapse/expand mechanism for comments under each annotation to save space. Comments are collapsed by default with a toggle button ("+ Show X comments" to expand, "− Hide comments" to collapse), styled in `AnnotationList.css` (teal `#2c7a7b`, hover `#4a999a`).
+
+### User Profiles and Authentication
+- **Functionality**: Users authenticate via a DID (Decentralized Identifier) and create profiles with a handle and profile picture, stored in Gun.js under a user-specific namespace (`user_<did>/profile`) and mirrored in the global `profiles` node for lookup.
+- **Change**: Shifted from OrbitDB to Gun.js, with user-specific namespaces to isolate DID and profile data, resolving conflicts across users. The `currentDID` is cached in `localStorage` to persist on the same device, with import/export functionality for cross-device use.
+- **Import/Export**: Fixed DID import/export to include profiles, with improved error handling for user-friendly feedback (e.g., "Incorrect passphrase or corrupted data").
+- **Primary Server for Advanced Users**: Advanced users can deploy their own Gun.js server and set it as their "primary server" by specifying its URL (e.g., `https://user123-server.example.com/gun`) in the settings menu. The URL is stored in `user_<did>/primaryServer`, and the extension prioritizes this server for the user’s data interactions, falling back to other peers if offline.
+- **Author Display Issue**: Fixed an issue where authors were displayed as "Unknown" in the extension and on the `/view-annotations` page by updating profile fetching in `useAnnotations.ts` to handle real-time updates and enhancing the `/api/annotations` endpoint on the Render server to fetch profiles from Gun.js (`profiles/<did>` or `user_<did>/profile`) with retries (up to 5 attempts) and in-memory caching (5-minute TTL). This ensures the correct `authorHandle` (e.g., "Waltika") is displayed.
+
+### Scalability
+- **Concern**: All annotations are currently stored in a single Gun.js node (`annotations`), which won’t scale to trillions of annotations across millions of users.
+- **Proposed Solution**: Use domain-based sharding, creating one Gun.js node per domain (e.g., `annotations_example_com`, `annotations_aaa_com`). Servers replicate only the shards (domains) relevant to their users’ activity (e.g., pages visited or annotated).
+- **Sub-Sharding for Popular Domains**: For high-traffic domains (e.g., `google.com`), sub-shard by hashing the full URL (e.g., `annotations_google_com_shard_0`).
+- **Next Steps**: Planned for the next sprint to implement sharding and test with high-traffic scenarios.
+
+### Non-Chrome Browsers (Req 11)
+- **Functionality**: Implemented the `/view-annotations` page on `https://citizenx.app` to display annotations for non-Chrome browsers. The page shows all annotations for a given URL, with a clickable link to the annotated page (opens in a new tab). Added a loading spinner with proper show/hide logic, styled to match the CitizenX design (white `#fff`, teal `#2c7a7b`, Inter font).
+- **Chrome on Android Issue**: Fixed an issue where Chrome on Android (e.g., on Samsung devices) was incorrectly identified as non-Chrome due to the `!userAgent.includes('samsung')` check in `check-extension.js`. Corrected to `!userAgent.includes('samsungbrowser')` and added a mobile check (`/android|iphone|ipad|ipod|mobile/i.test(userAgent)`) to redirect mobile browsers to `/view-annotations`, as they cannot install extensions.
+- **SSR Limitation**: The `/view-annotations` endpoint fails to render due to `AnnotationList` using React hooks (`useState`), which are not supported in server-side rendering. A temporary workaround (`AnnotationListServer.tsx`) was reverted to focus on scalability and security. Planned to reuse Node.js code for SSR in the future (see "Reusing Node.js Code for SSR on the Website").
+
+### Sharing (Req 10)
+- **Functionality**: Users can share annotations via a custom share modal (macOS) or `navigator.share` (other platforms). The sharing link format is `https://citizenx.app/check-extension?annotationId=<id>&url=<encoded-url>`. Considered URL shortening with Bitly but deferred due to ad-supported preview pages in the free plan.
+
+### Persistence
+- **Current State**: Attempted to store Gun.js data at `/var/data/gun-data` on the Render server, but storage is ephemeral due to the free plan. A paid plan upgrade is needed for persistence.
+- **Proposed Solution**: Implement a pinning service for Gun.js to ensure data persistence and replication across nodes (e.g., Voyager, or a custom solution). Added as a non-functional requirement.
+
+### Security
+- **Functionality**: Designed a security model to ensure annotations can only be modified or deleted by their creator and to protect against hacking:
   - **Signed Annotations**: Each annotation is signed with the creator’s private key, with the signature stored in Gun.js (e.g., `annotations/<url>/<annotationId>/signature`). Clients verify signatures on read, discarding tampered data.
   - **Signed Write Requests**: Write operations (create, update, delete) are signed and stored in `writeRequests`. Servers verify the signature and ensure the requester’s DID matches the annotation’s `author` before applying the write.
   - **Immutable Versioning**: Annotations are stored as immutable versions (`annotations/<url>/<annotationId>/versions/<timestamp>`), with updates creating new versions. Deletions use tombstones (`deleted: true`).
   - **Attack Mitigation**: Protect against malicious peers, data injection, DID spoofing, replay attacks, and DoS attacks through signature verification, rate-limiting (`rateLimits/<did>`), timestamp checks, and logging unauthorized attempts (`securityLogs`).
+- **Comment Deletion Security**: Ensured that only the comment’s author can delete it by verifying the DID in `CommentList.tsx` (`isOwnComment: true`). Fixed an issue where the entire annotation was deleted by ensuring `onDeleteComment` is correctly passed and called, preventing accidental annotation deletion.
 
 ## Architecture
 
@@ -36,6 +55,7 @@ As of May 2, 2025, the core functionality of creating, storing, and sharing anno
 - **Libraries**:
   - `gun`: For decentralized database operations.
   - `react-dom`: For rendering the UI in the side panel.
+  - `quill`: For WYSIWYG editing of annotations.
 - **Infrastructure**:
   - Single Gun.js bootstrap node on Render (`https://citizen-x-bootsrap.onrender.com`).
   - Webflow for hosting static pages (`https://citizenx.app`).
@@ -43,12 +63,12 @@ As of May 2, 2025, the core functionality of creating, storing, and sharing anno
 ### Key Components
 1. **Hooks**:
    - `useUserProfile.ts`: Manages user authentication, DID generation, and profile creation/update. Stores the DID and private key in `chrome.storage.local`, caches `currentDID` in `localStorage`, and persists profiles in Gun.js (`user_<did>/profile` and `profiles` nodes). Supports setting a `primaryServer` URL for advanced users.
-   - `useAnnotations.ts`: Manages annotation creation, storage, and retrieval. Stores annotations in a Gun.js node (`annotations`) and supports real-time updates. Includes client-side ownership checks for writes.
+   - `useAnnotations.ts`: Manages annotation creation, storage, and retrieval. Stores annotations in a Gun.js node (`annotations`) and supports real-time updates. Includes client-side ownership checks for writes. Improved profile fetching to handle real-time updates, fixing the "Unknown" author issue.
    - `useStorage.ts`: Initializes the Gun.js instance and handles database operations.
 
 2. **Components**:
    - `AnnotationUI.tsx`: The main UI component for the side panel, rendering the annotation list, profile modal, and import/export UI. Uses `useUserProfile` and `useAnnotations` hooks. Includes a settings menu (⚙️ icon) with options for authentication, sign-out, export/import identity, and setting a primary server for advanced users.
-   - `AnnotationList.tsx`: Displays a list of annotations and comments for the current page, looking up user profiles by DID. Handles sharing functionality.
+   - `AnnotationList.tsx`: Displays a list of annotations and comments for the current page, looking up user profiles by DID. Handles sharing functionality and comment collapsing. Fixed comment deletion by ensuring `onDeleteComment` is passed correctly and only renders `CommentList` when the prop is available.
    - `Comment.tsx`: Renders individual comments within annotations, displaying user info.
 
 3. **Storage**:
@@ -80,11 +100,12 @@ As of May 2, 2025, the core functionality of creating, storing, and sharing anno
    - `useUserProfile` loads profiles from Gun.js (`profiles` node), creating a map of DIDs to profile data for display in annotations and comments.
    - Fetches the `primaryServer` URL from `user_<did>/primaryServer` and adds it to the Gun.js peer list for prioritization.
 
-3. **Annotation Creation**:
+3. **Annotation Creation and Deletion**:
    - Users create annotations via `AnnotationUI`, which calls `useAnnotations` to save them in Gun.js (`annotations/<url>/<annotationId>`).
    - Annotations are signed with the user’s private key, with the signature stored in `annotations/<url>/<annotationId>/signature`.
    - Writes (create, update, delete) are sent as signed requests to `writeRequests`, verified by servers before applying.
    - Annotations are stored as immutable versions (`annotations/<url>/<annotationId>/versions/<timestamp>`), with deletions using tombstones (`deleted: true`).
+   - Users can delete their own comments via `CommentList.tsx`, with the `onDeleteComment` prop correctly passed to trigger a DELETE request to `/api/comments`, ensuring only the comment is removed and the annotation remains intact.
    - `AnnotationList` and `Comment` components fetch annotations, verify signatures, and look up user profiles by DID to display the handle and profile picture.
 
 4. **Non-Chrome Browsers**:
@@ -107,7 +128,7 @@ As of May 2, 2025, the core functionality of creating, storing, and sharing anno
 - **Current Limitation**: All annotations are stored in a single Gun.js node (`annotations`), which won’t scale to trillions of annotations across millions of users.
 - **Proposed Solution**: Use domain-based sharding, creating one Gun.js node per domain (e.g., `annotations_example_com`, `annotations_aaa_com`). Servers replicate only the shards (domains) relevant to their users’ activity (e.g., pages visited or annotated).
 - **Sub-Sharding for Popular Domains**: For high-traffic domains (e.g., `google.com`), sub-shard by hashing the full URL (e.g., `annotations_google_com_shard_0`).
-- **Next Steps**: Design and implement the per-domain node structure, updating `useAnnotations` and `useStorage` to dynamically select the appropriate node based on the current page’s domain.
+- **Next Steps**: Planned for the next sprint to implement the per-domain node structure, updating `useAnnotations` and `useStorage` to dynamically select the appropriate node based on the current page’s domain.
 
 ## Security Plan
 - **Goal**: Ensure annotations can only be modified or deleted by their creator and protect the system from hacking.
@@ -116,6 +137,7 @@ As of May 2, 2025, the core functionality of creating, storing, and sharing anno
   - **Signed Write Requests**: Write operations (create, update, delete) are signed and stored in `writeRequests`. Servers verify the signature and ensure the requester’s DID matches the annotation’s `author` before applying the write.
   - **Immutable Versioning**: Annotations are stored as immutable versions (`annotations/<url>/<annotationId>/versions/<timestamp>`), with updates creating new versions. Deletions use tombstones (`deleted: true`).
   - **Attack Mitigation**: Protect against malicious peers, data injection, DID spoofing, replay attacks, and DoS attacks through signature verification, rate-limiting (`rateLimits/<did>`), timestamp checks, and logging unauthorized attempts (`securityLogs`).
+  - **Comment Deletion**: Fixed to ensure only the comment’s author can delete it, verified by DID matching (`isOwnComment: true`). Ensured the `onDeleteComment` prop is correctly passed to `CommentList.tsx`, preventing accidental annotation deletion.
 
 ## Pending Features
 - **Page History (Requirement 4)**: Track visited URLs in the background script and store them for notifications.
@@ -123,6 +145,12 @@ As of May 2, 2025, the core functionality of creating, storing, and sharing anno
 - **Notifications (Requirement 6)**: Notify users of new comments on their annotations.
 - **Pinning Service**: Implement a pinning service for Gun.js to prevent data loss and enable replication.
 - **Primary Server UI**: Add a "Set Primary Server" option in the settings menu (⚙️ icon) in `AnnotationUI.tsx`, allowing advanced users to specify their server URL, which is saved to `user_<did>/primaryServer`.
+- **Collaborative Deletion and Moderation (Requirement 14)**:
+  - Add hiding and reporting functionality for comments and annotations.
+  - Implement user opinion preferences and age verification in the settings panel.
+  - Develop truthfulness ranking with diversity weighting.
+  - Create a `ModeratorPanel.tsx` for admin voting on reported content.
+- **Real-Time Updates (Requirement 9 - Future Versions)**: Enhance `useAnnotations.ts` to rely on Gun.js subscriptions (`map().on()`) for seamless UI updates, removing the initial fetch dependency.
 
 ## File Structure
 - **Hooks**:
@@ -143,4 +171,4 @@ As of May 2, 2025, the core functionality of creating, storing, and sharing anno
   - Gun.js: `annotations`, `profiles`, `user_<did>`, `writeRequests`, `securityLogs`, `rateLimits`
 
 ## Last Updated
-May 2, 2025
+May 8, 2025
