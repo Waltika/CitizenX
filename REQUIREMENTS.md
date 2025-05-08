@@ -9,7 +9,7 @@ A decentralized Chrome extension for annotating websites in order to bring a kno
 2. We want the user to have a profile picture and a handle.
     - **Status**: Implemented. Users can create profiles with a handle and profile picture, stored in Gun.js (`user_<did>/profile` and `profiles` nodes). Profiles are included in the import/export process.
 3. We want pages from different languages and with non-functional parameters (like UTM parameters) to be considered the same page.
-    - **Status**: Implemented via `normalizeUrl` in `src/shared/utils/normalizeUrl.ts`, which removes UTM parameters and normalizes URLs.
+    - **Status**: Implemented via `normalizeUrl` in `src/shared/utils/normalizeUrl.ts`, which removes UTM parameters and normal - **Status**: Implemented via `normalizeUrl` in `src/shared/utils/normalizeUrl.ts`, which removes UTM parameters and normalizes URLs.
 4. We want the Chrome extension to maintain a list of the history of pages visited by the user.
     - **Status**: Pending.
 5. We want the user to be notified through the extension when annotations are made by someone else on the pages he visited.
@@ -41,16 +41,25 @@ A decentralized Chrome extension for annotating websites in order to bring a kno
         - Update the CitizenX extension's build process (e.g., Vite configuration) to include the shared library.
         - Test the shared library to ensure consistent behavior (e.g., identical hash outputs for `simpleHash`, consistent URL normalization) across both projects.
         - Document the shared library's API and usage in a `README.md` within the library directory.
-14. We want a collaborative deletion and moderation system for annotations and comments to ensure fair and secure content management.
-    - **Status**: Pending.
-    - **Description**: Implement a system where only the author can delete their own annotations or comments, any user can hide content locally, and moderators can delete illegal content via a collaborative voting process. This ensures a balance between user control, community moderation, and legal compliance.
+14. We want a collaborative deletion and moderation system for annotations and comments to ensure fair and secure content management, prioritizing truthfulness over popularity.
+    - **Status**: Partially Implemented. Deletion for own comments implemented; hiding, reporting, and ranking in progress.
+    - **Description**: Implement a system where users can delete their own content, hide or report others’ content, and choose between diverse or ideologically aligned content environments. Admins can delete content via consensus, and a truthfulness-based ranking system uses implicit signals (hides, reports) to sort content, inspired by X Community Notes. Adult content is filtered for underage or unverified users, with age verification persisting across devices. All user preferences are stored in Gun.js for persistence.
     - **Implementation Details**:
-        - **Ownership-Based Deletion**: Only the author (identified by their DID) can delete their annotations or comments. Update `AnnotationManager.ts` and `gun-server.js` to verify the requester’s DID against the `author` field. Add a "Delete" button for comments in `AnnotationList.tsx`, visible only to the comment’s author.
-        - **Hiding Content**: Allow any user to hide annotations or comments locally by storing hidden content IDs in `chrome.storage.local` (`hiddenAnnotations`, `hiddenComments`). Add "Hide" and "Unhide" buttons in `AnnotationList.tsx`, affecting only the user’s view. Filter hidden content from the UI with an option to toggle visibility.
-        - **Moderator-Driven Deletion**: Define moderators in a Gun.js `admins` node with trusted DIDs. Moderators can initiate deletion of illegal content (e.g., content violating laws or community guidelines) via a voting process stored in `deletionVotes/<contentId>`. Require at least 3 moderator approvals to delete, using signed votes to ensure authenticity. Implement a `reportContent` function to flag content, storing reports in `reportedContent/<contentId>`. Moderators review and vote via a new `ModeratorPanel.tsx` component.
-        - **Security**: Use Gun.js SEA for signing deletion and vote requests. Validate signatures in `AnnotationManager.ts` and `gun-server.js`. Log deletions and votes in a `deletionLog` node for transparency.
-        - **UI and Notifications**: Add "Report" buttons for annotations and comments in `AnnotationList.tsx`. Notify users via the extension’s UI (leveraging future notification system from Requirements 5 or 6) when their content is deleted or reported. Style buttons to match the UI (teal `#2c7a7b`, hover `#4a999a`).
-        - **Testing**: Simulate deletion scenarios (e.g., unauthorized attempts, moderator voting, hiding/unhiding) to ensure permissions and voting work as expected.
+        - **Ownership-Based Deletion**: Users delete their own annotations/comments (verified by DID), setting `isDeleted: true` in Gun.js. Implemented for comments in `CommentList.tsx`, with buttons visible only to authors. Extend to annotations in `AnnotationList.tsx`. Update `AnnotationManager.ts` and `gun-server.js` to enforce DID checks.
+        - **Admin Deletion**: Define admins in Gun.js `admins/<did>` node. Admins delete content via a voting process (3 signed votes in `deletionVotes/<contentId>`), setting `isDeleted: true`. Implement in `CommentManager.ts` and plan `ModeratorPanel.tsx` for voting UI.
+        - **Hiding Content**: Users hide annotations/comments persistently in `user_<did>/hiddenContent/<contentId>`, affecting only their view. Add “Hide”/”Unhide” buttons in `CommentList.tsx` and `AnnotationList.tsx`. Filter hidden content in `AnnotationManager.getAnnotations`. Submit hide signals to `rankingSignals/<contentId>/hideCount`.
+        - **Reporting Content**: Users report content as misleading/harmful, storing in `reportedContent/<contentId>` with reasons (e.g., “Misinformation”). Add “Report” button with dropdown in `CommentList.tsx`. Signals increment `rankingSignals/<contentId>/reportCount` and flag for admin review.
+        - **Truthfulness Ranking**: Rank content by `weightedScore` in `rankingSignals/<contentId>`, computed from hide (`weight=1`) and report (`weight=2`) signals. Weight signals by user diversity (Hamming distance of `user_<did>/perspective` hashes, updated via `simpleHash` of hide/report history). Sort in `AnnotationManager.getAnnotations`. Inspired by X Community Notes, emphasizing diverse consensus.
+        - **User Opinion Preference**: Users choose “Diverse Opinions” (prioritize high `weightedScore`) or “My Perspective” (boost content matching `perspective.hash`) in a settings panel (⚙️ icon). Store in `user_<did>/preferences`. Blend 20% diverse content in bias mode to avoid echo chambers.
+        - **Adult Content and Age Verification**: Users report adult content, tagged by admins in `contentTags/<contentId>`. Unverified/underage users see filtered content (strict default, e.g., hide untagged items). Store self-declared age verification in `user_<did>/ageVerification`. Apply strictest jurisdictional rules (e.g., COPPA, GDPR-K) by default, with optional location detection. Implement prompt in settings panel.
+        - **Security**: Use Gun.js SEA for signed deletion, hide, and report requests. Validate signatures in `AnnotationManager.ts` and `gun-server.js`. Log actions in `deletionLog`. Limit one hide/report per user per item in `rankingSignals/<contentId>/userDIDs`. Apply rate limits in `user_<did>/actionLimits`.
+        - **UI and Notifications**: Add buttons in `CommentList.tsx` (Delete: orange `#f97316`, Hide: gray `#666`, Report: red `#dc2626`). Use toast notifications (“Deleted,” “Hidden,” “Reported”). Plan settings panel for preferences and unhiding. Notify users of deletions/reports via future notification system (Requirements 5/6).
+        - **Testing**: Simulate deletion (own/admin), hiding, reporting, and ranking scenarios. Test preference persistence across devices/cache clears. Validate age filtering and jurisdictional compliance.
+    - **Future Enhancements**:
+        - Refine diversity with AI clustering (Requirement 6).
+        - Add comment sentiment analysis (keyword-based).
+        - Implement third-party age verification.
+        - Track content views for exposure normalization.
 
 **Focus for Next Sprint**:
 - **Sharding (Scalability)**:
@@ -74,10 +83,11 @@ A decentralized Chrome extension for annotating websites in order to bring a kno
     - Update `gun-server.js` and relevant extension files (`AnnotationManager.ts`, `CleanupManager.ts`) to import from the shared library.
     - Test the integration to ensure no regressions in sharding or URL normalization.
 - **Collaborative Deletion and Moderation**:
-    - Implement ownership-based deletion for annotations and comments (Requirement 14), updating `AnnotationManager.ts` and `gun-server.js` to enforce DID-based permissions.
-    - Add "Delete" button for comments and "Hide"/"Unhide"/"Report" buttons for both annotations and comments in `AnnotationList.tsx`.
-    - Develop the moderator voting system in Gun.js (`deletionVotes`, `reportedContent`) and create `ModeratorPanel.tsx` for reviewing and voting on reported content.
-    - Test deletion, hiding, and moderation workflows to ensure compliance with collaborative requirements.
+    - Complete hiding and reporting for comments and annotations, updating `CommentList.tsx` and `AnnotationList.tsx`.
+    - Implement opinion preference toggle and age verification in settings panel.
+    - Develop truthfulness ranking in `AnnotationManager.ts` with diversity weighting.
+    - Create `ModeratorPanel.tsx` for admin voting on reported content.
+    - Test deletion, hiding, reporting, ranking, and age filtering workflows.
 
 ## Non Functional Requirements - v1.0
 1. Except for the Chrome Extension, we want zero installation on the user's device.
