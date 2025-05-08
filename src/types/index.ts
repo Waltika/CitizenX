@@ -17,7 +17,6 @@ export interface Annotation {
 }
 
 export interface Comment {
-    text: string;
     content: string | TrustedHTML;
     id: string;
     author: string;
