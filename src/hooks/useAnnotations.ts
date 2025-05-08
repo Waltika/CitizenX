@@ -16,11 +16,14 @@ interface UseAnnotationsResult {
     handleSaveAnnotation: (content: string) => Promise<void>;
     handleDeleteAnnotation: (annotationId: string) => Promise<void>;
     handleSaveComment: (annotationId: string, content: string) => Promise<void>;
+    handleDeleteComment: (annotationId: string, commentId: string) => Promise<void>;
 }
 
 export const useAnnotations = ({ url, did }: UseAnnotationsProps): UseAnnotationsResult => {
     const { storage, error: storageError, isLoading: storageLoading } = useStorage();
     const [annotations, setAnnotations] = useState<Annotation[]>([]);
+    const [pendingAnnotations, setPendingAnnotations] = useState<Annotation[]>([]);
+    const [pendingComments, setPendingComments] = useState<Comment[]>([]);
     const [profiles, setProfiles] = useState<Record<string, any>>({});
     const [error, setError] = useState<string | null>(null);
     const [loading, setLoading] = useState<boolean>(false);
@@ -93,6 +96,8 @@ export const useAnnotations = ({ url, did }: UseAnnotationsProps): UseAnnotation
             console.log('useAnnotations: No URL provided, skipping fetch');
             setLoading(false);
             setAnnotations([]);
+            setPendingAnnotations([]);
+            setPendingComments([]);
             setProfiles({});
             return;
         }
@@ -115,6 +120,8 @@ export const useAnnotations = ({ url, did }: UseAnnotationsProps): UseAnnotation
         console.log('useAnnotations: Fetching annotations for URL:', normalizedUrl);
         setLoading(true);
         setError(null);
+        setPendingAnnotations([]);
+        setPendingComments([]);
 
         // Create a new AbortController for this fetch
         abortControllerRef.current = new AbortController();
@@ -125,9 +132,37 @@ export const useAnnotations = ({ url, did }: UseAnnotationsProps): UseAnnotation
                 console.log('useAnnotations: Ignoring update for stale URL:', normalizedUrl);
                 return;
             }
-            setAnnotations(newAnnotations);
-            // Fetch profiles for new annotations
-            await updateProfilesForAnnotations(newAnnotations);
+
+            // Deduplicate annotations by id
+            const uniqueAnnotations: Annotation[] = Array.from(
+                new Map(newAnnotations.map(item => [item.id, item])).values()
+            );
+
+            // Filter out deleted annotations
+            const filteredAnnotations = uniqueAnnotations.filter(ann => !ann.isDeleted);
+
+            // Update comments within each annotation to exclude deleted comments
+            const annotationsWithFilteredComments = filteredAnnotations.map(ann => {
+                const currentComments = annotations.find(a => a.id === ann.id)?.comments || [];
+                const updatedComments = (ann.comments || []).filter(comment => {
+                    const currentComment = currentComments.find(c => c.id === comment.id);
+                    return !comment.isDeleted && (!currentComment || !currentComment.isDeleted);
+                });
+                return { ...ann, comments: updatedComments };
+            });
+
+            // Clear pending annotations/comments that are now confirmed
+            setPendingAnnotations((prev) =>
+                prev.filter(pending => !annotationsWithFilteredComments.some(ann => ann.id === pending.id))
+            );
+            setPendingComments((prev) =>
+                prev.filter(pending => !annotationsWithFilteredComments.some(ann =>
+                    ann.comments?.some(c => c.id === pending.id)
+                ))
+            );
+
+            setAnnotations(annotationsWithFilteredComments);
+            await updateProfilesForAnnotations(annotationsWithFilteredComments);
         };
 
         storage.getAnnotations(normalizedUrl, updateAnnotations).then(async (fetchedAnnotations) => {
@@ -188,15 +223,18 @@ export const useAnnotations = ({ url, did }: UseAnnotationsProps): UseAnnotation
             isDeleted: false,
         };
 
+        // Add to pending annotations for immediate feedback
+        setPendingAnnotations((prev) => {
+            const uniquePending: Annotation[] = Array.from(
+                new Map([...prev, annotation].map(item => [item.id, item])).values()
+            );
+            console.log('useAnnotations: Adding pending annotation:', annotation);
+            return uniquePending;
+        });
+
         await storage.saveAnnotation(annotation);
-        if (currentUrlRef.current === normalizeUrl(url)) {
-            setAnnotations((prev) => {
-                const updatedAnnotations = [...prev, annotation];
-                updateProfilesForAnnotations(updatedAnnotations);
-                return updatedAnnotations;
-            });
-        }
-    }, [did, url, storage, updateProfilesForAnnotations]);
+        // Rely on the updateAnnotations callback to update the state
+    }, [did, url, storage]);
 
     const handleDeleteAnnotation = useCallback(async (annotationId: string) => {
         if (!storage) {
@@ -210,6 +248,7 @@ export const useAnnotations = ({ url, did }: UseAnnotationsProps): UseAnnotation
         await storage.deleteAnnotation(normalizeUrl(url), annotationId);
         if (currentUrlRef.current === normalizeUrl(url)) {
             setAnnotations((prev) => prev.filter((annotation) => annotation.id !== annotationId));
+            setPendingAnnotations((prev) => prev.filter((annotation) => annotation.id !== annotationId));
         }
     }, [url, storage]);
 
@@ -231,30 +270,86 @@ export const useAnnotations = ({ url, did }: UseAnnotationsProps): UseAnnotation
             content,
             author: did,
             timestamp: Date.now(),
-            isDeleted: false
+            isDeleted: false,
+            annotationId,
         };
 
+        // Add to pending comments for immediate feedback
+        setPendingComments((prev) => {
+            const uniquePending: Comment[] = Array.from(
+                new Map([...prev, comment].map(item => [item.id, item])).values()
+            );
+            console.log('useAnnotations: Adding pending comment:', comment);
+            return uniquePending;
+        });
+
         await storage.saveComment(normalizeUrl(url), annotationId, comment);
-        if (currentUrlRef.current === normalizeUrl(url)) {
-            setAnnotations((prev) => {
-                const updatedAnnotations = prev.map((annotation) =>
-                    annotation.id === annotationId
-                        ? { ...annotation, comments: [...(annotation.comments || []), comment] }
-                        : annotation
-                );
-                updateProfilesForAnnotations(updatedAnnotations);
-                return updatedAnnotations;
-            });
+        // Rely on the updateAnnotations callback to update the state
+    }, [did, url, storage]);
+
+    const handleDeleteComment = useCallback(async (annotationId: string, commentId: string) => {
+        if (!did) {
+            throw new Error('User not authenticated');
         }
-    }, [did, url, storage, updateProfilesForAnnotations]);
+
+        if (!storage) {
+            throw new Error('Storage not initialized');
+        }
+
+        if (!url) {
+            throw new Error('No URL provided for comment deletion');
+        }
+
+        // Batch state updates to minimize re-renders
+        setAnnotations((prevAnnotations) => {
+            const updatedAnnotations = prevAnnotations.map((annotation) =>
+                annotation.id === annotationId
+                    ? {
+                        ...annotation,
+                        comments: (annotation.comments || []).filter(
+                            (comment) => comment.id !== commentId
+                        ),
+                    }
+                    : annotation
+            );
+            setPendingComments((prevPending) =>
+                prevPending.filter((comment) => comment.id !== commentId)
+            );
+            return updatedAnnotations;
+        });
+
+        await storage.deleteComment(normalizeUrl(url), annotationId, commentId);
+        // Rely on updateAnnotations to handle the final state update from the database
+    }, [did, url, storage]);
+
+    // Combine pending annotations and confirmed annotations, ensuring deduplication
+    const combinedAnnotations: Annotation[] = Array.from(
+        new Map([...pendingAnnotations, ...annotations].map(item => [item.id, item])).values()
+    );
+
+    const displayedAnnotations: Annotation[] = combinedAnnotations.map((annotation: Annotation) => {
+        const pendingForAnnotation: Comment[] = pendingComments.filter(
+            (comment: Comment) => comment.annotationId === annotation.id && !comment.isDeleted
+        );
+        const confirmedComments: Comment[] = (annotation.comments || []).filter(
+            (comment) => !comment.isDeleted
+        );
+        return {
+            ...annotation,
+            comments: Array.from(
+                new Map([...confirmedComments, ...pendingForAnnotation].map(item => [item.id, item])).values()
+            ) as Comment[]
+        };
+    });
 
     return {
-        annotations,
+        annotations: displayedAnnotations,
         profiles,
         error: error || storageError,
         loading: loading || storageLoading,
         handleSaveAnnotation,
         handleDeleteAnnotation,
         handleSaveComment,
+        handleDeleteComment,
     };
 };

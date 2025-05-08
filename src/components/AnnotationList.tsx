@@ -231,6 +231,7 @@ export const AnnotationList: React.FC<AnnotationListProps> = ({ annotations, pro
                             commentInput={commentInputs[annotation.id] || ''}
                             editorRef={(el) => (editorRefs.current[annotation.id] = el)}
                             handleSaveComment={() => handleSaveComment(annotation.id)}
+                            onShowToast={onShowToast} // Add onShowToast prop
                         />
                     </div>
                 );

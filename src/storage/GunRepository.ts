@@ -1,5 +1,7 @@
 import Gun from 'gun';
 import 'gun/lib/webrtc';
+import 'gun/lib/radix'; // Import RAD for IndexedDB support
+import 'gun/lib/radisk'; // Import radisk for persistent storage
 import { PeerManager } from './PeerManager';
 import { AnnotationManager } from './AnnotationManager';
 import { CommentManager } from './CommentManager';
@@ -44,7 +46,7 @@ export class GunRepository {
         this.gun = Gun({
             peers: this.options.peers,
             radisk: this.options.radisk,
-            localStorage: true,
+            localStorage: false, // Disable localStorage to avoid QuotaExceededError
             file: 'gun-data',
             webrtc: true,
         });
