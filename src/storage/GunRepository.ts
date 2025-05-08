@@ -2,6 +2,7 @@ import Gun from 'gun';
 import 'gun/lib/webrtc';
 import { PeerManager } from './PeerManager';
 import { AnnotationManager } from './AnnotationManager';
+import { CommentManager } from './CommentManager';
 import { ProfileManager } from './ProfileManager';
 import { CleanupManager } from './CleanupManager';
 import { Annotation, Profile, Comment } from '@/types';
@@ -22,6 +23,7 @@ export class GunRepository {
     private options: GunRepositoryOptions;
     private peerManager: PeerManager;
     private annotationManager: AnnotationManager;
+    private commentManager: CommentManager;
     private profileManager: ProfileManager;
     private cleanupManager: CleanupManager;
     private initializationResolve: ((value?: void | PromiseLike<void>) => void) | null = null;
@@ -49,6 +51,7 @@ export class GunRepository {
 
         this.peerManager = new PeerManager(this.gun, this.options.peers ?? [], this.initialPeers);
         this.annotationManager = new AnnotationManager(this.gun);
+        this.commentManager = new CommentManager(this.gun);
         this.profileManager = new ProfileManager(this.gun);
         this.cleanupManager = new CleanupManager(this.gun);
 
@@ -184,7 +187,7 @@ export class GunRepository {
     }
 
     async saveComment(url: string, annotationId: string, comment: Comment): Promise<void> {
-        return this.annotationManager.saveComment(url, annotationId, comment);
+        return this.commentManager.saveComment(url, annotationId, comment);
     }
 
     async inspectAnnotations(): Promise<void> {

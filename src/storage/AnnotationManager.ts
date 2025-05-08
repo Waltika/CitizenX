@@ -1,5 +1,6 @@
-import { Annotation, Comment } from '@/types';
+import { Annotation } from '@/types';
 import { normalizeUrl } from '../shared/utils/normalizeUrl';
+import { CommentManager } from './CommentManager';
 
 type AnnotationUpdateCallback = (annotations: Annotation[]) => void;
 
@@ -11,12 +12,14 @@ interface CallbackEntry {
 export class AnnotationManager {
     private gun: any;
     private annotationCallbacks: Map<string, CallbackEntry> = new Map();
+    private commentManager: CommentManager;
 
     constructor(gun: any) {
         this.gun = gun;
+        this.commentManager = new CommentManager(gun);
     }
 
-    private getShardKey(url: string): { domainShard: string; subShard?: string } {
+    getShardKey(url: string): { domainShard: string; subShard?: string } {
         const normalizedUrl = normalizeUrl(url);
         const urlObj = new URL(normalizedUrl);
         const domain = urlObj.hostname.replace(/\./g, '_');
@@ -67,20 +70,7 @@ export class AnnotationManager {
                         loadedAnnotations.add(annotation.id);
                         hasNewData = true;
 
-                        const comments: Comment[] = await new Promise((resolveComments) => {
-                            const commentList: Comment[] = [];
-                            annotationNode.get(annotation.id).get('comments').map().once((comment: any) => {
-                                if (comment) {
-                                    commentList.push({
-                                        id: comment.id,
-                                        content: comment.content,
-                                        author: comment.author,
-                                        timestamp: comment.timestamp,
-                                    } as Comment);
-                                }
-                            });
-                            setTimeout(() => resolveComments(commentList), 500);
-                        });
+                        const comments = await this.commentManager.getComments(url, annotation.id, annotationNode);
 
                         const annotationData: Annotation = {
                             id: annotation.id,
@@ -141,20 +131,7 @@ export class AnnotationManager {
                     annotations.splice(0, annotations.length, ...updatedAnnotations);
                 } else {
                     console.log(`[${timestamp}] Processing update for URL: ${url} with annotation:`, annotation);
-                    const comments: Comment[] = await new Promise((resolveComments) => {
-                        const commentList: Comment[] = [];
-                        annotationNodes[1].get(annotation.id).get('comments').map().once((comment: any) => {
-                            if (comment) {
-                                commentList.push({
-                                    id: comment.id,
-                                    content: comment.content,
-                                    author: comment.author,
-                                    timestamp: comment.timestamp,
-                                } as Comment);
-                            }
-                        });
-                        setTimeout(() => resolveComments(commentList), 500);
-                    });
+                    const comments = await this.commentManager.getComments(url, annotation.id, annotationNodes[1]);
 
                     if (annotation.isDeleted) {
                         console.log(`[${timestamp}] Skipping update for deleted annotation for URL: ${url}, ID: ${annotation.id}`);
@@ -214,12 +191,6 @@ export class AnnotationManager {
                 }
             });
         });
-
-        if (comments && comments.length > 0) {
-            for (const comment of comments) {
-                await this.saveComment(annotation.url, annotation.id, comment);
-            }
-        }
     }
 
     async deleteAnnotation(url: string, id: string): Promise<void> {
@@ -237,23 +208,6 @@ export class AnnotationManager {
                     reject(new Error(ack.err));
                 } else {
                     console.log(`[${markTimestamp}] Successfully marked annotation as deleted for URL: ${url}, ID: ${id}`);
-                    resolve();
-                }
-            });
-        });
-    }
-
-    async saveComment(url: string, annotationId: string, comment: Comment): Promise<void> {
-        const { domainShard, subShard } = this.getShardKey(url);
-        const targetNode = subShard ? this.gun.get(subShard).get(url) : this.gun.get(domainShard).get(url);
-
-        return new Promise((resolve, reject) => {
-            targetNode.get(annotationId).get('comments').get(comment.id).put(comment, (ack: any) => {
-                if (ack.err) {
-                    console.error('AnnotationManager: Failed to save comment:', ack.err);
-                    reject(new Error(ack.err));
-                } else {
-                    console.log('AnnotationManager: Saved comment:', comment);
                     resolve();
                 }
             });

@@ -1,6 +1,6 @@
-// StorageRepository.ts
 import { GunRepository } from './GunRepository';
 import { Annotation, Comment, Profile } from '@/types';
+import { normalizeUrl } from '../shared/utils/normalizeUrl';
 
 // Define PeerStatus interface to match the one in GunRepository and PeerManager
 interface PeerStatus {
@@ -59,20 +59,6 @@ export class StorageRepository {
                 resolve();
             });
         });
-    }
-
-    private normalizeUrl(url: string): string {
-        let cleanUrl = url.replace(/^(https?:\/\/)+/, 'https://');
-        cleanUrl = cleanUrl.replace(/\/+$/, '');
-        const urlObj = new URL(cleanUrl);
-        const params = new URLSearchParams(urlObj.search);
-        for (const key of params.keys()) {
-            if (key.startsWith('utm_')) {
-                params.delete(key);
-            }
-        }
-        urlObj.search = params.toString();
-        return urlObj.toString();
     }
 
     async initialize(): Promise<void> {
@@ -138,26 +124,26 @@ export class StorageRepository {
 
     async getAnnotations(url: string, callback?: (annotations: Annotation[]) => void): Promise<Annotation[]> {
         await this.initialize();
-        const normalizedUrl = this.normalizeUrl(url);
+        const normalizedUrl = normalizeUrl(url);
         console.log('StorageRepository: Fetching annotations for normalized URL:', normalizedUrl);
         return this.repository.getAnnotations(normalizedUrl, callback);
     }
 
     async saveAnnotation(annotation: Annotation): Promise<void> {
         await this.initialize();
-        const normalizedAnnotation = { ...annotation, url: this.normalizeUrl(annotation.url) };
+        const normalizedAnnotation = { ...annotation, url: normalizeUrl(annotation.url) };
         await this.repository.saveAnnotation(normalizedAnnotation);
     }
 
     async deleteAnnotation(url: string, id: string): Promise<void> {
         await this.initialize();
-        const normalizedUrl = this.normalizeUrl(url);
+        const normalizedUrl = normalizeUrl(url);
         await this.repository.deleteAnnotation(normalizedUrl, id);
     }
 
     async saveComment(url: string, annotationId: string, comment: Comment): Promise<void> {
         await this.initialize();
-        const normalizedUrl = this.normalizeUrl(url);
+        const normalizedUrl = normalizeUrl(url);
         await this.repository.saveComment(normalizedUrl, annotationId, comment);
     }
 
