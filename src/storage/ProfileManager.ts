@@ -27,7 +27,7 @@ export class ProfileManager {
                     setTimeout(() => {
                         console.warn('ProfileManager: Gun.js did not respond, using cached DID as fallback');
                         resolve(cachedDID);
-                    }, 5000);
+                    }, 1000);
                 } else {
                     resolve(null);
                 }
@@ -76,21 +76,77 @@ export class ProfileManager {
         });
     }
 
-    async getProfile(did: string, retries = 5, delay = 1000): Promise<Profile | null> {
+    async getProfile(did: string, retries = 5, delay = 500): Promise<Profile | null> {
+        const totalStartTime = Date.now();
+        console.log(`[Timing] Starting getProfile for DID: ${did} at ${new Date().toISOString()}`);
+
         for (let attempt = 1; attempt <= retries; attempt++) {
+            const attemptStartTime = Date.now();
             const result = await new Promise<Profile | null>((resolve) => {
-                this.gun.get(`user_${did}`).get('profile').once((data: any) => {
+                let nodesProcessed = 0;
+                const totalNodes = 2; // Two queries: 'profiles' and 'user_${did}/profile'
+                let profileFound = false;
+
+                const timeout = setTimeout(() => {
+                    console.log(`Profile fetch attempt ${attempt}/${retries} for DID: ${did} timed out after 2000ms`);
+                    if (!profileFound) {
+                        nodesProcessed = totalNodes;
+                        resolve(null);
+                    }
+                }, 2000); // Increased timeout to 2000ms
+
+                // First query: gun.get('profiles').get(did)
+                this.gun.get('profiles').get(did).once((data: any) => {
+                    if (profileFound) return; // Skip if profile already found
                     if (data && data.did && data.handle) {
-                        console.log('ProfileManager: Loaded profile for DID:', did, data);
+                        console.log('ProfileManager: Loaded profile from profiles for DID:', did, data);
+                        profileFound = true;
+                        clearTimeout(timeout);
                         resolve({ did: data.did, handle: data.handle, profilePicture: data.profilePicture });
-                    } else {
-                        console.warn('ProfileManager: Profile not found for DID on attempt', attempt, did, data);
+                        return;
+                    }
+                    console.log(`ProfileManager: No profile found in profiles for DID on attempt ${attempt}:`, did, data);
+                    nodesProcessed++;
+                    if (nodesProcessed === totalNodes && !profileFound) {
+                        clearTimeout(timeout);
                         resolve(null);
                     }
                 });
+
+                // Second query: gun.get(`user_${did}`).get('profile')
+                this.gun.get(`user_${did}`).get('profile').once((data: any) => {
+                    if (profileFound) return; // Skip if profile already found
+                    if (data && data.did && data.handle) {
+                        console.log('ProfileManager: Loaded profile from user_${did}/profile for DID:', did, data);
+                        profileFound = true;
+                        clearTimeout(timeout);
+                        resolve({ did: data.did, handle: data.handle, profilePicture: data.profilePicture });
+                        return;
+                    }
+                    console.log(`ProfileManager: No profile found in user_${did}/profile for DID on attempt ${attempt}:`, did, data);
+                    nodesProcessed++;
+                    if (nodesProcessed === totalNodes && !profileFound) {
+                        clearTimeout(timeout);
+                        resolve(null);
+                    }
+                });
+
+                // If no data after a short delay, resolve as null
+                setTimeout(() => {
+                    if (nodesProcessed === 0 && !profileFound) {
+                        console.warn('ProfileManager: No profile data emitted for DID on attempt', attempt, did);
+                        clearTimeout(timeout);
+                        resolve(null);
+                    }
+                }, 100);
             });
 
+            const attemptEndTime = Date.now();
+            console.log(`[Timing] Profile fetch attempt ${attempt}/${retries} for DID: ${did} took ${attemptEndTime - attemptStartTime}ms`);
+
             if (result) {
+                const totalEndTime = Date.now();
+                console.log(`[Timing] Total getProfile time for DID: ${did}: ${totalEndTime - totalStartTime}ms`);
                 return result;
             }
 
@@ -99,6 +155,8 @@ export class ProfileManager {
         }
 
         console.error('ProfileManager: Failed to load profile for DID after retries:', did);
+        const totalEndTime = Date.now();
+        console.log(`[Timing] Total getProfile time for DID: ${did} (failed): ${totalEndTime - totalStartTime}ms`);
         return null;
     }
 }

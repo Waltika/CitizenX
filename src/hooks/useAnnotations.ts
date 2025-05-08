@@ -27,6 +27,67 @@ export const useAnnotations = ({ url, did }: UseAnnotationsProps): UseAnnotation
     const currentUrlRef = useRef<string | null>(null);
     const abortControllerRef = useRef<AbortController | null>(null);
 
+    const fetchProfileWithRetries = useCallback(async (did: string, attempt: number = 1): Promise<{ did: string, profile: any } | null> => {
+        const maxRetries = 3;
+        const retryDelay = 500;
+
+        try {
+            const profile = await storage!.getProfile(did);
+            if (profile) {
+                console.log(`useAnnotations: Successfully fetched profile for DID ${did} on attempt ${attempt}:`, profile);
+                return { did, profile };
+            } else if (attempt < maxRetries) {
+                console.log(`useAnnotations: Profile not found for DID ${did} on attempt ${attempt}, retrying after ${retryDelay}ms`);
+                await new Promise((resolve) => setTimeout(resolve, retryDelay));
+                return fetchProfileWithRetries(did, attempt + 1);
+            } else {
+                console.warn(`useAnnotations: Failed to fetch profile for DID ${did} after ${maxRetries} attempts`);
+                return null;
+            }
+        } catch (err) {
+            console.error(`useAnnotations: Error fetching profile for DID ${did} on attempt ${attempt}:`, err);
+            if (attempt < maxRetries) {
+                console.log(`useAnnotations: Retrying profile fetch for DID ${did} after ${retryDelay}ms`);
+                await new Promise((resolve) => setTimeout(resolve, retryDelay));
+                return fetchProfileWithRetries(did, attempt + 1);
+            } else {
+                console.warn(`useAnnotations: Failed to fetch profile for DID ${did} after ${maxRetries} attempts`);
+                return null;
+            }
+        }
+    }, [storage]);
+
+    const updateProfilesForAnnotations = useCallback(async (newAnnotations: Annotation[]) => {
+        const newDids = newAnnotations
+            .map(annotation => annotation.author)
+            .filter(did => did && !profiles[did]); // Only fetch profiles for DIDs not already in state
+
+        if (newDids.length === 0) {
+            console.log('useAnnotations: No new profiles to fetch for annotations:', newAnnotations);
+            return;
+        }
+
+        console.log('useAnnotations: Fetching profiles for new DIDs:', newDids);
+        const profilePromises = newDids.map(did => fetchProfileWithRetries(did));
+        const profileResults = await Promise.all(profilePromises);
+
+        const newProfiles = profileResults.reduce((acc: Record<string, any>, result) => {
+            if (result && result.profile) {
+                acc[result.did] = result.profile;
+            } else {
+                console.log(`useAnnotations: No profile loaded for DID ${result?.did}, using default`);
+                acc[result?.did || ''] = { handle: 'Unknown' };
+            }
+            return acc;
+        }, {});
+
+        setProfiles((prev) => {
+            const updatedProfiles = { ...prev, ...newProfiles };
+            console.log('useAnnotations: Updated profiles state:', updatedProfiles);
+            return updatedProfiles;
+        });
+    }, [profiles, fetchProfileWithRetries]);
+
     useEffect(() => {
         if (!url) {
             console.log('useAnnotations: No URL provided, skipping fetch');
@@ -59,15 +120,17 @@ export const useAnnotations = ({ url, did }: UseAnnotationsProps): UseAnnotation
         abortControllerRef.current = new AbortController();
         const signal = abortControllerRef.current.signal;
 
-        const updateAnnotations = (newAnnotations: Annotation[]) => {
+        const updateAnnotations = async (newAnnotations: Annotation[]) => {
             if (signal.aborted || currentUrlRef.current !== normalizedUrl) {
                 console.log('useAnnotations: Ignoring update for stale URL:', normalizedUrl);
                 return;
             }
             setAnnotations(newAnnotations);
+            // Fetch profiles for new annotations
+            await updateProfilesForAnnotations(newAnnotations);
         };
 
-        storage.getAnnotations(normalizedUrl, updateAnnotations).then((fetchedAnnotations) => {
+        storage.getAnnotations(normalizedUrl, updateAnnotations).then(async (fetchedAnnotations) => {
             if (signal.aborted || currentUrlRef.current !== normalizedUrl) {
                 console.log('useAnnotations: Ignoring fetch result for stale URL:', normalizedUrl);
                 return;
@@ -75,28 +138,7 @@ export const useAnnotations = ({ url, did }: UseAnnotationsProps): UseAnnotation
 
             console.log('useAnnotations: Fetched annotations:', fetchedAnnotations);
             setAnnotations(fetchedAnnotations);
-
-            const profilePromises = fetchedAnnotations.map((annotation) =>
-                storage.getProfile(annotation.author).then((profile) => ({
-                    did: annotation.author,
-                    profile,
-                }))
-            );
-
-            Promise.all(profilePromises).then((profileResults) => {
-                if (signal.aborted || currentUrlRef.current !== normalizedUrl) {
-                    console.log('useAnnotations: Ignoring profile results for stale URL:', normalizedUrl);
-                    return;
-                }
-
-                const newProfiles = profileResults.reduce((acc: Record<string, any>, { did, profile }) => {
-                    if (profile) {
-                        acc[did] = profile;
-                    }
-                    return acc;
-                }, {});
-                setProfiles((prev) => ({ ...prev, ...newProfiles }));
-            });
+            await updateProfilesForAnnotations(fetchedAnnotations);
         }).catch((err) => {
             if (signal.aborted || currentUrlRef.current !== normalizedUrl) {
                 console.log('useAnnotations: Ignoring error for stale URL:', normalizedUrl);
@@ -120,7 +162,7 @@ export const useAnnotations = ({ url, did }: UseAnnotationsProps): UseAnnotation
             }
             currentUrlRef.current = null;
         };
-    }, [url, storage, storageLoading, storageError]);
+    }, [url, storage, storageLoading, storageError, updateProfilesForAnnotations]);
 
     const handleSaveAnnotation = useCallback(async (content: string) => {
         if (!did) {
@@ -148,9 +190,13 @@ export const useAnnotations = ({ url, did }: UseAnnotationsProps): UseAnnotation
 
         await storage.saveAnnotation(annotation);
         if (currentUrlRef.current === normalizeUrl(url)) {
-            setAnnotations((prev) => [...prev, annotation]);
+            setAnnotations((prev) => {
+                const updatedAnnotations = [...prev, annotation];
+                updateProfilesForAnnotations(updatedAnnotations);
+                return updatedAnnotations;
+            });
         }
-    }, [did, url, storage]);
+    }, [did, url, storage, updateProfilesForAnnotations]);
 
     const handleDeleteAnnotation = useCallback(async (annotationId: string) => {
         if (!storage) {
@@ -185,21 +231,22 @@ export const useAnnotations = ({ url, did }: UseAnnotationsProps): UseAnnotation
             content,
             author: did,
             timestamp: Date.now(),
-            isDeleted: false,
-            text: ''
+            isDeleted: false
         };
 
         await storage.saveComment(normalizeUrl(url), annotationId, comment);
         if (currentUrlRef.current === normalizeUrl(url)) {
-            setAnnotations((prev) =>
-                prev.map((annotation) =>
+            setAnnotations((prev) => {
+                const updatedAnnotations = prev.map((annotation) =>
                     annotation.id === annotationId
                         ? { ...annotation, comments: [...(annotation.comments || []), comment] }
                         : annotation
-                )
-            );
+                );
+                updateProfilesForAnnotations(updatedAnnotations);
+                return updatedAnnotations;
+            });
         }
-    }, [did, url, storage]);
+    }, [did, url, storage, updateProfilesForAnnotations]);
 
     return {
         annotations,
