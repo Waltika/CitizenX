@@ -5,7 +5,6 @@ import { shortenUrl } from '../utils/shortenUrl';
 import { stripHtml } from '../utils/stripHtml';
 import Quill from 'quill';
 import { ShareModal } from './ShareModal';
-import { CommentList } from './CommentList';
 import './AnnotationList.css';
 
 interface AnnotationListProps {
@@ -44,6 +43,12 @@ export const AnnotationList: React.FC<AnnotationListProps> = ({ annotations, pro
     useEffect(() => {
         const initializeQuillEditors = () => {
             annotations.forEach((annotation) => {
+                // Skip invalid annotations
+                if (!annotation.id || !annotation.author || !annotation.content) {
+                    console.warn('Skipping Quill initialization for invalid annotation:', annotation);
+                    return;
+                }
+
                 const editorId = annotation.id;
                 const editorElement = editorRefs.current[editorId];
                 if (editorElement && !quillInstances.current[editorId]) {
@@ -83,7 +88,7 @@ export const AnnotationList: React.FC<AnnotationListProps> = ({ annotations, pro
 
         const timer = setTimeout(initializeQuillEditors, 0);
 
-        const currentAnnotationIds = new Set(annotations.map((annotation) => annotation.id));
+        const currentAnnotationIds = new Set(annotations.map((annotation) => annotation.id).filter(Boolean));
         Object.keys(quillInstances.current).forEach((editorId) => {
             if (!currentAnnotationIds.has(editorId) && quillInstances.current[editorId]) {
                 console.log(`Cleaning up Quill editor for removed annotation ${editorId}`);
@@ -186,9 +191,23 @@ export const AnnotationList: React.FC<AnnotationListProps> = ({ annotations, pro
     return (
         <div className="annotation-list">
             {annotations.map((annotation) => {
+                // Skip rendering invalid annotations
+                if (!annotation.id || !annotation.author || !annotation.content) {
+                    console.warn('Skipping rendering of invalid annotation:', annotation);
+                    return null;
+                }
+
                 const authorProfile = profiles[annotation.author] || null;
                 const authorHandle = authorProfile ? authorProfile.handle : 'Unknown';
                 console.log('AnnotationList: Rendering annotation:', annotation, 'Author handle:', authorHandle);
+
+                // Filter out deleted comments and sort the rest by timestamp
+                const sortedComments = annotation.comments
+                    ? [...annotation.comments]
+                        .filter((comment) => !comment.isDeleted && comment.author) // Exclude deleted and invalid comments
+                        .sort((a, b) => a.timestamp - b.timestamp)
+                    : [];
+                const isExpanded = expandedComments[annotation.id] || false;
 
                 return (
                     <div key={annotation.id} className="annotation-item" data-annotation-id={annotation.id}>
@@ -222,17 +241,54 @@ export const AnnotationList: React.FC<AnnotationListProps> = ({ annotations, pro
                             className="annotation-content"
                             dangerouslySetInnerHTML={{ __html: annotation.content || 'No content' }}
                         />
-                        <CommentList
-                            annotation={annotation}
-                            profiles={profiles}
-                            isExpanded={expandedComments[annotation.id] || false}
-                            onToggleComments={() => toggleComments(annotation.id)}
-                            onSaveComment={onSaveComment}
-                            commentInput={commentInputs[annotation.id] || ''}
-                            editorRef={(el) => (editorRefs.current[annotation.id] = el)}
-                            handleSaveComment={() => handleSaveComment(annotation.id)}
-                            onShowToast={onShowToast} // Add onShowToast prop
-                        />
+                        <div className="comments-container">
+                            <button
+                                className="comments-toggle-button"
+                                onClick={() => toggleComments(annotation.id)}
+                            >
+                                {isExpanded ? '−' : '+'} {isExpanded ? 'Hide comments' : `Show ${sortedComments.length} comment${sortedComments.length > 1 ? 's' : ''}`}
+                            </button>
+                            {isExpanded && sortedComments.length > 0 && (
+                                <div className="comments-section">
+                                    {sortedComments.map((comment) => {
+                                        const commentAuthor = profiles[comment.author] || null;
+                                        const commentAuthorHandle = commentAuthor ? commentAuthor.handle : 'Unknown';
+                                        return (
+                                            <div key={comment.id} className="comment-item">
+                                                <div className="comment-group">
+                                                    <div className="comment-header">
+                                                        <span className="comment-author">{commentAuthorHandle}</span>
+                                                        <span className="comment-timestamp">
+                                                            {' '}
+                                                            • {new Date(comment.timestamp).toLocaleString()}
+                                                        </span>
+                                                    </div>
+                                                    <div
+                                                        className="comment-content"
+                                                        dangerouslySetInnerHTML={{ __html: comment.content }}
+                                                    />
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            )}
+                            <div className="add-comment-section">
+                                <div
+                                    ref={(el) => (editorRefs.current[annotation.id] = el)}
+                                    className="quill-editor"
+                                ></div>
+                            </div>
+                            {onSaveComment && (
+                                <button
+                                    onClick={() => handleSaveComment(annotation.id)}
+                                    disabled={!commentInputs[annotation.id]?.trim()}
+                                    className="add-comment-button"
+                                >
+                                    Add Comment
+                                </button>
+                            )}
+                        </div>
                     </div>
                 );
             })}

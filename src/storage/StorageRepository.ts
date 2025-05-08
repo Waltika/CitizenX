@@ -32,10 +32,7 @@ export class StorageRepository {
 
     constructor() {
         const bootstrapPeers = [
-            'http://localhost:8765/gun',
             'https://citizen-x-bootsrap.onrender.com/gun',
-            'https://gun-manhattan.herokuapp.com/gun',
-            'https://relay.peer.ooo/gun',
         ];
 
         this.repository = new GunRepository({

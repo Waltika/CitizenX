@@ -150,7 +150,12 @@ export const AnnotationUI: React.FC<AnnotationUIProps> = ({ url, isUrlLoading })
         }
     }, [url]);
 
-    console.log('AnnotationUI: Rendering with annotations:', annotations, 'profiles:', profiles, 'loading:', annotationsLoading);
+    // Filter valid annotations before passing to AnnotationList
+    const validAnnotations = annotations.filter(
+        (annotation) => annotation.id && annotation.author && annotation.content
+    );
+
+    console.log('AnnotationUI: Rendering with annotations:', validAnnotations, 'profiles:', profiles, 'loading:', annotationsLoading);
 
     return (
         <div className="annotation-ui-container">
@@ -177,7 +182,7 @@ export const AnnotationUI: React.FC<AnnotationUIProps> = ({ url, isUrlLoading })
                         onCloseSettings={handleCloseSettings}
                         onBeforeImport={handleBeforeImport}
                         onResetJustImported={handleResetJustImported}
-                        onShowToast={handleShowToast} // Pass the toast callback
+                        onShowToast={handleShowToast}
                     />
                 </div>
             </div>
@@ -198,7 +203,7 @@ export const AnnotationUI: React.FC<AnnotationUIProps> = ({ url, isUrlLoading })
             ) : (
                 <div className="annotation-list-wrapper">
                     <AnnotationList
-                        annotations={annotations}
+                        annotations={validAnnotations}
                         profiles={profiles}
                         onDelete={handleDeleteAnnotation}
                         onSaveComment={!did || annotationsLoading ? undefined : handleSaveComment}
