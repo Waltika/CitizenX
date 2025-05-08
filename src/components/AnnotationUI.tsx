@@ -29,7 +29,7 @@ interface AnnotationUIProps {
 
 export const AnnotationUI: React.FC<AnnotationUIProps> = ({ url, isUrlLoading }) => {
     const { did, profile, loading: profileLoading, error: profileError, authenticate, signOut, exportIdentity, importIdentity, createProfile, updateProfile } = useUserProfile();
-    const { annotations, profiles, error: annotationsError, loading: annotationsLoading, handleSaveAnnotation, handleDeleteAnnotation, handleSaveComment } = useAnnotations({ url, did });
+    const { annotations, profiles, error: annotationsError, loading: annotationsLoading, handleSaveAnnotation, handleDeleteAnnotation, handleSaveComment, handleDeleteComment } = useAnnotations({ url, did });
     const [annotationText, setAnnotationText] = useState('');
     const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
     const [profileHandle, setProfileHandle] = useState('');
@@ -155,6 +155,9 @@ export const AnnotationUI: React.FC<AnnotationUIProps> = ({ url, isUrlLoading })
         (annotation) => annotation.id && annotation.author && annotation.content
     );
 
+    const onDeleteCommentProp = did && !annotationsLoading ? handleDeleteComment : undefined;
+    console.log('AnnotationUI: Passing onDeleteComment to AnnotationList - did:', did, 'annotationsLoading:', annotationsLoading, 'onDeleteComment:', onDeleteCommentProp);
+
     console.log('AnnotationUI: Rendering with annotations:', validAnnotations, 'profiles:', profiles, 'loading:', annotationsLoading);
 
     return (
@@ -206,6 +209,7 @@ export const AnnotationUI: React.FC<AnnotationUIProps> = ({ url, isUrlLoading })
                         annotations={validAnnotations}
                         profiles={profiles}
                         onDelete={handleDeleteAnnotation}
+                        onDeleteComment={onDeleteCommentProp}
                         onSaveComment={!did || annotationsLoading ? undefined : handleSaveComment}
                         currentUrl={url}
                         onShowToast={handleShowToast}

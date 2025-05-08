@@ -9,6 +9,7 @@ interface CommentListProps {
     isExpanded: boolean;
     onToggleComments: () => void;
     onSaveComment?: (annotationId: string, content: string) => Promise<void>;
+    onDeleteComment?: (annotationId: string, commentId: string) => Promise<void>;
     commentInput: string;
     editorRef: (el: HTMLDivElement | null) => void;
     handleSaveComment: () => Promise<void>;
@@ -21,6 +22,7 @@ export const CommentList: React.FC<CommentListProps> = ({
                                                             isExpanded,
                                                             onToggleComments,
                                                             onSaveComment,
+                                                            onDeleteComment,
                                                             commentInput,
                                                             editorRef,
                                                             handleSaveComment,
@@ -32,14 +34,20 @@ export const CommentList: React.FC<CommentListProps> = ({
         const fetchDID = async () => {
             const did = await storage.getCurrentDID();
             setCurrentDID(did);
+            console.log('CommentList: Fetched currentDID:', did);
         };
         fetchDID();
     }, []);
 
     const handleDeleteComment = async (commentId: string) => {
+        console.log('CommentList: Delete button clicked for comment:', commentId);
         try {
-            await storage.deleteComment(annotation.url, annotation.id, commentId);
-            onShowToast('Comment deleted successfully');
+            if (onDeleteComment) {
+                await onDeleteComment(annotation.id, commentId);
+                onShowToast('Comment deleted successfully');
+            } else {
+                console.error('CommentList: onDeleteComment prop is undefined');
+            }
         } catch (error: any) {
             console.error('CommentList: Failed to delete comment:', error);
             onShowToast(error.message || 'Failed to delete comment');
@@ -61,9 +69,10 @@ export const CommentList: React.FC<CommentListProps> = ({
             {isExpanded && sortedComments.length > 0 && (
                 <div className="comments-section">
                     {sortedComments.map((comment) => {
-                        const commentAuthor = profiles[comment.author] || null;
-                        const commentAuthorHandle = commentAuthor ? commentAuthor.handle : 'Unknown';
+                        const commentAuthor = comment.author && profiles[comment.author] ? profiles[comment.author] : null;
+                        const commentAuthorHandle = commentAuthor ? commentAuthor.handle : 'Loading author...';
                         const isOwnComment = currentDID && comment.author === currentDID;
+                        console.log('CommentList: Comment ID:', comment.id, 'Author:', comment.author, 'Current DID:', currentDID, 'isOwnComment:', isOwnComment);
 
                         return (
                             <div key={comment.id} className="comment-item">

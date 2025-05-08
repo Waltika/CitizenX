@@ -10,6 +10,7 @@ interface CallbackEntry {
 
 export class AnnotationManager {
     private gun: any;
+    private serverUrl: string = 'https://citizen-x-bootsrap.onrender.com';
     private annotationCallbacks: Map<string, CallbackEntry> = new Map();
 
     constructor(gun: any) {
@@ -70,7 +71,15 @@ export class AnnotationManager {
                             const commentList: Comment[] = [];
                             const commentIds: Set<string> = new Set();
                             annotationNode.get(annotation.id).get('comments').map().once((comment: any) => {
-                                if (comment && comment.id && comment.author && comment.content && !commentIds.has(comment.id)) {
+                                if (
+                                    comment &&
+                                    comment.id &&
+                                    comment.author &&
+                                    typeof comment.author === 'string' &&
+                                    comment.author.startsWith('did:') &&
+                                    comment.content &&
+                                    !commentIds.has(comment.id)
+                                ) {
                                     commentIds.add(comment.id);
                                     const commentData: Comment = {
                                         id: comment.id,
@@ -190,7 +199,15 @@ export class AnnotationManager {
                         const commentList: Comment[] = [];
                         const commentIds: Set<string> = new Set();
                         annotationNodes[0].get(annotation.id).get('comments').map().once((comment: any) => {
-                            if (comment && comment.id && comment.author && comment.content && !commentIds.has(comment.id)) {
+                            if (
+                                comment &&
+                                comment.id &&
+                                comment.author &&
+                                typeof comment.author === 'string' &&
+                                comment.author.startsWith('did:') &&
+                                comment.content &&
+                                !commentIds.has(comment.id)
+                            ) {
                                 commentIds.add(comment.id);
                                 const commentData: Comment = {
                                     id: comment.id,
@@ -349,5 +366,25 @@ export class AnnotationManager {
                 }
             });
         });
+    }
+
+    async deleteComment(url: string, annotationId: string, commentId: string, userDid: string): Promise<void> {
+        const response = await fetch(`${this.serverUrl}/api/comments`, {
+            method: 'DELETE',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-User-DID': userDid,
+            },
+            body: JSON.stringify({ url, annotationId, commentId }),
+        });
+
+        if (!response.ok) {
+            throw new Error(`Failed to delete comment: ${response.statusText}`);
+        }
+
+        const result = await response.json();
+        if (!result.success) {
+            throw new Error('Failed to delete comment');
+        }
     }
 }

@@ -16,6 +16,7 @@ interface UseAnnotationsResult {
     handleSaveAnnotation: (content: string) => Promise<void>;
     handleDeleteAnnotation: (annotationId: string) => Promise<void>;
     handleSaveComment: (annotationId: string, content: string) => Promise<void>;
+    handleDeleteComment: (annotationId: string, commentId: string) => Promise<void>;
 }
 
 export const useAnnotations = ({ url, did }: UseAnnotationsProps): UseAnnotationsResult => {
@@ -90,6 +91,48 @@ export const useAnnotations = ({ url, did }: UseAnnotationsProps): UseAnnotation
                 }));
 
             setAnnotations(validAnnotations);
+
+            // Fetch profiles for annotation authors and comment authors
+            const authorDids = new Set<string>();
+            validAnnotations.forEach((annotation) => {
+                if (typeof annotation.author === 'string' && annotation.author.startsWith('did:')) {
+                    authorDids.add(annotation.author);
+                } else {
+                    console.warn('useAnnotations: Skipping invalid annotation author:', annotation.author, 'for annotation:', annotation.id);
+                }
+                (annotation.comments || []).forEach((comment) => {
+                    if (typeof comment.author === 'string' && comment.author.startsWith('did:')) {
+                        authorDids.add(comment.author);
+                    } else {
+                        console.warn('useAnnotations: Skipping invalid comment author:', comment.author, 'for comment:', comment.id, 'in annotation:', annotation.id);
+                    }
+                });
+            });
+
+            const profilePromises = Array.from(authorDids).map((did) =>
+                storage.getProfile(did).then((profile) => ({
+                    did,
+                    profile,
+                }))
+            );
+
+            Promise.all(profilePromises).then((profileResults) => {
+                if (signal.aborted || currentUrlRef.current !== normalizedUrl) {
+                    console.log('useAnnotations: Ignoring profile results for stale URL:', normalizedUrl);
+                    return;
+                }
+
+                const newProfiles = profileResults.reduce((acc: Record<string, any>, { did, profile }) => {
+                    if (profile) {
+                        acc[did] = profile;
+                    }
+                    return acc;
+                }, {});
+                setProfiles((prev) => ({ ...prev, ...newProfiles }));
+            }).catch((err) => {
+                console.error('useAnnotations: Failed to fetch profiles:', err);
+                setError('Failed to fetch profiles: ' + (err.message || 'Unknown error'));
+            });
         };
 
         storage.getAnnotations(normalizedUrl, updateAnnotations).then((fetchedAnnotations) => {
@@ -126,12 +169,16 @@ export const useAnnotations = ({ url, did }: UseAnnotationsProps): UseAnnotation
             // Fetch profiles for annotation authors and comment authors
             const authorDids = new Set<string>();
             validAnnotations.forEach((annotation) => {
-                if (typeof annotation.author === 'string') {
+                if (typeof annotation.author === 'string' && annotation.author.startsWith('did:')) {
                     authorDids.add(annotation.author);
+                } else {
+                    console.warn('useAnnotations: Skipping invalid annotation author:', annotation.author, 'for annotation:', annotation.id);
                 }
                 (annotation.comments || []).forEach((comment) => {
-                    if (typeof comment.author === 'string') {
+                    if (typeof comment.author === 'string' && comment.author.startsWith('did:')) {
                         authorDids.add(comment.author);
+                    } else {
+                        console.warn('useAnnotations: Skipping invalid comment author:', comment.author, 'for comment:', comment.id, 'in annotation:', annotation.id);
                     }
                 });
             });
@@ -266,6 +313,30 @@ export const useAnnotations = ({ url, did }: UseAnnotationsProps): UseAnnotation
         }
     }, [did, url, storage]);
 
+    const handleDeleteComment = useCallback(async (annotationId: string, commentId: string) => {
+        if (!storage) {
+            throw new Error('Storage not initialized');
+        }
+
+        if (!url) {
+            throw new Error('No URL provided for comment deletion');
+        }
+
+        await storage.deleteComment(normalizeUrl(url), annotationId, commentId);
+        if (currentUrlRef.current === normalizeUrl(url)) {
+            setAnnotations((prev) =>
+                prev.map((annotation) =>
+                    annotation.id === annotationId
+                        ? {
+                            ...annotation,
+                            comments: (annotation.comments || []).filter((comment) => comment.id !== commentId),
+                        }
+                        : annotation
+                )
+            );
+        }
+    }, [url, storage]);
+
     return {
         annotations,
         profiles,
@@ -274,5 +345,6 @@ export const useAnnotations = ({ url, did }: UseAnnotationsProps): UseAnnotation
         handleSaveAnnotation,
         handleDeleteAnnotation,
         handleSaveComment,
+        handleDeleteComment,
     };
 };
