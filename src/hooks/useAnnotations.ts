@@ -248,7 +248,7 @@ export const useAnnotations = ({ url, did }: UseAnnotationsProps): UseAnnotation
             author: did,
             timestamp: Date.now(),
             isDeleted: false,
-            text: ''
+            annotationId: annotationId,
         };
 
         await storage.saveComment(normalizeUrl(url), annotationId, comment);

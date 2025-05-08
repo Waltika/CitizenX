@@ -78,7 +78,7 @@ export class AnnotationManager {
                                         author: comment.author,
                                         timestamp: comment.timestamp || Date.now(),
                                         isDeleted: comment.isDeleted || false,
-                                        text: comment.text || '',
+                                        annotationId: comment.annotationId || annotation.id
                                     };
                                     if (!commentData.isDeleted) {
                                         commentList.push(commentData);
@@ -198,7 +198,7 @@ export class AnnotationManager {
                                     author: comment.author,
                                     timestamp: comment.timestamp || Date.now(),
                                     isDeleted: comment.isDeleted || false,
-                                    text: comment.text || '',
+                                    annotationId: ''
                                 };
                                 if (!commentData.isDeleted) {
                                     commentList.push(commentData);
