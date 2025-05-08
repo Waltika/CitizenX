@@ -5,6 +5,7 @@ import { shortenUrl } from '../utils/shortenUrl';
 import { stripHtml } from '../utils/stripHtml';
 import Quill from 'quill';
 import { ShareModal } from './ShareModal';
+import { CommentList } from './CommentList';
 import './AnnotationList.css';
 
 interface AnnotationListProps {
@@ -189,9 +190,6 @@ export const AnnotationList: React.FC<AnnotationListProps> = ({ annotations, pro
                 const authorHandle = authorProfile ? authorProfile.handle : 'Unknown';
                 console.log('AnnotationList: Rendering annotation:', annotation, 'Author handle:', authorHandle);
 
-                const sortedComments = annotation.comments ? [...annotation.comments].sort((a, b) => a.timestamp - b.timestamp) : [];
-                const isExpanded = expandedComments[annotation.id] || false;
-
                 return (
                     <div key={annotation.id} className="annotation-item" data-annotation-id={annotation.id}>
                         <div className="annotation-header">
@@ -224,54 +222,16 @@ export const AnnotationList: React.FC<AnnotationListProps> = ({ annotations, pro
                             className="annotation-content"
                             dangerouslySetInnerHTML={{ __html: annotation.content || 'No content' }}
                         />
-                        <div className="comments-container">
-                            <button
-                                className="comments-toggle-button"
-                                onClick={() => toggleComments(annotation.id)}
-                            >
-                                {isExpanded ? '−' : '+'} {isExpanded ? 'Hide comments' : `Show ${sortedComments.length} comment${sortedComments.length > 1 ? 's' : ''}`}
-                            </button>
-                            {isExpanded && sortedComments.length > 0 && (
-                                <div className="comments-section">
-                                    {sortedComments.map((comment) => {
-                                        const commentAuthor = profiles[comment.author] || null;
-                                        const commentAuthorHandle = commentAuthor ? commentAuthor.handle : 'Unknown';
-                                        return (
-                                            <div key={comment.id} className="comment-item">
-                                                <div className="comment-group">
-                                                    <div className="comment-header">
-                                                        <span className="comment-author">{commentAuthorHandle}</span>
-                                                        <span className="comment-timestamp">
-                                                            {' '}
-                                                            • {new Date(comment.timestamp).toLocaleString()}
-                                                        </span>
-                                                    </div>
-                                                    <div
-                                                        className="comment-content"
-                                                        dangerouslySetInnerHTML={{ __html: comment.content }}
-                                                    />
-                                                </div>
-                                            </div>
-                                        );
-                                    })}
-                                </div>
-                            )}
-                            <div className="add-comment-section">
-                                <div
-                                    ref={(el) => (editorRefs.current[annotation.id] = el)}
-                                    className="quill-editor"
-                                ></div>
-                            </div>
-                            {onSaveComment && (
-                                <button
-                                    onClick={() => handleSaveComment(annotation.id)}
-                                    disabled={!commentInputs[annotation.id]?.trim()}
-                                    className="add-comment-button"
-                                >
-                                    Add Comment
-                                </button>
-                            )}
-                        </div>
+                        <CommentList
+                            annotation={annotation}
+                            profiles={profiles}
+                            isExpanded={expandedComments[annotation.id] || false}
+                            onToggleComments={() => toggleComments(annotation.id)}
+                            onSaveComment={onSaveComment}
+                            commentInput={commentInputs[annotation.id] || ''}
+                            editorRef={(el) => (editorRefs.current[annotation.id] = el)}
+                            handleSaveComment={() => handleSaveComment(annotation.id)}
+                        />
                     </div>
                 );
             })}
