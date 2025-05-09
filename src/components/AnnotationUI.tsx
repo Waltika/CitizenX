@@ -28,8 +28,6 @@ interface AnnotationUIProps {
     tabId?: number;
 }
 
-const MemoizedAnnotationList = React.memo(AnnotationList);
-
 export const AnnotationUI: React.FC<AnnotationUIProps> = ({ url, isUrlLoading, tabId }) => {
     const { did, profile, loading: profileLoading, error: profileError, authenticate, signOut, exportIdentity, importIdentity, createProfile, updateProfile } = useUserProfile();
     const { annotations, profiles, error: annotationsError, loading: annotationsLoading, handleSaveAnnotation, handleDeleteAnnotation, handleSaveComment, handleDeleteComment } = useAnnotations({ url, did, tabId });
@@ -187,9 +185,9 @@ export const AnnotationUI: React.FC<AnnotationUIProps> = ({ url, isUrlLoading, t
     }, [url]);
 
     const validAnnotations = useMemo(
-        () => annotations.filter(
-            (annotation) => annotation.id && annotation.author && annotation.content
-        ),
+        () => annotations
+            .filter((annotation) => annotation.id && annotation.author && annotation.content)
+            .sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0)),
         [annotations]
     );
 
@@ -243,18 +241,21 @@ export const AnnotationUI: React.FC<AnnotationUIProps> = ({ url, isUrlLoading, t
                 </div>
             ) : (
                 <div className="annotation-list-wrapper">
-                    {validAnnotations.length === 0 && (
-                        <p>No annotations available for this page.</p>
+                    {validAnnotations.length === 0 ? (
+                        <div className="no-annotations-wrapper">
+                            <p className="no-annotations-message">No annotations available for this page.</p>
+                        </div>
+                    ) : (
+                        <AnnotationList
+                            annotations={validAnnotations}
+                            profiles={profiles}
+                            onDelete={handleDeleteAnnotation}
+                            onDeleteComment={onDeleteCommentProp}
+                            onSaveComment={did ? handleSaveComment : undefined}
+                            currentUrl={url}
+                            onShowToast={handleShowToast}
+                        />
                     )}
-                    <MemoizedAnnotationList
-                        annotations={validAnnotations}
-                        profiles={profiles}
-                        onDelete={handleDeleteAnnotation}
-                        onDeleteComment={onDeleteCommentProp}
-                        onSaveComment={did ? handleSaveComment : undefined}
-                        currentUrl={url}
-                        onShowToast={handleShowToast}
-                    />
                 </div>
             )}
             <Toast
