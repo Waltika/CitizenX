@@ -46,7 +46,6 @@ export class AnnotationManager {
     private async getValidTabId(providedTabId?: number): Promise<number | undefined> {
         if (typeof chrome !== 'undefined' && chrome.tabs) {
             try {
-                // First, try to validate the provided tabId if it exists
                 if (providedTabId) {
                     const tab = await new Promise<chrome.tabs.Tab>((resolve, reject) => {
                         chrome.tabs.get(providedTabId, (tab) => {
@@ -65,7 +64,6 @@ export class AnnotationManager {
                     }
                 }
 
-                // If provided tabId is invalid or not provided, fetch the current active tab
                 const tabs = await new Promise<chrome.tabs.Tab[]>((resolve) => {
                     chrome.tabs.query({ active: true, currentWindow: true }, resolve);
                 });
@@ -111,7 +109,6 @@ export class AnnotationManager {
                         }
                     });
                 });
-                // Add a small delay to ensure the tab is fully focused and rendered
                 await new Promise(resolve => setTimeout(resolve, 100));
             } catch (error) {
                 console.error('AnnotationManager: Error activating tab:', error);
@@ -123,13 +120,11 @@ export class AnnotationManager {
     }
 
     async captureScreenshot(providedTabId?: number): Promise<string> {
-        // Re-validate the tabId just before capturing the screenshot
         const tabId = await this.getValidTabId(providedTabId);
         if (!tabId) {
             throw new Error('No valid tabId available for screenshot capture');
         }
 
-        // Ensure the tab is active and focused before capturing
         await this.activateTab(tabId);
 
         console.log('AnnotationManager: Attempting to capture screenshot for tabId:', tabId);
@@ -156,7 +151,6 @@ export class AnnotationManager {
 
     async saveAnnotation(annotation: Annotation, tabId?: number): Promise<void> {
         console.log('AnnotationManager: Saving annotation with tabId:', tabId);
-        // Validate required fields
         if (!annotation.id || !annotation.url || !annotation.content || !annotation.author) {
             console.error('AnnotationManager: Missing required fields in annotation:', annotation);
             throw new Error('Missing required fields in annotation');
@@ -168,12 +162,10 @@ export class AnnotationManager {
             console.log('AnnotationManager: Captured screenshot for annotation:', annotation.id);
         } catch (error) {
             console.error('AnnotationManager: Failed to capture screenshot:', error);
-            // Do not set screenshot if capture fails; it will be omitted
         }
 
         const { comments, ...annotationWithoutComments } = annotation;
 
-        // Only include screenshot if it was successfully captured
         const updatedAnnotation: Partial<Annotation> = {
             ...annotationWithoutComments,
         };
@@ -208,12 +200,10 @@ export class AnnotationManager {
     async getAnnotations(url: string, callback?: AnnotationUpdateCallback): Promise<Annotation[]> {
         const annotations: Annotation[] = [];
         const { domainShard, subShard } = this.getShardKey(url);
-        const annotationNodes = [
-            this.gun.get(domainShard).get(url),
-        ];
-        if (subShard) {
-            annotationNodes.push(this.gun.get(subShard).get(url));
-        }
+        const annotationNodes = [this.gun.get(domainShard).get(url)];
+        if (subShard) annotationNodes.push(this.gun.get(subShard).get(url));
+        const lastProcessed = new Map<string, number>();
+        const debounceInterval = 2000; // Increased to 2 seconds
 
         const maxRetries = 3;
         for (let attempt = 1; attempt <= maxRetries; attempt++) {
@@ -222,8 +212,11 @@ export class AnnotationManager {
 
             for (const annotationNode of annotationNodes) {
                 await new Promise<void>((resolve) => {
-                    const onData = async (annotation: any) => {
-                        if (!annotation) return;
+                    const onData = async (annotation: any, key: string) => {
+                        if (!annotation || !key || typeof key !== 'string' || key.includes('Marker') || !annotation.id) {
+                            console.warn('Skipping invalid annotation or marker:', { annotation, key });
+                            return;
+                        }
                         if (loadedAnnotations.has(annotation.id)) return;
                         loadedAnnotations.add(annotation.id);
                         hasNewData = true;
@@ -250,49 +243,11 @@ export class AnnotationManager {
                                         isDeleted: comment.isDeleted || false,
                                         annotationId: comment.annotationId || annotation.id
                                     };
-                                    if (!commentData.isDeleted) {
-                                        commentList.push(commentData);
-                                    }
-                                } else {
-                                    console.warn('AnnotationManager: Skipping invalid comment:', comment);
+                                    if (!commentData.isDeleted) commentList.push(commentData);
                                 }
                             });
                             setTimeout(() => resolveComments(commentList), 500);
                         });
-
-                        const commentStates = await Promise.all(
-                            annotationNodes.map((node) =>
-                                new Promise<Record<string, boolean>>((resolve) => {
-                                    const states: Record<string, boolean> = {};
-                                    node.get(annotation.id).get('comments').map().once((comment: any, commentId: string) => {
-                                        if (comment) {
-                                            states[commentId] = comment.isDeleted || false;
-                                        }
-                                    });
-                                    setTimeout(() => resolve(states), 500);
-                                })
-                            )
-                        );
-
-                        const resolvedComments: Comment[] = [];
-                        const seenCommentIds: Set<string> = new Set();
-                        for (const comment of comments) {
-                            if (seenCommentIds.has(comment.id)) continue;
-                            seenCommentIds.add(comment.id);
-
-                            let isDeleted = false;
-                            for (const states of commentStates) {
-                                if (states[comment.id] === true) {
-                                    isDeleted = true;
-                                    break;
-                                }
-                            }
-                            if (!isDeleted) {
-                                resolvedComments.push(comment);
-                            } else {
-                                console.log(`AnnotationManager: Excluded inconsistent deleted comment for annotation ${annotation.id}, Comment ID: ${comment.id}`);
-                            }
-                        }
 
                         const annotationData: Annotation = {
                             id: annotation.id,
@@ -300,30 +255,24 @@ export class AnnotationManager {
                             content: annotation.content,
                             author: annotation.author,
                             timestamp: annotation.timestamp || Date.now(),
-                            comments: resolvedComments,
+                            comments,
                             isDeleted: annotation.isDeleted || false,
                             text: annotation.text || '',
                             screenshot: annotation.screenshot,
                         };
 
-                        annotations.push(annotationData);
-                        console.log('AnnotationManager: Loaded annotation:', annotationData);
+                        if (!annotationData.isDeleted) {
+                            annotations.push(annotationData);
+                            console.log('AnnotationManager: Loaded annotation:', annotationData);
+                        }
                     };
 
                     annotationNode.map().once(onData);
-
-                    setTimeout(() => {
-                        console.log('AnnotationManager: Initial annotations loaded for URL:', url, annotations, 'Has new data:', hasNewData, 'Attempt:', attempt);
-                        resolve();
-                    }, 2000);
+                    setTimeout(() => resolve(), 2000);
                 });
             }
 
-            if (hasNewData || attempt === maxRetries) {
-                break;
-            }
-
-            console.log('AnnotationManager: Retrying annotations fetch for URL:', url, 'Attempt:', attempt);
+            if (hasNewData || attempt === maxRetries) break;
             await new Promise((resolve) => setTimeout(resolve, 1000));
         }
 
@@ -335,26 +284,29 @@ export class AnnotationManager {
             entry.callbacks.push(callback);
 
             const onUpdate = async (annotation: any, key: string) => {
+                const now = Date.now();
                 const timestamp = new Date().toISOString();
+                if (!key || typeof key !== 'string' || key.includes('Marker') || !annotation || !annotation.id) {
+                    console.warn(`[${timestamp}] Skipping invalid update or marker:`, { annotation, key });
+                    return;
+                }
+                if (lastProcessed.has(key) && now - lastProcessed.get(key)! < debounceInterval) {
+                    console.log(`[${timestamp}] Skipping duplicate update for key: ${key}`);
+                    return;
+                }
+                lastProcessed.set(key, now);
+
                 console.log(`[${timestamp}] Real-time update received for URL: ${url}, Key: ${key}, Annotation:`, annotation);
 
                 if (annotation === null) {
-                    console.log(`[${timestamp}] Received null annotation for URL: ${url}, Key: ${key}, verifying deletion intent`);
                     const matchingAnnotation = annotations.find(ann => ann.id === key);
-                    const hasDeletionFlag = matchingAnnotation?.isDeleted === true;
-
-                    console.log(`[${timestamp}] Deletion flag check for URL: ${url}, Key: ${key} - Has deletion flag: ${hasDeletionFlag}, Matching annotation:`, matchingAnnotation);
-
-                    if (!hasDeletionFlag) {
-                        console.log(`[${timestamp}] No deletion flag found for URL: ${url}, Key: ${key}, ignoring null update`);
+                    if (!matchingAnnotation?.isDeleted) {
+                        console.log(`[${timestamp}] No deletion flag for URL: ${url}, Key: ${key}, ignoring null update`);
                         return;
                     }
-
-                    console.log(`[${timestamp}] Confirmed deletion for URL: ${url}, ID: ${key}`);
                     const updatedAnnotations = annotations.filter(a => a.id !== key);
                     annotations.splice(0, annotations.length, ...updatedAnnotations);
                 } else {
-                    console.log(`[${timestamp}] Processing update for URL: ${url} with annotation:`, annotation);
                     const comments: Comment[] = await new Promise((resolveComments) => {
                         const commentList: Comment[] = [];
                         const commentIds: Set<string> = new Set();
@@ -377,52 +329,13 @@ export class AnnotationManager {
                                     isDeleted: comment.isDeleted || false,
                                     annotationId: ''
                                 };
-                                if (!commentData.isDeleted) {
-                                    commentList.push(commentData);
-                                }
-                            } else {
-                                console.warn('AnnotationManager: Skipping invalid comment during update:', comment);
+                                if (!commentData.isDeleted) commentList.push(commentData);
                             }
                         });
                         setTimeout(() => resolveComments(commentList), 500);
                     });
 
-                    const commentStates = await Promise.all(
-                        annotationNodes.map((node) =>
-                            new Promise<Record<string, boolean>>((resolve) => {
-                                const states: Record<string, boolean> = {};
-                                node.get(annotation.id).get('comments').map().once((comment: any, commentId: string) => {
-                                    if (comment) {
-                                        states[commentId] = comment.isDeleted || false;
-                                    }
-                                });
-                                setTimeout(() => resolve(states), 500);
-                            })
-                        )
-                    );
-
-                    const resolvedComments: Comment[] = [];
-                    const seenCommentIds: Set<string> = new Set();
-                    for (const comment of comments) {
-                        if (seenCommentIds.has(comment.id)) continue;
-                        seenCommentIds.add(comment.id);
-
-                        let isDeleted = false;
-                        for (const states of commentStates) {
-                            if (states[comment.id] === true) {
-                                isDeleted = true;
-                                break;
-                            }
-                        }
-                        if (!isDeleted) {
-                            resolvedComments.push(comment);
-                        } else {
-                            console.log(`AnnotationManager: Excluded inconsistent deleted comment during update for annotation ${annotation.id}, Comment ID: ${comment.id}`);
-                        }
-                    }
-
                     if (annotation.isDeleted) {
-                        console.log(`[${timestamp}] Skipping update for deleted annotation for URL: ${url}, ID: ${annotation.id}`);
                         const updatedAnnotations = annotations.filter(a => a.id !== annotation.id);
                         annotations.splice(0, annotations.length, ...updatedAnnotations);
                     } else {
@@ -433,7 +346,7 @@ export class AnnotationManager {
                             content: annotation.content,
                             author: annotation.author,
                             timestamp: annotation.timestamp || Date.now(),
-                            comments: resolvedComments,
+                            comments,
                             isDeleted: annotation.isDeleted || false,
                             text: annotation.text || '',
                             screenshot: annotation.screenshot,
@@ -445,11 +358,8 @@ export class AnnotationManager {
                 entry.callbacks.forEach(cb => cb([...annotations]));
             };
 
-            annotationNodes.forEach(node => node.map().on(onUpdate));
-
-            entry.cleanup = () => {
-                annotationNodes.forEach(node => node.map().off());
-            };
+            annotationNodes.forEach(node => node.map().on(onUpdate, { change: true }));
+            entry.cleanup = () => annotationNodes.forEach(node => node.map().off());
         }
 
         return [...annotations];

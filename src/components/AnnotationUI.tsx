@@ -25,7 +25,7 @@ import { normalizeUrl } from "../shared/utils/normalizeUrl";
 interface AnnotationUIProps {
     url: string;
     isUrlLoading: boolean;
-    tabId?: number; // Add tabId as a prop
+    tabId?: number;
 }
 
 export const AnnotationUI: React.FC<AnnotationUIProps> = ({ url, isUrlLoading, tabId }) => {
@@ -87,7 +87,6 @@ export const AnnotationUI: React.FC<AnnotationUIProps> = ({ url, isUrlLoading, t
     const handleSave = async () => {
         if (!annotationText.trim()) return;
 
-        // Validate the tabId before attempting screenshot capture
         let validatedTabId: number | undefined = tabId;
         if (typeof chrome !== 'undefined' && chrome.tabs && tabId) {
             try {
@@ -100,7 +99,6 @@ export const AnnotationUI: React.FC<AnnotationUIProps> = ({ url, isUrlLoading, t
                         }
                     });
                 });
-                // Check if the tab URL is capturable (not a chrome:// URL or restricted page)
                 if (tab.url && !tab.url.startsWith('chrome://') && !tab.url.startsWith('chrome-extension://')) {
                     validatedTabId = tab.id;
                     console.log('AnnotationUI: Valid tabId for screenshot capture:', validatedTabId);
@@ -120,7 +118,6 @@ export const AnnotationUI: React.FC<AnnotationUIProps> = ({ url, isUrlLoading, t
         }
 
         try {
-            // Pass the validated tabId to handleSaveAnnotation
             await handleSaveAnnotation(annotationText, validatedTabId);
             setAnnotationText('');
             if (quillRef.current) {
@@ -191,7 +188,7 @@ export const AnnotationUI: React.FC<AnnotationUIProps> = ({ url, isUrlLoading, t
         (annotation) => annotation.id && annotation.author && annotation.content
     );
 
-    const onDeleteCommentProp = did && !annotationsLoading ? handleDeleteComment : undefined;
+    const onDeleteCommentProp = did ? handleDeleteComment : undefined;
     console.log('AnnotationUI: Passing onDeleteComment to AnnotationList - did:', did, 'annotationsLoading:', annotationsLoading, 'onDeleteComment:', onDeleteCommentProp);
 
     console.log('AnnotationUI: Rendering with annotations:', validAnnotations, 'profiles:', profiles, 'loading:', annotationsLoading);
@@ -230,23 +227,26 @@ export const AnnotationUI: React.FC<AnnotationUIProps> = ({ url, isUrlLoading, t
                 <button
                     onClick={handleSave}
                     className="annotation-save-button"
-                    disabled={!annotationText.trim() || !did || annotationsLoading || !url || isUrlLoading}
+                    disabled={!annotationText.trim() || !did || !url || isUrlLoading}
                 >
                     Save
                 </button>
             </div>
-            {annotationsLoading ? (
+            {(isUrlLoading || annotationsLoading) && annotations.length === 0 ? (
                 <div className="loading-spinner">
                     <span>Loading annotations...</span>
                 </div>
             ) : (
                 <div className="annotation-list-wrapper">
+                    {validAnnotations.length === 0 && !annotationsLoading && (
+                        <p>No annotations available for this page.</p>
+                    )}
                     <AnnotationList
                         annotations={validAnnotations}
                         profiles={profiles}
                         onDelete={handleDeleteAnnotation}
                         onDeleteComment={onDeleteCommentProp}
-                        onSaveComment={!did || annotationsLoading ? undefined : handleSaveComment}
+                        onSaveComment={did ? handleSaveComment : undefined}
                         currentUrl={url}
                         onShowToast={handleShowToast}
                     />
