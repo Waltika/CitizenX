@@ -19,6 +19,22 @@ interface AnnotationListProps {
 
 const MemoizedCommentList = memo(CommentList);
 
+// Utility to sanitize HTML content by removing inline styles
+const sanitizeAnnotationContent = (content: string): string => {
+    // Create a temporary div to parse the HTML
+    const tempDiv = document.createElement('div');
+    tempDiv.innerHTML = content;
+
+    // Remove inline styles from all elements
+    const elements = tempDiv.getElementsByTagName('*');
+    for (let i = 0; i < elements.length; i++) {
+        elements[i].removeAttribute('style');
+    }
+
+    // Return the sanitized HTML
+    return tempDiv.innerHTML;
+};
+
 export const AnnotationList: React.FC<AnnotationListProps> = ({
                                                                   annotations,
                                                                   profiles,
@@ -33,12 +49,10 @@ export const AnnotationList: React.FC<AnnotationListProps> = ({
     const [shareLoading, setShareLoading] = useState<boolean>(false);
     const [shareError, setShareError] = useState<string | null>(null);
     const [expandedComments, setExpandedComments] = useState<Record<string, boolean>>({});
-    // Use refs to store CommentList instances
     const commentListRefs = useRef<Record<string, React.RefObject<CommentListRef>>>({});
 
     console.log('AnnotationList: Received onDeleteComment prop:', onDeleteComment);
 
-    // Initialize expandedComments state and refs for all annotations
     useEffect(() => {
         const newExpandedState = annotations.reduce((acc, annotation) => {
             if (annotation.id && expandedComments[annotation.id] === undefined) {
@@ -47,14 +61,12 @@ export const AnnotationList: React.FC<AnnotationListProps> = ({
             return acc;
         }, {} as Record<string, boolean>);
 
-        // Initialize refs for new annotations
         annotations.forEach(annotation => {
             if (annotation.id && !commentListRefs.current[annotation.id]) {
                 commentListRefs.current[annotation.id] = React.createRef<CommentListRef>();
             }
         });
 
-        // Clean up refs for removed annotations
         Object.keys(commentListRefs.current).forEach(annotationId => {
             if (!annotations.some(annotation => annotation.id === annotationId)) {
                 delete commentListRefs.current[annotationId];
@@ -80,9 +92,7 @@ export const AnnotationList: React.FC<AnnotationListProps> = ({
             console.log('AnnotationList: Saving comment for annotation:', annotationId, content);
             try {
                 await onSaveComment(annotationId, content);
-                // Clear the comment input state
                 setCommentInputs((prev) => ({ ...prev, [annotationId]: '' }));
-                // Clear the Quill editor using the ref
                 const commentListRef = commentListRefs.current[annotationId];
                 if (commentListRef.current) {
                     commentListRef.current.clearEditor();
@@ -157,7 +167,6 @@ export const AnnotationList: React.FC<AnnotationListProps> = ({
     return (
         <div className="annotation-list">
             {annotations.map((annotation) => {
-                // Skip rendering invalid annotations
                 if (!annotation.id || !annotation.author || !annotation.content) {
                     console.warn('AnnotationList: Skipping rendering of invalid annotation:', annotation);
                     return null;
@@ -167,13 +176,15 @@ export const AnnotationList: React.FC<AnnotationListProps> = ({
                 const authorHandle = authorProfile ? authorProfile.handle : 'Loading author...';
                 console.log('AnnotationList: Rendering annotation:', annotation, 'Author handle:', authorHandle);
 
-                // Filter out deleted comments and sort the rest by timestamp
                 const sortedComments = annotation.comments
                     ? [...annotation.comments]
                         .filter((comment) => !comment.isDeleted && comment.author)
                         .sort((a, b) => a.timestamp - b.timestamp)
                     : [];
                 const isExpanded = expandedComments[annotation.id] || false;
+
+                // Sanitize the annotation content to remove inline styles
+                const sanitizedContent = sanitizeAnnotationContent(annotation.content || 'No content');
 
                 return (
                     <div key={annotation.id} className="annotation-item" data-annotation-id={annotation.id}>
@@ -234,7 +245,7 @@ export const AnnotationList: React.FC<AnnotationListProps> = ({
                         </div>
                         <div
                             className="annotation-content"
-                            dangerouslySetInnerHTML={{ __html: annotation.content || 'No content' }}
+                            dangerouslySetInnerHTML={{ __html: sanitizedContent }}
                         />
                         <MemoizedCommentList
                             ref={commentListRefs.current[annotation.id]}
