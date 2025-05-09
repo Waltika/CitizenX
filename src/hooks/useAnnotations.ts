@@ -157,6 +157,7 @@ export const useAnnotations = ({ url, did, tabId }: UseAnnotationsProps): UseAnn
         if (deduplicatedAnnotations.length === 0) {
             setLoading(false);
             isFetchingRef.current = false;
+            setError(null); // Clear any existing error when there are no annotations
             return;
         }
 
@@ -200,7 +201,7 @@ export const useAnnotations = ({ url, did, tabId }: UseAnnotationsProps): UseAnn
             setLoading(false);
             isFetchingRef.current = false;
         });
-    }, [url, storage]); // Removed pendingAnnotations from dependencies
+    }, [url, storage]);
 
     const debouncedUpdateAnnotations = useCallback(
         debounce((newAnnotations: Annotation[]) => {
@@ -225,9 +226,8 @@ export const useAnnotations = ({ url, did, tabId }: UseAnnotationsProps): UseAnn
 
         try {
             const initialAnnotations = await storage.getAnnotations(normalizedUrl);
-            if (initialAnnotations.length > 0) {
-                updateAnnotations(initialAnnotations);
-            }
+            hasReceivedDataRef.current = true; // Set this immediately after the initial fetch, even if empty
+            updateAnnotations(initialAnnotations);
 
             const subscriptionPromise = storage.getAnnotations(normalizedUrl, (newAnnotations) => {
                 debouncedUpdateAnnotations(newAnnotations);
@@ -247,7 +247,7 @@ export const useAnnotations = ({ url, did, tabId }: UseAnnotationsProps): UseAnn
                     isFetchingRef.current = false;
                     setError('Timeout: Unable to fetch annotations');
                 }
-            }, 5000); // Increased timeout to 5 seconds
+            }, 5000);
         } catch (err) {
             if (currentUrlRef.current !== normalizedUrl) return;
             console.error('useAnnotations: Failed to fetch annotations:', err);
@@ -295,10 +295,9 @@ export const useAnnotations = ({ url, did, tabId }: UseAnnotationsProps): UseAnn
             isFetchingRef.current = false;
             hasReceivedDataRef.current = false;
         };
-    }, [url, storage, storageLoading]); // Removed fetchAnnotations from dependencies
+    }, [url, storage, storageLoading]);
 
     useEffect(() => {
-        // Reset state only when URL changes, but not in a way that triggers re-fetch
         setAnnotations([]);
         setProfiles({});
         setError(null);
