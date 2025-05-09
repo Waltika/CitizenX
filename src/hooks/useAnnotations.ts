@@ -1,35 +1,36 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useStorage } from './useStorage';
-import { Annotation, Comment } from '../types';
+import { Annotation, Comment, Profile } from '@/types'; // Ensure Profile is imported
 import { normalizeUrl } from '../shared/utils/normalizeUrl';
+import { storage } from '../storage/StorageRepository'; // Correct import path
 
 interface UseAnnotationsProps {
     url: string;
-    did: string | null;
+    did: string | null; // Allow string | null to match useUserProfile
+    tabId?: number;
 }
 
 interface UseAnnotationsResult {
     annotations: Annotation[];
-    profiles: Record<string, any>;
+    profiles: Record<string, Profile>; // Use Profile type
     error: string | null;
     loading: boolean;
-    handleSaveAnnotation: (content: string) => Promise<void>;
+    handleSaveAnnotation: (content: string, tabId?: number) => Promise<void>; // Add tabId parameter
     handleDeleteAnnotation: (annotationId: string) => Promise<void>;
     handleSaveComment: (annotationId: string, content: string) => Promise<void>;
     handleDeleteComment: (annotationId: string, commentId: string) => Promise<void>;
 }
 
-export const useAnnotations = ({ url, did }: UseAnnotationsProps): UseAnnotationsResult => {
+export const useAnnotations = ({ url, did, tabId }: UseAnnotationsProps): UseAnnotationsResult => {
     const { storage, error: storageError, isLoading: storageLoading } = useStorage();
     const [annotations, setAnnotations] = useState<Annotation[]>([]);
-    const [profiles, setProfiles] = useState<Record<string, any>>({});
+    const [profiles, setProfiles] = useState<Record<string, Profile>>({});
     const [error, setError] = useState<string | null>(null);
     const [loading, setLoading] = useState<boolean>(false);
     const currentUrlRef = useRef<string | null>(null);
     const abortControllerRef = useRef<AbortController | null>(null);
 
     useEffect(() => {
-        // Reset state when URL changes to prevent phantom annotations
         setAnnotations([]);
         setProfiles({});
         setError(null);
@@ -68,7 +69,6 @@ export const useAnnotations = ({ url, did }: UseAnnotationsProps): UseAnnotation
                 return;
             }
 
-            // Filter out invalid annotations and their comments
             const validAnnotations = newAnnotations
                 .filter(
                     (annotation) =>
@@ -92,7 +92,6 @@ export const useAnnotations = ({ url, did }: UseAnnotationsProps): UseAnnotation
 
             setAnnotations(validAnnotations);
 
-            // Fetch profiles for annotation authors and comment authors
             const authorDids = new Set<string>();
             validAnnotations.forEach((annotation) => {
                 if (typeof annotation.author === 'string' && annotation.author.startsWith('did:')) {
@@ -122,9 +121,11 @@ export const useAnnotations = ({ url, did }: UseAnnotationsProps): UseAnnotation
                     return;
                 }
 
-                const newProfiles = profileResults.reduce((acc: Record<string, any>, { did, profile }) => {
+                const newProfiles = profileResults.reduce((acc: Record<string, Profile>, { did, profile }) => {
                     if (profile) {
                         acc[did] = profile;
+                    } else {
+                        acc[did] = { did, handle: 'Unknown' }; // Add did to satisfy Profile type
                     }
                     return acc;
                 }, {});
@@ -143,7 +144,6 @@ export const useAnnotations = ({ url, did }: UseAnnotationsProps): UseAnnotation
 
             console.log('useAnnotations: Fetched annotations:', fetchedAnnotations);
 
-            // Filter out invalid annotations and their comments
             const validAnnotations = fetchedAnnotations
                 .filter(
                     (annotation) =>
@@ -166,15 +166,14 @@ export const useAnnotations = ({ url, did }: UseAnnotationsProps): UseAnnotation
                 }));
             setAnnotations(validAnnotations);
 
-            // Fetch profiles for annotation authors and comment authors
             const authorDids = new Set<string>();
-            validAnnotations.forEach((annotation) => {
+            validAnnotations.forEach((annotation: Annotation) => {
                 if (typeof annotation.author === 'string' && annotation.author.startsWith('did:')) {
                     authorDids.add(annotation.author);
                 } else {
                     console.warn('useAnnotations: Skipping invalid annotation author:', annotation.author, 'for annotation:', annotation.id);
                 }
-                (annotation.comments || []).forEach((comment) => {
+                (annotation.comments || []).forEach((comment: Comment) => {
                     if (typeof comment.author === 'string' && comment.author.startsWith('did:')) {
                         authorDids.add(comment.author);
                     } else {
@@ -196,9 +195,11 @@ export const useAnnotations = ({ url, did }: UseAnnotationsProps): UseAnnotation
                     return;
                 }
 
-                const newProfiles = profileResults.reduce((acc: Record<string, any>, { did, profile }) => {
+                const newProfiles = profileResults.reduce((acc: Record<string, Profile>, { did, profile }) => {
                     if (profile) {
                         acc[did] = profile;
+                    } else {
+                        acc[did] = { did, handle: 'Unknown' }; // Add did to satisfy Profile type
                     }
                     return acc;
                 }, {});
@@ -231,7 +232,7 @@ export const useAnnotations = ({ url, did }: UseAnnotationsProps): UseAnnotation
         };
     }, [url, storage, storageLoading, storageError]);
 
-    const handleSaveAnnotation = useCallback(async (content: string) => {
+    const handleSaveAnnotation = useCallback(async (content: string, tabId?: number) => {
         if (!did) {
             throw new Error('User not authenticated');
         }
@@ -255,7 +256,7 @@ export const useAnnotations = ({ url, did }: UseAnnotationsProps): UseAnnotation
             isDeleted: false,
         };
 
-        await storage.saveAnnotation(annotation);
+        await storage.saveAnnotation(annotation, tabId);
         if (currentUrlRef.current === normalizeUrl(url)) {
             setAnnotations((prev) => [...prev, annotation]);
         }
