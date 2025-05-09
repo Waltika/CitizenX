@@ -18,6 +18,7 @@ function debounce<T extends (...args: any[]) => void>(func: T, wait: number): (.
 
 function App() {
     const [url, setUrl] = useState<string>('');
+    const [tabId, setTabId] = useState<number | undefined>(undefined); // Add tabId state
     const [isUrlLoading, setIsUrlLoading] = useState<boolean>(true);
     const [annotations, setAnnotations] = useState<any[]>([]);
     const [profiles, setProfiles] = useState<Record<string, any>>({});
@@ -30,12 +31,15 @@ function App() {
             setIsUrlLoading(true);
             const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
             const newUrl = tab?.url || '';
-            console.log('index.tsx: Fetched current tab URL:', newUrl);
+            const newTabId = tab?.id; // Capture the tabId
+            console.log('index.tsx: Fetched current tab URL:', newUrl, 'with tabId:', newTabId);
             setUrl(newUrl);
+            setTabId(newTabId); // Update tabId state
             setIsUrlLoading(false);
         } catch (error) {
             console.error('index.tsx: Failed to fetch current tab URL:', error);
             setUrl('');
+            setTabId(undefined); // Clear tabId on error
             setIsUrlLoading(false);
         }
     };
@@ -172,7 +176,7 @@ function App() {
                     <button onClick={fetchAnnotationsAndProfiles}>Retry</button>
                 </div>
             )}
-            <AnnotationUI url={url} isUrlLoading={isUrlLoading} />
+            <AnnotationUI url={url} isUrlLoading={isUrlLoading} tabId={tabId} /> {/* Pass tabId as a prop */}
         </div>
     );
 }

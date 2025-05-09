@@ -1,7 +1,7 @@
 import Gun from 'gun';
 import 'gun/lib/webrtc';
-import 'gun/lib/radix'; // Import RAD for IndexedDB support
-import 'gun/lib/radisk'; // Import radisk for persistent storage
+import 'gun/lib/radix';
+import 'gun/lib/radisk';
 import { PeerManager } from './PeerManager';
 import { AnnotationManager } from './AnnotationManager';
 import { CommentManager } from './CommentManager';
@@ -43,7 +43,7 @@ export class GunRepository {
         this.gun = Gun({
             peers: this.options.peers,
             radisk: this.options.radisk,
-            localStorage: false, // Disable localStorage to avoid QuotaExceededError
+            localStorage: false,
             file: 'gun-data',
             webrtc: true,
         });
@@ -80,7 +80,7 @@ export class GunRepository {
         if (storedState.initialized) {
             console.log('GunRepository: Already initialized, using stored state');
             this.peerManager.setConnected(storedState.peerConnected);
-            await this.cleanupManager.migrateAnnotations(); // Run migration on startup
+            await this.cleanupManager.migrateAnnotations();
             return;
         }
 
@@ -131,7 +131,7 @@ export class GunRepository {
         }).then(async () => {
             console.log('GunRepository: Initialization complete, starting peer discovery');
             this.peerManager.discoverPeers();
-            await this.cleanupManager.migrateAnnotations(); // Run migration after initialization
+            await this.cleanupManager.migrateAnnotations();
         });
     }
 
@@ -177,8 +177,8 @@ export class GunRepository {
         this.annotationManager.cleanupAnnotationsListeners(url);
     }
 
-    async saveAnnotation(annotation: Annotation): Promise<void> {
-        return this.annotationManager.saveAnnotation(annotation);
+    async saveAnnotation(annotation: Annotation, tabId?: number): Promise<void> {
+        return this.annotationManager.saveAnnotation(annotation, tabId);
     }
 
     async deleteAnnotation(url: string, id: string): Promise<void> {

@@ -1,4 +1,3 @@
-// src/types/index.ts
 export interface Profile {
     did: string;
     handle: string;
@@ -14,6 +13,17 @@ export interface Annotation {
     timestamp: number;
     comments: Comment[];
     isDeleted: boolean;
+    screenshot?: string; // Base64-encoded screenshot
+    metadata?: {
+        title: string;
+        favicon: string | null;
+        ogTitle: string | null;
+        ogDescription: string | null;
+        ogImage: string | null;
+        twitterTitle: string | null;
+        twitterDescription: string | null;
+        twitterImage: string | null;
+    };
 }
 
 export interface Comment {
@@ -24,4 +34,3 @@ export interface Comment {
     timestamp: number;
     isDeleted: boolean;
 }
-

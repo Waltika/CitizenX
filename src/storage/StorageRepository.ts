@@ -126,10 +126,10 @@ export class StorageRepository {
         return this.repository.getAnnotations(normalizedUrl, callback);
     }
 
-    async saveAnnotation(annotation: Annotation): Promise<void> {
+    async saveAnnotation(annotation: Annotation, tabId?: number): Promise<void> {
         await this.initialize();
         const normalizedAnnotation = { ...annotation, url: normalizeUrl(annotation.url) };
-        await this.repository.saveAnnotation(normalizedAnnotation);
+        await this.repository.saveAnnotation(normalizedAnnotation, tabId);
     }
 
     async deleteAnnotation(url: string, id: string): Promise<void> {

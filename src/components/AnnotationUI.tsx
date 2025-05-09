@@ -25,11 +25,12 @@ import { normalizeUrl } from "../shared/utils/normalizeUrl";
 interface AnnotationUIProps {
     url: string;
     isUrlLoading: boolean;
+    tabId?: number; // Add tabId as a prop
 }
 
-export const AnnotationUI: React.FC<AnnotationUIProps> = ({ url, isUrlLoading }) => {
+export const AnnotationUI: React.FC<AnnotationUIProps> = ({ url, isUrlLoading, tabId }) => {
     const { did, profile, loading: profileLoading, error: profileError, authenticate, signOut, exportIdentity, importIdentity, createProfile, updateProfile } = useUserProfile();
-    const { annotations, profiles, error: annotationsError, loading: annotationsLoading, handleSaveAnnotation, handleDeleteAnnotation, handleSaveComment, handleDeleteComment } = useAnnotations({ url, did });
+    const { annotations, profiles, error: annotationsError, loading: annotationsLoading, handleSaveAnnotation, handleDeleteAnnotation, handleSaveComment, handleDeleteComment } = useAnnotations({ url, did, tabId });
     const [annotationText, setAnnotationText] = useState('');
     const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
     const [profileHandle, setProfileHandle] = useState('');
@@ -41,7 +42,6 @@ export const AnnotationUI: React.FC<AnnotationUIProps> = ({ url, isUrlLoading })
     const editorRef = useRef<HTMLDivElement>(null);
     const quillRef = useRef<Quill | null>(null);
 
-    // Initialize Quill editor for annotation input
     useEffect(() => {
         if (editorRef.current && !quillRef.current) {
             quillRef.current = new Quill(editorRef.current, {
@@ -56,7 +56,6 @@ export const AnnotationUI: React.FC<AnnotationUIProps> = ({ url, isUrlLoading })
                 placeholder: 'Enter annotation...'
             });
 
-            // Update state on content change
             quillRef.current.on('text-change', () => {
                 const content = quillRef.current?.root.innerHTML || '';
                 setAnnotationText(content === '<p><br></p>' ? '' : content);
@@ -86,12 +85,50 @@ export const AnnotationUI: React.FC<AnnotationUIProps> = ({ url, isUrlLoading })
     }, [annotationsLoading]);
 
     const handleSave = async () => {
-        if (annotationText.trim()) {
-            await handleSaveAnnotation(annotationText);
+        if (!annotationText.trim()) return;
+
+        // Validate the tabId before attempting screenshot capture
+        let validatedTabId: number | undefined = tabId;
+        if (typeof chrome !== 'undefined' && chrome.tabs && tabId) {
+            try {
+                const tab = await new Promise<chrome.tabs.Tab>((resolve, reject) => {
+                    chrome.tabs.get(tabId, (tab) => {
+                        if (chrome.runtime.lastError) {
+                            reject(new Error(chrome.runtime.lastError.message));
+                        } else {
+                            resolve(tab);
+                        }
+                    });
+                });
+                // Check if the tab URL is capturable (not a chrome:// URL or restricted page)
+                if (tab.url && !tab.url.startsWith('chrome://') && !tab.url.startsWith('chrome-extension://')) {
+                    validatedTabId = tab.id;
+                    console.log('AnnotationUI: Valid tabId for screenshot capture:', validatedTabId);
+                } else {
+                    console.warn('AnnotationUI: Cannot capture screenshot, tab URL is restricted:', tab.url);
+                    handleShowToast('Cannot capture screenshot for this page');
+                    validatedTabId = undefined;
+                }
+            } catch (error) {
+                console.error('AnnotationUI: Failed to validate tabId:', error);
+                handleShowToast('Failed to access tab for screenshot');
+                validatedTabId = undefined;
+            }
+        } else if (!tabId) {
+            console.warn('AnnotationUI: No tabId provided for screenshot capture');
+            handleShowToast('No active tab available for screenshot');
+        }
+
+        try {
+            // Pass the validated tabId to handleSaveAnnotation
+            await handleSaveAnnotation(annotationText, validatedTabId);
             setAnnotationText('');
             if (quillRef.current) {
                 quillRef.current.setContents([]);
             }
+        } catch (error) {
+            console.error('AnnotationUI: Failed to save annotation:', error);
+            handleShowToast('Failed to save annotation');
         }
     };
 
@@ -150,7 +187,6 @@ export const AnnotationUI: React.FC<AnnotationUIProps> = ({ url, isUrlLoading })
         }
     }, [url]);
 
-    // Filter valid annotations before passing to AnnotationList
     const validAnnotations = annotations.filter(
         (annotation) => annotation.id && annotation.author && annotation.content
     );
