@@ -52,6 +52,7 @@ export const AnnotationUI: React.FC<AnnotationUIProps> = ({ url, isUrlLoading, t
     const quillRef = useRef<Quill | null>(null);
 
     useEffect(() => {
+        console.log('AnnotationUI: Initializing Quill editor');
         if (editorRef.current && !quillRef.current) {
             quillRef.current = new Quill(editorRef.current, {
                 theme: 'snow',
@@ -80,6 +81,7 @@ export const AnnotationUI: React.FC<AnnotationUIProps> = ({ url, isUrlLoading, t
     }, []);
 
     useEffect(() => {
+        console.log('AnnotationUI: Checking profile state - profileLoading:', profileLoading, 'did:', did, 'justImported:', justImported);
         if (!profileLoading && did && !justImported) {
             if (!profile || !profile.handle) {
                 setIsProfileModalOpen(true);
@@ -88,10 +90,12 @@ export const AnnotationUI: React.FC<AnnotationUIProps> = ({ url, isUrlLoading, t
     }, [profileLoading, did, profile, justImported]);
 
     useEffect(() => {
+        console.log('AnnotationUI: URL changed, clearing pending comments - url:', url);
         setPendingComments([]);
     }, [url]);
 
     const deduplicateComments = useCallback((annotations: Annotation[]) => {
+        console.log('AnnotationUI: Deduplicating comments for annotations:', annotations.length);
         return annotations.map(annotation => {
             if (!annotation.comments) return annotation;
             const seenComments = new Map<string, any>();
@@ -121,13 +125,20 @@ export const AnnotationUI: React.FC<AnnotationUIProps> = ({ url, isUrlLoading, t
     }, [pendingComments]);
 
     const validAnnotations = useMemo(() => {
+        console.log('AnnotationUI: Computing validAnnotations - rawAnnotations:', rawAnnotations.length);
         const deduplicated = deduplicateComments(rawAnnotations);
         return deduplicated
             .filter((annotation) => annotation.id && annotation.author && annotation.content)
             .sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
     }, [rawAnnotations, deduplicateComments]);
 
+    const handleShowToast = useCallback((message: string) => {
+        setToastMessage(message);
+        setShowToast(true);
+    }, []);
+
     const handleSaveComment = useCallback(async (annotationId: string, content: string) => {
+        console.log('AnnotationUI: handleSaveComment called - annotationId:', annotationId, 'content:', content);
         const timestamp = Date.now();
         const tempCommentId = `temp-${timestamp}`;
         const pendingComment: PendingComment = {
@@ -180,6 +191,7 @@ export const AnnotationUI: React.FC<AnnotationUIProps> = ({ url, isUrlLoading, t
         }
 
         try {
+            console.log('AnnotationUI: Saving annotation - content:', annotationText);
             await handleSaveAnnotation(annotationText, validatedTabId);
             setAnnotationText('');
             if (quillRef.current) {
@@ -189,7 +201,7 @@ export const AnnotationUI: React.FC<AnnotationUIProps> = ({ url, isUrlLoading, t
             console.error('AnnotationUI: Failed to save annotation:', error);
             handleShowToast('Failed to save annotation');
         }
-    }, [annotationText, tabId, handleSaveAnnotation]);
+    }, [annotationText, tabId, handleSaveAnnotation, handleShowToast]);
 
     const handleProfileSave = useCallback(async () => {
         if (profileHandle.trim()) {
@@ -203,11 +215,6 @@ export const AnnotationUI: React.FC<AnnotationUIProps> = ({ url, isUrlLoading, t
             setProfilePicture(undefined);
         }
     }, [profile, profileHandle, profilePicture, updateProfile, createProfile]);
-
-    const handleShowToast = useCallback((message: string) => {
-        setToastMessage(message);
-        setShowToast(true);
-    }, []);
 
     const handleCloseSettings = useCallback((justImported?: boolean) => {
         if (justImported) {

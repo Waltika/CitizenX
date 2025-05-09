@@ -21,6 +21,12 @@ interface UseAnnotationsResult {
     handleDeleteComment: (annotationId: string, commentId: string) => Promise<void>;
 }
 
+interface PendingAnnotation {
+    tempId: string;
+    content: string;
+    timestamp: number;
+}
+
 function debounce<T extends (...args: any[]) => void>(func: T, wait: number): (...args: Parameters<T>) => void {
     let timeout: NodeJS.Timeout | null = null;
     return (...args: Parameters<T>) => {
@@ -40,6 +46,7 @@ export const useAnnotations = ({ url, did, tabId }: UseAnnotationsProps): UseAnn
     const [profiles, setProfiles] = useState<Record<string, Profile>>({});
     const [error, setError] = useState<string | null>(null);
     const [loading, setLoading] = useState<boolean>(false);
+    const [pendingAnnotations, setPendingAnnotations] = useState<PendingAnnotation[]>([]);
     const currentUrlRef = useRef<string | null>(null);
     const abortControllerRef = useRef<AbortController | null>(null);
     const isFetchingRef = useRef<boolean>(false);
@@ -48,6 +55,7 @@ export const useAnnotations = ({ url, did, tabId }: UseAnnotationsProps): UseAnn
     const subscriptionPromiseRef = useRef<Promise<void> | null>(null);
 
     const handleDeleteComment = useCallback(async (annotationId: string, commentId: string) => {
+        console.log('useAnnotations: handleDeleteComment called - annotationId:', annotationId, 'commentId:', commentId);
         if (!storage) {
             console.error('Storage not initialized for comment deletion');
             throw new Error('Storage not initialized');
@@ -74,61 +82,86 @@ export const useAnnotations = ({ url, did, tabId }: UseAnnotationsProps): UseAnn
     }, [url, storage]);
 
     const updateAnnotations = useCallback((newAnnotations: Annotation[]) => {
+        console.log('useAnnotations: updateAnnotations called - newAnnotations:', newAnnotations.length);
         if (currentUrlRef.current !== normalizeUrl(url)) {
             console.log(`useAnnotations: Ignoring update for stale URL: ${url}`);
             return;
         }
 
-        const validAnnotations = newAnnotations.filter((a: any) => {
+        // Deduplicate annotations and comments
+        const seenAnnotations = new Map<string, Annotation>();
+        const deduplicatedAnnotations = newAnnotations.reduce((acc: Annotation[], annotation: any) => {
             const isValid =
-                a &&
-                typeof a === 'object' &&
-                !a.isDeleted &&
-                a.id &&
-                typeof a.id === 'string' &&
-                a.author &&
-                typeof a.author === 'string' &&
-                a.author.startsWith('did:') &&
-                a.content &&
-                typeof a.content === 'string';
-            if (!isValid && process.env.NODE_ENV === 'development') {
-                console.log(`useAnnotations: Skipping invalid annotation:`, a);
+                annotation &&
+                typeof annotation === 'object' &&
+                !annotation.isDeleted &&
+                annotation.id &&
+                typeof annotation.id === 'string' &&
+                annotation.author &&
+                typeof annotation.author === 'string' &&
+                annotation.author.startsWith('did:') &&
+                annotation.content &&
+                typeof annotation.content === 'string';
+
+            if (!isValid) {
+                if (process.env.NODE_ENV === 'development') {
+                    console.log(`useAnnotations: Skipping invalid annotation:`, annotation);
+                }
+                return acc;
             }
-            return isValid;
-        }).map(a => ({
-            ...a,
-            comments: a.comments
-                ? a.comments.filter((c: any) => {
-                    const isValidComment =
-                        c &&
-                        typeof c === 'object' &&
-                        !c.isDeleted &&
-                        c.id &&
-                        typeof c.id === 'string' &&
-                        c.author &&
-                        typeof c.author === 'string' &&
-                        c.author.startsWith('did:') &&
-                        c.content &&
-                        typeof c.content === 'string';
-                    if (!isValidComment && process.env.NODE_ENV === 'development') {
+
+            // Skip duplicates by ID
+            if (seenAnnotations.has(annotation.id)) return acc;
+
+            // Deduplicate comments within the annotation
+            const comments = annotation.comments || [];
+            const seenComments = new Map<string, any>();
+            const uniqueComments = comments.filter((c: any) => {
+                const isValidComment =
+                    c &&
+                    typeof c === 'object' &&
+                    !c.isDeleted &&
+                    c.id &&
+                    typeof c.id === 'string' &&
+                    c.author &&
+                    typeof c.author === 'string' &&
+                    c.author.startsWith('did:') &&
+                    c.content &&
+                    typeof c.content === 'string';
+                if (!isValidComment) {
+                    if (process.env.NODE_ENV === 'development') {
                         console.log(`useAnnotations: Skipping invalid comment:`, c);
                     }
-                    return isValidComment;
-                })
-                : [],
-        }));
+                    return false;
+                }
 
-        setAnnotations(validAnnotations);
+                if (seenComments.has(c.id)) return false;
+
+                const key = `${c.content}-${c.timestamp}`;
+                if (seenComments.has(key)) return false;
+
+                seenComments.set(c.id, c);
+                seenComments.set(key, c);
+                return true;
+            });
+
+            const deduplicatedAnnotation = { ...annotation, comments: uniqueComments };
+            seenAnnotations.set(annotation.id, deduplicatedAnnotation);
+            acc.push(deduplicatedAnnotation);
+            return acc;
+        }, []);
+
+        setAnnotations(deduplicatedAnnotations);
         hasReceivedDataRef.current = true;
 
-        if (validAnnotations.length === 0) {
+        if (deduplicatedAnnotations.length === 0) {
             setLoading(false);
             isFetchingRef.current = false;
             return;
         }
 
         const authorDids = new Set<string>();
-        validAnnotations.forEach(annotation => {
+        deduplicatedAnnotations.forEach(annotation => {
             authorDids.add(annotation.author);
             (annotation.comments || []).forEach(comment => authorDids.add(comment.author));
         });
@@ -167,16 +200,17 @@ export const useAnnotations = ({ url, did, tabId }: UseAnnotationsProps): UseAnn
             setLoading(false);
             isFetchingRef.current = false;
         });
-    }, [url, storage]);
+    }, [url, storage]); // Removed pendingAnnotations from dependencies
 
     const debouncedUpdateAnnotations = useCallback(
         debounce((newAnnotations: Annotation[]) => {
             updateAnnotations(newAnnotations);
-        }, 1500), // Increased to 1500ms to reduce update frequency
+        }, 1500),
         [updateAnnotations]
     );
 
     const fetchAnnotations = useCallback(async () => {
+        console.log('useAnnotations: fetchAnnotations called - url:', url);
         if (!url || !storage || isFetchingRef.current) return;
         const normalizedUrl = normalizeUrl(url);
         isFetchingRef.current = true;
@@ -199,6 +233,11 @@ export const useAnnotations = ({ url, did, tabId }: UseAnnotationsProps): UseAnn
                 debouncedUpdateAnnotations(newAnnotations);
             }).then(unsubscribe => {
                 unsubscribeRef.current = unsubscribe;
+            }).catch(err => {
+                console.error('useAnnotations: Failed to establish GUN subscription:', err);
+                setError('Failed to connect to GUN: ' + (err instanceof Error ? err.message : 'Unknown error'));
+                setLoading(false);
+                isFetchingRef.current = false;
             });
             subscriptionPromiseRef.current = subscriptionPromise;
 
@@ -206,8 +245,9 @@ export const useAnnotations = ({ url, did, tabId }: UseAnnotationsProps): UseAnn
                 if (isFetchingRef.current && !hasReceivedDataRef.current) {
                     setLoading(false);
                     isFetchingRef.current = false;
+                    setError('Timeout: Unable to fetch annotations');
                 }
-            }, 3000);
+            }, 5000); // Increased timeout to 5 seconds
         } catch (err) {
             if (currentUrlRef.current !== normalizedUrl) return;
             console.error('useAnnotations: Failed to fetch annotations:', err);
@@ -218,13 +258,7 @@ export const useAnnotations = ({ url, did, tabId }: UseAnnotationsProps): UseAnn
     }, [url, storage, debouncedUpdateAnnotations]);
 
     useEffect(() => {
-        setAnnotations([]);
-        setProfiles({});
-        setError(null);
-        setLoading(false);
-        isFetchingRef.current = false;
-        hasReceivedDataRef.current = false;
-
+        console.log('useAnnotations: useEffect for fetchAnnotations - url:', url, 'storageLoading:', storageLoading);
         if (!url) return;
 
         if (storageLoading || !storage) {
@@ -259,10 +293,20 @@ export const useAnnotations = ({ url, did, tabId }: UseAnnotationsProps): UseAnn
             }
             currentUrlRef.current = null;
             isFetchingRef.current = false;
+            hasReceivedDataRef.current = false;
         };
-    }, [url, storage, storageLoading, fetchAnnotations]);
+    }, [url, storage, storageLoading]); // Removed fetchAnnotations from dependencies
+
+    useEffect(() => {
+        // Reset state only when URL changes, but not in a way that triggers re-fetch
+        setAnnotations([]);
+        setProfiles({});
+        setError(null);
+        setPendingAnnotations([]);
+    }, [url]);
 
     const handleSaveAnnotation = useCallback(async (content: string, saveTabId?: number) => {
+        console.log('useAnnotations: handleSaveAnnotation called - content:', content);
         if (!did) {
             throw new Error('User not authenticated');
         }
@@ -272,6 +316,16 @@ export const useAnnotations = ({ url, did, tabId }: UseAnnotationsProps): UseAnn
         if (!url) {
             throw new Error('No URL provided for annotation');
         }
+
+        const timestamp = Date.now();
+        const tempId = `temp-${timestamp}`;
+        const pendingAnnotation: PendingAnnotation = {
+            tempId,
+            content,
+            timestamp,
+        };
+
+        setPendingAnnotations(prev => [...prev, pendingAnnotation]);
 
         const annotation: Annotation = {
             id: Date.now().toString(),
@@ -284,13 +338,18 @@ export const useAnnotations = ({ url, did, tabId }: UseAnnotationsProps): UseAnn
             isDeleted: false,
         };
 
-        await storage.saveAnnotation(annotation, saveTabId || tabId);
-        if (currentUrlRef.current === normalizeUrl(url)) {
-            setAnnotations(prev => [...prev, annotation]);
+        try {
+            await storage.saveAnnotation(annotation, saveTabId || tabId);
+            setPendingAnnotations(prev => prev.filter(pa => pa.tempId !== tempId));
+        } catch (error) {
+            console.error('useAnnotations: Failed to save annotation:', error);
+            setPendingAnnotations(prev => prev.filter(pa => pa.tempId !== tempId));
+            throw error;
         }
     }, [did, url, storage, tabId]);
 
     const handleDeleteAnnotation = useCallback(async (annotationId: string) => {
+        console.log('useAnnotations: handleDeleteAnnotation called - annotationId:', annotationId);
         if (!storage) {
             throw new Error('Storage not initialized');
         }
@@ -305,6 +364,7 @@ export const useAnnotations = ({ url, did, tabId }: UseAnnotationsProps): UseAnn
     }, [url, storage]);
 
     const handleSaveComment = useCallback(async (annotationId: string, content: string) => {
+        console.log('useAnnotations: handleSaveComment called - annotationId:', annotationId, 'content:', content);
         if (!did) {
             throw new Error('User not authenticated');
         }
