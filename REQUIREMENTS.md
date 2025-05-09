@@ -22,9 +22,25 @@ A decentralized Chrome extension for annotating websites in order to bring a kno
    - **Description**: Display comments as a thread under each annotation.
    - **Status**: Implemented. Comments are stored as sub-nodes in Gun.js (`annotations/<url>/<annotationId>/comments`) and displayed as a thread under each annotation. Added a collapse/expand mechanism to save space, with comments collapsed by default and a toggle button ("+ Show X comments" to expand, "− Hide comments" to collapse).
 
+8. **Decentralized Persistence Using IPFS**
+   - **Description**: Ensure persistence is decentralized using IPFS.
+   - **Status**: Partially implemented. Gun.js is used for decentralized storage with persistent storage on a paid Render.com plan (`/var/data/gun-data`). Data is replicated across nodes with a minimum factor of three. IPFS integration is planned for future versions to enhance decentralization.
+   - **Implementation Details**:
+     - Gun.js stores data in sharded nodes (`annotations_<domain>`) with sub-sharding for high-traffic domains.
+     - Persistence is achieved using RAD (Random Access Disk) on the server, but cleanup of deleted items (`isDeleted: true`) requires validation to ensure tombstones persist across restarts.
+     - **Testing**: Validate persistence by simulating server restarts and checking that deleted items remain tombstoned.
+
+9. **Decentralized Collaborative Features**
+   - **Description**: Ensure notifications and other collaborative features do not rely on a centralized server.
+   - **Status**: Partially implemented. Gun.js provides decentralized storage with domain-based sharding (`annotations_<domain>`) and sub-sharding for high-traffic domains. Notifications are pending. Multi-node setups or pinning services are needed to eliminate single points of failure.
+   - **Sharding and Replication**:
+     - Domain-based sharding distributes annotations by URL domain, with sub-sharding for popular domains (e.g., `google.com`).
+     - Peer-to-peer replication ensures a minimum replication factor of three, prioritizing user-deployed servers or pinning services.
+     - **Testing**: Test sharding with high-traffic scenarios (e.g., 10,000 annotations on `google.com`) to ensure scalability and data consistency.
+
 14. **Collaborative Deletion and Moderation System**
    - **Description**: Implement a system where users can delete their own content, hide or report others’ content, and choose between diverse or ideologically aligned content environments. Admins can delete content via consensus, and a truthfulness-based ranking system uses implicit signals (hides, reports) to sort content. Adult content is filtered for underage or unverified users, with age verification persisting across devices.
-   - **Status**: Partially Implemented. 
+   - **Status**: Partially Implemented.
      - **Deletion for Own Comments**: Implemented. Users can delete their own comments, verified by DID matching in `CommentList.tsx`. Fixed an issue where clicking the delete button accidentally deleted the entire annotation by ensuring `onDeleteComment` is passed correctly from `AnnotationUI.tsx` to `CommentList.tsx`. Fixed a prop-passing issue where `onDeleteComment` was `undefined` by adding a guard clause in `AnnotationList.tsx` to render `CommentList` only when the prop is available.
      - **Hiding, Reporting, and Ranking**: In progress. Planned for the next sprint to add "Hide" and "Report" buttons, implement truthfulness ranking with diversity weighting, and create a `ModeratorPanel.tsx` for admin voting.
      - **User Preferences and Age Verification**: Planned for the next sprint to add opinion preference toggle and age verification in the settings panel.
@@ -55,21 +71,11 @@ A decentralized Chrome extension for annotating websites in order to bring a kno
    - **Status**: Implemented. The `/view-annotations` page displays annotations with a clickable link to the annotated page (opens in a new tab). Styled with white `#fff`, teal `#2c7a7b`, Inter font, and includes a loading spinner.
    - **Mobile Detection**: Added a mobile check (`/android|iphone|ipad|ipod|mobile/i.test(userAgent)`) in `check-extension.js` to redirect mobile browsers (e.g., Chrome on Android) to `/view-annotations`, as they cannot install extensions.
    - **Author Display Fix**: Fixed an issue where authors were displayed as "Unknown" by updating the `/api/annotations` endpoint on the Render server to fetch user profiles from Gun.js with retries (up to 5 attempts) and in-memory caching (5-minute TTL), ensuring the correct `authorHandle` (e.g., "Waltika") is included in the response. Extended the fix to the extension by improving profile fetching in `useAnnotations.ts` to handle real-time updates.
-   - **SSR Limitation**: The `/view-annotations` endpoint fails to render due to `AnnotationList` using React hooks (`useState`), which are not supported in server-side rendering. A temporary workaround (`AnnotationListServer.tsx`) was reverted to focus on scalability and security.
+   - **SSR Limitation**: The `/view-annotations` endpoint fails to render due to `AnnotationList` using React hooks (`useState`), which are not supported in server-side rendering. A temporary workaround (`AnnotationListServer.tsx`) was reverted to focus on scalability and security—even though it’s still in the file structure, it’s not currently used.
 
 12. **Screenshots for Shared Annotations**
    - **Description**: Provide a screenshot of the top of the annotated page for both the annotation feature on non-Chrome browsers and the sharing functionality. Store the screenshot with the annotations, but only once.
    - **Status**: Pending.
-
-### Decentralized Infrastructure
-8. **Decentralized Persistence Using IPFS**
-   - **Description**: Ensure persistence is decentralized using IPFS.
-   - **Status**: Partially implemented. Shifted to Gun.js for decentralized storage, which can integrate with IPFS in the future. Currently using a single Gun.js node on Render, with persistence pending a paid plan upgrade or pinning service.
-
-9. **Decentralized Collaborative Features**
-   - **Description**: Ensure notifications and other collaborative features do not rely on a centralized server.
-   - **Status**: Partially implemented. Gun.js provides decentralized storage, but notifications are pending. The Render server is a single point of failure until a pinning service or multi-node setup is implemented.
-   - **Sharding and Replication**: Designed domain-based sharding (`annotations_<domain>`) with peer-to-peer replication (minimum factor of three), ensuring servers only replicate relevant shards while maintaining availability.
 
 ### Code and Deployment
 13. **Factor Out Common Functions**
@@ -135,8 +141,19 @@ A decentralized Chrome extension for annotating websites in order to bring a kno
 
 9. **Enhance Real-Time Updates with Gun.js Subscriptions**
    - **Description**: Improve real-time updates by relying entirely on Gun.js subscriptions (`map().on()`) in `useAnnotations.ts`, removing the initial fetch dependency. Implement debouncing to batch updates and pre-fetch profiles for known authors.
-   - **Status**: Planned.
+   - **Status**: Partially implemented in v1.0. Real-time updates are supported via `map().on()` in `AnnotationManager.ts`, but initial fetch dependency remains, and debouncing is not implemented.
    - **Details**: Update `useAnnotations.ts` to populate `annotations` state incrementally via `map().on()`. Use `lodash/debounce` for batching updates (100ms delay). Pre-fetch profiles to minimize delays in displaying author handles. Test with simultaneous updates to ensure smooth UI updates without flickering.
+
+10. **Multi-Browser Extension Support**
+   - **Description**: Extend the CitizenX extension to support all browsers that allow extensions (e.g., Firefox, Edge, Safari), maximizing reuse of the existing codebase to minimize duplication.
+   - **Status**: Pending.
+   - **Details**:
+     - Utilize WebExtension APIs for compatibility across Chrome, Firefox, and Edge.
+     - Adapt for Safari using Safari Web Extensions, addressing specific manifest keys and native messaging requirements.
+     - Reuse React components (`AnnotationList.tsx`, `AnnotationUI.tsx`), hooks (`useAnnotations.ts`, `useUserProfile.ts`), and storage logic (`AnnotationManager.ts`, `GunRepository.ts`) across browsers.
+     - Implement an abstraction layer or polyfills to handle browser-specific APIs (e.g., `chrome.*` vs. `browser.*`).
+     - Update `vite.config.extension.js` to support multi-browser builds.
+     - Test extension functionality and UI consistency across all supported browsers.
 
 ## Non Functional Requirements - v1.0
 1. **Zero Installation Beyond Extension**
@@ -145,26 +162,67 @@ A decentralized Chrome extension for annotating websites in order to bring a kno
 
 2. **100% Serverless with IPFS Storage**
    - **Description**: Ensure the system is 100% serverless, storing data on IPFS.
-   - **Status**: Partially met. Using Gun.js for decentralized storage, with a single node on Render. IPFS integration is planned for future versions.
+   - **Status**: Partially met. Gun.js provides decentralized storage with persistent storage on a paid Render.com plan (`/var/data/gun-data`). IPFS integration is planned for future versions. Cleanup of deleted items requires validation to ensure persistence across server restarts.
 
 3. **Decentralized Authentication**
-   - **Description**: Ensure authentication is decentralized.
-   - **Status**: Met. Authentication uses DIDs stored in Gun.js (`user_<did>`).
+   - **Description**: Ensure authentication is decentralized and protects against impersonation, unauthorized privilege escalation, and unauthorized access to sensitive user information.
+   - **Status**: Partially met. Authentication uses DIDs stored in Gun.js (`user_<did>`). Enhanced security measures are implemented to align with industry standards for decentralized identity management and zero-knowledge proofs.
+   - **Implementation Details**:
+     - **Preventing Impersonation**:
+       - **DID Generation and Storage**: Each user generates a unique DID using Gun.js SEA (Security, Encryption, Authentication) framework, which creates a public-private key pair. The private key is encrypted with a user-provided passphrase and stored securely in `chrome.storage.local` and Gun.js (`user_<did>/encryptedKey`). The DID is a hash of the public key, ensuring uniqueness and non-repudiation.
+       - **Signature Verification**: All write operations (annotations, comments, deletions, profile updates) are signed with the user’s private key using Gun.js SEA. The signature is stored alongside the data (e.g., `annotations/<url>/<annotationId>/signature`). Clients and servers verify the signature against the DID’s public key (`user_<did>/publicKey`) before processing, preventing impersonation by fake peers, scripts, or agents.
+       - **Anti-Spoofing Measures**: Implement nonce-based challenges in `writeRequests` to prevent replay attacks. Each write request includes a unique nonce and timestamp, verified by servers within a 5-minute window. Log failed signature verifications in `securityLogs/<did>/<timestamp>` to detect and block malicious peers.
+       - **Testing**: Simulate impersonation attempts (e.g., fake DID with forged signatures, replayed requests) to ensure signatures are validated and unauthorized writes are rejected.
+     - **Preventing Unauthorized Privilege Escalation**:
+       - **Role-Based Access Control**: Define roles (e.g., user, admin) in Gun.js (`roles/<did>`). Admins are explicitly assigned by a trusted authority (e.g., project maintainers) and stored in `admins/<did>`. Role assignments are signed by the assigner’s private key and verified by servers.
+       - **Admin Actions**: Admin actions (e.g., content deletion via consensus) require multi-signature verification (3 signed votes in `deletionVotes/<contentId>`). Each vote is signed by an admin’s private key, verified against `admins/<did>/publicKey`. Prevent privilege escalation by ensuring only verified admins can vote or perform moderation actions.
+       - **Action Validation**: All privileged actions (e.g., commenting, rating, deleting, moderating) verify the requester’s DID and role. For example, deletion requests check `isOwnComment` or admin status in `CommentList.tsx` and `AnnotationManager.ts`. Servers reject unsigned or unauthorized requests, logging attempts in `securityLogs`.
+       - **Rate Limiting**: Enforce rate limits per DID (`rateLimits/<did>`) to prevent abuse (e.g., spamming comments, reports, or admin votes). Limit actions to 100/hour per DID, with exponential backoff for violations.
+       - **Testing**: Simulate privilege escalation attempts (e.g., non-admin attempting to delete content, forging admin signatures) to ensure role checks and signature verifications block unauthorized actions.
+     - **Protecting Sensitive Information**:
+       - **Zero-Knowledge Age Verification**: Implement a zero-knowledge proof (ZKP) system for age verification using a library like `zkp.js` integrated with Gun.js SEA. Users generate a ZKP proving they are over a certain age (e.g., 18) without revealing their exact age or identity. The proof is stored in `user_<did>/ageVerificationProof` and verified by clients/servers without accessing personal data.
+       - **Encrypted Sensitive Data**: Store sensitive user data (e.g., age verification, perspective preferences) in `user_<did>/private`, encrypted with the user’s private key using Gun.js SEA. Access requires explicit user consent via a signed permission grant (`user_<did>/permissions/<accessorDID>`), specifying allowed data and duration.
+       - **Crowdsourced Verification**: For crowdsourced verification (e.g., age, identity attributes), use a blinded signature scheme. Users submit encrypted attributes to verifiers, who sign without seeing the data. The signed proof is stored in `user_<did>/verifiedAttributes`, accessible only with user consent. Prevent linking to real identities by using ephemeral DIDs for verification interactions.
+       - **Data Access Controls**: Implement fine-grained access controls in `AnnotationManager.ts` and `gun-server.js`. Only the user’s client can decrypt `user_<did>/private` data. Shared data (e.g., annotations, profiles) is public but anonymized (linked to DID, not real identity). Log unauthorized access attempts in `securityLogs`.
+       - **Privacy by Design**: Apply strict jurisdictional compliance (e.g., COPPA, GDPR-K) by default, minimizing data collection. Use optional location detection (stored in `user_<did>/locationPreferences`, encrypted) only with consent. Notify users of data access requests via the settings panel.
+       - **Testing**: Simulate unauthorized access (e.g., attempting to read `user_<did>/private` without permission, linking DID to real identity) to ensure encryption, ZKPs, and access controls prevent data leakage.
+     - **Security Auditing**:
+       - Conduct regular audits of Gun.js SEA implementation, focusing on key management, signature verification, and ZKP integration.
+       - Use penetration testing to identify vulnerabilities in `writeRequests`, `rateLimits`, and `securityLogs`.
+       - Publish a public bug bounty program to incentivize community reporting of security issues.
+     - **Future Enhancements**:
+       - Integrate with decentralized identity standards (e.g., W3C DID, Verifiable Credentials) for interoperability.
+       - Explore blockchain-based DID anchoring for enhanced immutability.
+       - Implement AI-driven anomaly detection in `securityLogs` to identify sophisticated attacks.
 
 4. **Minimize Data Loss**
    - **Description**: Ensure minimal data loss in case of network issues or other failures.
-   - **Status**: Partially met. Data is stored in Gun.js with a replication factor of three across servers (user-deployed, pinning service). Persistence requires a pinning service or Render paid plan upgrade.
+   - **Status**: Partially met. Data is stored in Gun.js with a replication factor of three across servers (user-deployed, pinning service). Persistent storage is enabled on a paid Render.com plan, but cleanup of deleted items requires validation to prevent reappearance after restarts.
 
 5. **Minimal Chrome Extension Content**
    - **Description**: Ensure the Chrome extension is minimal, with all code bundled locally to comply with Chrome Web Store policies.
    - **Status**: Met. All code is bundled locally using Vite.
 
 6. **Secure Access Technologies**
-   - **Description**: Secure JWT tokens and other access technologies against hacking.
-   - **Status**: Not applicable for JWT tokens (not used). Implemented security for annotations:
-     - Signed annotations and write requests to prevent unauthorized changes.
-     - Immutable versioning with tombstones for deletions.
-     - Protection against malicious peers, data injection, DID spoofing, replay attacks, and DoS attacks through signature verification, rate-limiting, timestamp checks, and logging (enhanced by Requirement 14 for deletion security).
+   - **Description**: Secure annotations and user data against hacking, impersonation, privilege escalation, and unauthorized data access.
+   - **Status**: Implemented. Enhanced security measures align with decentralized identity management and zero-knowledge proof standards.
+   - **Implementation Details**:
+     - **Signed Annotations and Requests**: All annotations, comments, and write requests (create, update, delete) are signed with the user’s private key using Gun.js SEA, stored with signatures (e.g., `annotations/<url>/<annotationId>/signature`). Clients and servers verify signatures against the DID’s public key, discarding tampered or unsigned data.
+     - **Immutable Versioning**: Annotations and comments are stored as immutable versions (`annotations/<url>/<annotationId>/versions/<timestamp>`), with updates creating new versions and deletions using tombstones (`deleted: true`). Ensures auditability and prevents unauthorized modifications.
+     - **Attack Mitigation**: Protect against malicious peers, data injection, DID spoofing, replay attacks, and DoS attacks:
+       - **Signature Verification**: Enforce signature checks in `AnnotationManager.ts` and `gun-server.js` for all writes.
+       - **Nonce and Timestamp Checks**: Include nonces and timestamps in `writeRequests`, verified within a 5-minute window to prevent replays.
+       - **Rate Limiting**: Apply per-DID rate limits (`rateLimits/<did>`) to prevent abuse (e.g., 100 actions/hour, with exponential backoff).
+       - **Logging**: Log unauthorized attempts in `securityLogs/<did>/<timestamp>` for auditing and peer banning.
+       - **Input Sanitization**: Sanitize user inputs (annotations, comments) using DOMPurify in `useAnnotations.ts` and `gun-server.js` to prevent XSS attacks.
+       - **CORS Security**: Set strict CORS policy in `gun-server.js` (`Access-Control-Allow-Origin: https://citizenx.app`) to prevent unauthorized API access.
+     - **Role-Based Security**: Ensure only authorized DIDs perform privileged actions (e.g., admin deletions, moderation). Verify roles in `roles/<did>` and `admins/<did>`, with multi-signature consensus for admin actions.
+     - **Zero-Knowledge Proofs**: Use ZKPs for age verification and sensitive data, ensuring no personal information is revealed without consent. Encrypt private data in `user_<did>/private` with user’s private key.
+     - **Testing**: Simulate attacks (e.g., data injection, DID spoofing, unauthorized deletions, XSS, DoS) to validate protections. Test ZKP verification and encrypted data access to ensure privacy.
+     - **Future Enhancements**:
+       - Integrate with W3C DID and Verifiable Credentials for standardized identity management.
+       - Implement blockchain-based DID anchoring for immutability.
+       - Add AI-driven anomaly detection in `securityLogs`.
 
 7. **Add Privacy Policy to Manifest**
    - **Description**: Add a privacy policy to `manifest.json` once the website is available: `"privacy_policy": "https://yourwebsite.com/privacy-policy"`.
@@ -172,22 +230,24 @@ A decentralized Chrome extension for annotating websites in order to bring a kno
 
 ## Focus for Next Sprint
 - **Sharding (Scalability)**:
-  - Implement domain-based sharding (`annotations_<domain>`) in Gun.js to distribute annotations across nodes based on the domain of the annotated page, reducing load on individual nodes.
-  - Add sub-sharding for high-traffic domains (e.g., `annotations_google_com_shard_0`) by hashing the full URL and distributing annotations across shards.
-  - Update `AnnotationManager.ts` to fetch and save annotations from/to the appropriate shard based on the normalized URL.
-  - Test sharding with simulated high-traffic scenarios (e.g., 10,000 annotations on `google.com`) to ensure performance and data consistency.
-  - Explore multi-node setups or pinning services (e.g., a custom pinning service with incentives, as planned in Non-Functional Requirement 1 - Future Versions) to enhance persistence and replication.
+  - Complete sharding implementation by testing domain-based sharding (`annotations_<domain>`) and sub-sharding for high-traffic domains (e.g., `annotations_google_com_shard_0`) with simulated high-traffic scenarios (e.g., 10,000 annotations on `google.com`) to ensure performance and data consistency.
+  - Explore multi-node setups or pinning services (e.g., a custom pinning service with incentives) to enhance persistence and replication.
+  - Finalize migration of legacy annotations to sharded nodes, ensuring `isDeleted: true` items are correctly tombstoned.
+
+- **Persistence**:
+  - Validate persistence on the paid Render.com plan by simulating server restarts and verifying that tombstones (`put(null)`) and `isDeleted: true` markers persist.
+  - Enhance `CleanupManager.ts` to ensure deleted items are tombstoned before replication, preventing reappearance.
+  - Test replication across peers to ensure deleted items are not reintroduced.
 
 - **Security**:
-  - Prevent hacking of the `gun-server` by securing API endpoints (`/api/annotations`, `/api/comments`):
-    - Implement rate limiting in `gun-server.js` to prevent DoS attacks, using Gun.js `rateLimits/<did>` to track requests per user.
-    - Enhance CORS security by setting a strict CORS policy (e.g., `Access-Control-Allow-Origin: https://citizenx.app`).
-    - Sanitize user inputs (annotations, comments) to prevent XSS attacks using a library like DOMPurify in `useAnnotations.ts` and `gun-server.js`.
-  - Ensure only owners of annotations/comments and admins can delete them (Requirement 14):
-    - Extend the existing signature verification in `AnnotationManager.ts` to check the requester’s DID against the `author` field for delete operations.
-    - Define an admin role in Gun.js (`admins/<did>`) with a list of trusted DIDs, allowing admins to delete content after community consensus.
-    - Update `writeRequests` to include delete operations, ensuring servers verify ownership or admin status before applying deletions.
-  - Test security measures by simulating attacks (e.g., unauthorized deletion attempts, XSS injection, DoS attacks) and verifying that protections hold.
+  - Enhance security measures to prevent impersonation, privilege escalation, and unauthorized data access:
+    - Implement ZKP for age verification in `user_<did>/ageVerificationProof` using `zkp.js`.
+    - Add blinded signature scheme for crowdsourced verification in `user_<did>/verifiedAttributes`.
+    - Enforce nonce-based challenges and timestamp checks in `writeRequests` to prevent replay attacks.
+    - Conduct penetration testing to validate signature verification, rate limiting, and input sanitization.
+  - Update `gun-server.js` to include strict CORS policy and DOMPurify for input sanitization.
+  - Extend signature verification to all privileged actions (e.g., hiding, reporting, admin voting).
+  - Test security measures by simulating attacks (e.g., DID spoofing, unauthorized data access, XSS injection, DoS attacks).
 
 - **Code Factorization**:
   - Begin implementing the shared library (`@citizenx/shared`) as per Requirement 13, starting with `normalizeUrl` and `simpleHash`.
@@ -202,4 +262,5 @@ A decentralized Chrome extension for annotating websites in order to bring a kno
   - Test deletion, hiding, reporting, ranking, and age filtering workflows.
 
 - **Real-Time Updates**:
-  - Enhance real-time updates using Gun.js subscriptions (Requirement 9 - Future Versions), ensuring `useAnnotations.ts` relies on `map().on()` for seamless UI updates without initial fetch dependency.
+  - Complete enhancement of real-time updates (Requirement 9) by removing initial fetch dependency in `useAnnotations.ts`, implementing debouncing with `lodash/debounce` (100ms delay), and pre-fetching profiles for known authors.
+  - Test simultaneous updates to ensure smooth UI updates without flickering.
