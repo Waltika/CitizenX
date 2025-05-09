@@ -1,11 +1,10 @@
-import React, { useState, useEffect, useRef, memo } from 'react';
+import React, { useState, useEffect, useCallback, useRef, memo } from 'react';
 import { Annotation, Profile } from '@/types';
 import { normalizeUrl } from '../shared/utils/normalizeUrl';
 import { shortenUrl } from '../utils/shortenUrl';
 import { stripHtml } from '../utils/stripHtml';
-import Quill from 'quill';
 import { ShareModal } from './ShareModal';
-import { CommentList } from './CommentList';
+import { CommentList, CommentListRef } from './CommentList';
 import './AnnotationList.css';
 
 interface AnnotationListProps {
@@ -33,13 +32,13 @@ export const AnnotationList: React.FC<AnnotationListProps> = ({
     const [showShareModal, setShowShareModal] = useState<string | null>(null);
     const [shareLoading, setShareLoading] = useState<boolean>(false);
     const [shareError, setShareError] = useState<string | null>(null);
-    const editorRefs = useRef<Record<string, HTMLDivElement | null>>({});
-    const quillInstances = useRef<Record<string, Quill | null>>({});
     const [expandedComments, setExpandedComments] = useState<Record<string, boolean>>({});
+    // Use refs to store CommentList instances
+    const commentListRefs = useRef<Record<string, React.RefObject<CommentListRef>>>({});
 
     console.log('AnnotationList: Received onDeleteComment prop:', onDeleteComment);
 
-    // Initialize expandedComments state for all annotations
+    // Initialize expandedComments state and refs for all annotations
     useEffect(() => {
         const newExpandedState = annotations.reduce((acc, annotation) => {
             if (annotation.id && expandedComments[annotation.id] === undefined) {
@@ -48,103 +47,54 @@ export const AnnotationList: React.FC<AnnotationListProps> = ({
             return acc;
         }, {} as Record<string, boolean>);
 
+        // Initialize refs for new annotations
+        annotations.forEach(annotation => {
+            if (annotation.id && !commentListRefs.current[annotation.id]) {
+                commentListRefs.current[annotation.id] = React.createRef<CommentListRef>();
+            }
+        });
+
+        // Clean up refs for removed annotations
+        Object.keys(commentListRefs.current).forEach(annotationId => {
+            if (!annotations.some(annotation => annotation.id === annotationId)) {
+                delete commentListRefs.current[annotationId];
+            }
+        });
+
         setExpandedComments((prev) => ({
             ...prev,
             ...newExpandedState,
         }));
     }, [annotations]);
 
-    // Initialize Quill editors synchronously
-    useEffect(() => {
-        annotations.forEach((annotation) => {
-            if (!annotation.id || !annotation.author || !annotation.content) {
-                console.warn('Skipping Quill initialization for invalid annotation:', annotation);
-                return;
-            }
+    const handleSetCommentInput = useCallback((annotationId: string, content: string) => {
+        setCommentInputs((prev) => ({
+            ...prev,
+            [annotationId]: content,
+        }));
+    }, []);
 
-            const editorId = annotation.id;
-            const editorElement = editorRefs.current[editorId];
-            if (editorElement && !quillInstances.current[editorId]) {
-                console.log(`Initializing Quill editor for annotation ${editorId}`);
-                const wrapper = document.createElement('div');
-                wrapper.className = 'quill-wrapper';
-                editorElement.appendChild(wrapper);
-
-                try {
-                    quillInstances.current[editorId] = new Quill(wrapper, {
-                        theme: 'snow',
-                        modules: {
-                            toolbar: [
-                                ['bold', 'italic', 'underline'],
-                                [{ 'list': 'ordered' }, { 'list': 'bullet' }],
-                                ['link'],
-                            ],
-                        },
-                        placeholder: 'Add a comment...',
-                    });
-
-                    quillInstances.current[editorId]!.on('text-change', () => {
-                        const content = quillInstances.current[editorId]!.root.innerHTML || '';
-                        setCommentInputs((prev) => ({
-                            ...prev,
-                            [editorId]: content === '<p><br></p>' ? '' : content,
-                        }));
-                    });
-                } catch (error) {
-                    console.error(`Failed to initialize Quill editor for annotation ${editorId}:`, error);
-                }
-            } else if (!editorElement) {
-                console.warn(`Editor element not found for annotation ${editorId}`);
-            }
-        });
-
-        // Clean up editors for removed annotations
-        const currentAnnotationIds = new Set(annotations.map((annotation) => annotation.id).filter(Boolean));
-        Object.keys(quillInstances.current).forEach((editorId) => {
-            if (!currentAnnotationIds.has(editorId) && quillInstances.current[editorId]) {
-                console.log(`Cleaning up Quill editor for removed annotation ${editorId}`);
-                const editorElement = editorRefs.current[editorId];
-                if (editorElement) {
-                    editorElement.innerHTML = '';
-                }
-                quillInstances.current[editorId]!.off('text-change');
-                quillInstances.current[editorId] = null;
-                delete quillInstances.current[editorId];
-                delete editorRefs.current[editorId];
-            }
-        });
-
-        return () => {
-            Object.keys(quillInstances.current).forEach((editorId) => {
-                console.log(`Cleaning up Quill editor on unmount for annotation ${editorId}`);
-                const editorElement = editorRefs.current[editorId];
-                if (editorElement) {
-                    editorElement.innerHTML = '';
-                }
-                if (quillInstances.current[editorId]) {
-                    quillInstances.current[editorId]!.off('text-change');
-                    quillInstances.current[editorId] = null;
-                }
-            });
-            quillInstances.current = {};
-            editorRefs.current = {};
-        };
-    }, [annotations]);
-
-    const handleSaveComment = async (annotationId: string) => {
+    const handleSaveComment = useCallback(async (annotationId: string) => {
         const content = commentInputs[annotationId] || '';
         if (content.trim() && onSaveComment) {
             console.log('AnnotationList: Saving comment for annotation:', annotationId, content);
-            await onSaveComment(annotationId, content);
-            setCommentInputs((prev) => ({ ...prev, [annotationId]: '' }));
-            const quill = quillInstances.current[annotationId];
-            if (quill) {
-                quill.setContents([]);
+            try {
+                await onSaveComment(annotationId, content);
+                // Clear the comment input state
+                setCommentInputs((prev) => ({ ...prev, [annotationId]: '' }));
+                // Clear the Quill editor using the ref
+                const commentListRef = commentListRefs.current[annotationId];
+                if (commentListRef.current) {
+                    commentListRef.current.clearEditor();
+                }
+            } catch (error) {
+                console.error('AnnotationList: Failed to save comment:', error);
+                onShowToast('Failed to save comment');
             }
         }
-    };
+    }, [commentInputs, onSaveComment, onShowToast]);
 
-    const handleShare = async (annotation: Annotation) => {
+    const handleShare = useCallback(async (annotation: Annotation) => {
         setShareLoading(true);
         setShareError(null);
         try {
@@ -187,29 +137,29 @@ export const AnnotationList: React.FC<AnnotationListProps> = ({
         } finally {
             setShareLoading(false);
         }
-    };
+    }, [currentUrl, profiles]);
 
-    const handleCopyLink = async (shareContent: string) => {
+    const handleCopyLink = useCallback(async (shareContent: string) => {
         console.log('AnnotationList: Copying share content:', shareContent);
         await navigator.clipboard.writeText(shareContent);
         onShowToast('Link copied to clipboard!');
         console.log('AnnotationList: Triggered toast with message: Link copied to clipboard!');
         setShowShareModal(null);
-    };
+    }, [onShowToast]);
 
-    const toggleComments = (annotationId: string) => {
+    const toggleComments = useCallback((annotationId: string) => {
         setExpandedComments((prev) => ({
             ...prev,
             [annotationId]: !prev[annotationId],
         }));
-    };
+    }, []);
 
     return (
         <div className="annotation-list">
             {annotations.map((annotation) => {
                 // Skip rendering invalid annotations
                 if (!annotation.id || !annotation.author || !annotation.content) {
-                    console.warn('Skipping rendering of invalid annotation:', annotation);
+                    console.warn('AnnotationList: Skipping rendering of invalid annotation:', annotation);
                     return null;
                 }
 
@@ -287,6 +237,7 @@ export const AnnotationList: React.FC<AnnotationListProps> = ({
                             dangerouslySetInnerHTML={{ __html: annotation.content || 'No content' }}
                         />
                         <MemoizedCommentList
+                            ref={commentListRefs.current[annotation.id]}
                             annotation={annotation}
                             profiles={profiles}
                             isExpanded={isExpanded}
@@ -294,7 +245,7 @@ export const AnnotationList: React.FC<AnnotationListProps> = ({
                             onSaveComment={onSaveComment}
                             onDeleteComment={onDeleteComment}
                             commentInput={commentInputs[annotation.id] || ''}
-                            editorRef={(el) => (editorRefs.current[annotation.id] = el)}
+                            setCommentInput={handleSetCommentInput}
                             handleSaveComment={() => handleSaveComment(annotation.id)}
                             onShowToast={onShowToast}
                         />

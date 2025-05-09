@@ -1,4 +1,3 @@
-// PeerManager.ts
 interface KnownPeer {
     url: string;
     timestamp: number;
@@ -19,11 +18,33 @@ export class PeerManager {
     private fetchAttempts: number = 0;
     private maxFetchAttempts: number = 10;
     private STORAGE_KEY = 'gun_repository_state';
+    private CLIENT_PEER_ID_KEY = 'client_peer_id';
+    private clientPeerId: string;
+    private circuitBreaker = { isOpen: false, failureCount: 0, maxFailures: 3, resetTimeout: 30000 }; // 30 seconds
 
     constructor(gun: any, initialPeers: string[], fallbackPeers: string[]) {
         this.gun = gun;
         this.currentPeers = initialPeers;
         this.initialPeers = fallbackPeers;
+        this.clientPeerId = ''; // Will be set in initializeClientPeerId
+    }
+
+    private async initializeClientPeerId(): Promise<void> {
+        return new Promise((resolve) => {
+            chrome.storage.local.get([this.CLIENT_PEER_ID_KEY], (result) => {
+                const storedClientPeerId = result[this.CLIENT_PEER_ID_KEY];
+                if (storedClientPeerId) {
+                    this.clientPeerId = storedClientPeerId;
+                    console.log('PeerManager: Loaded existing client peer ID:', this.clientPeerId);
+                } else {
+                    this.clientPeerId = `client-${Date.now()}`;
+                    chrome.storage.local.set({ [this.CLIENT_PEER_ID_KEY]: this.clientPeerId }, () => {
+                        console.log('PeerManager: Generated and stored new client peer ID:', this.clientPeerId);
+                    });
+                }
+                resolve();
+            });
+        });
     }
 
     private throttleLog(message: string, interval: number = 60000): boolean {
@@ -69,7 +90,9 @@ export class PeerManager {
         }, 30 * 1000);
     }
 
-    discoverPeers(): void {
+    async discoverPeers(): Promise<void> {
+        await this.initializeClientPeerId(); // Ensure clientPeerId is set before proceeding
+
         this.fetchKnownPeers().then((peers) => {
             const updatedPeers = [...new Set([...(this.currentPeers ?? []), ...peers, ...this.initialPeers])];
             if (this.arraysEqual(updatedPeers, this.currentPeers)) {
@@ -87,6 +110,9 @@ export class PeerManager {
         this.gun.get('knownPeers').map().on((peer: KnownPeer, id: string) => {
             const now = Date.now();
             if (now - lastUpdateTime < throttleInterval) {
+                if (this.throttleLog(`Skipping duplicate update for peer ${id}`)) {
+                    console.log(`PeerManager: Skipping duplicate update for peer ${id}`);
+                }
                 return;
             }
 
@@ -120,23 +146,27 @@ export class PeerManager {
             });
         });
 
-        const clientPeerId = `client-${Date.now()}`;
         setInterval(() => {
             const now = Date.now();
-            this.gun.get('knownPeers').get(clientPeerId).put({
+            this.gun.get('knownPeers').get(this.clientPeerId).put({
                 url: 'client-peer',
                 timestamp: now,
             }, (ack: any) => {
                 if (ack.err) {
                     console.error('PeerManager: Failed to register client peer:', ack.err);
                 } else {
-                    console.log('PeerManager: Registered client peer:', clientPeerId);
+                    console.log('PeerManager: Registered client peer:', this.clientPeerId);
                 }
             });
         }, 5 * 60 * 1000);
     }
 
     private async fetchKnownPeers(): Promise<string[]> {
+        if (this.circuitBreaker.isOpen) {
+            console.log('PeerManager: Circuit breaker open, skipping fetchKnownPeers.');
+            return [];
+        }
+
         const storedState = await this.getStoredState();
         if (storedState.initialized && !storedState.peerConnected && this.fetchAttempts >= this.maxFetchAttempts) {
             if (this.throttleLog('Max fetch attempts reached')) {
@@ -159,45 +189,71 @@ export class PeerManager {
         const maxRetries = 5;
         let attempt = 0;
         this.fetchAttempts++;
+        const baseDelay = 2000;
 
         while (attempt < maxRetries) {
             attempt++;
-            const peers: string[] = await new Promise((resolve) => {
-                const peerList: string[] = [];
-                this.gun.get('knownPeers').map().once((peer: KnownPeer, id: string) => {
-                    console.log('PeerManager: Raw peer data from knownPeers:', id, peer);
-                    if (!peer || !peer.url || !peer.timestamp) {
-                        return;
-                    }
-                    const now = Date.now();
-                    const age = now - peer.timestamp;
-                    if (age <= 10 * 60 * 1000) {
-                        peerList.push(peer.url);
-                        console.log('PeerManager: Found valid peer:', peer.url, 'Age:', age / 1000, 'seconds');
-                    } else {
-                        console.log('PeerManager: Skipping stale peer in fetch:', peer.url, 'Age:', age / 1000, 'seconds');
-                    }
+            try {
+                const peers: string[] = await new Promise((resolve) => {
+                    const peerList: string[] = [];
+                    this.gun.get('knownPeers').map().once((peer: KnownPeer, id: string) => {
+                        console.log('PeerManager: Raw peer data from knownPeers:', id, peer);
+                        if (!peer || !peer.url || !peer.timestamp) {
+                            return;
+                        }
+                        const now = Date.now();
+                        const age = now - peer.timestamp;
+                        if (age <= 10 * 60 * 1000) {
+                            peerList.push(peer.url);
+                            console.log('PeerManager: Found valid peer:', peer.url, 'Age:', age / 1000, 'seconds');
+                        } else {
+                            console.log('PeerManager: Skipping stale peer in fetch:', peer.url, 'Age:', age / 1000, 'seconds');
+                        }
+                    });
+                    setTimeout(() => resolve(peerList), 5000);
                 });
-                setTimeout(() => resolve(peerList), 5000);
-            });
 
-            if (peers.length > 0) {
-                this.fetchAttempts = 0;
-                await this.updateStoredState({ initialized: true, peerConnected: true });
-                return peers;
-            }
+                if (peers.length > 0) {
+                    this.fetchAttempts = 0;
+                    this.circuitBreaker.failureCount = 0; // Reset circuit breaker on success
+                    await this.updateStoredState({ initialized: true, peerConnected: true });
+                    return peers;
+                }
 
-            if (attempt === maxRetries) {
-                console.log('PeerManager: No valid peers found in knownPeers after', attempt, 'attempts');
-                await this.updateStoredState({ initialized: true, peerConnected: false });
-                return [];
-            }
+                if (attempt === maxRetries) {
+                    console.log('PeerManager: No valid peers found in knownPeers after', attempt, 'attempts');
+                    await this.updateStoredState({ initialized: true, peerConnected: false });
+                    return [];
+                }
 
-            if (this.throttleLog('Retry fetchKnownPeers')) {
-                console.log('PeerManager: Retrying fetchKnownPeers, attempt:', attempt);
+                this.circuitBreaker.failureCount++;
+                if (this.circuitBreaker.failureCount >= this.circuitBreaker.maxFailures) {
+                    this.circuitBreaker.isOpen = true;
+                    console.log('PeerManager: Circuit breaker tripped, will reset after 30 seconds.');
+                    setTimeout(() => {
+                        this.circuitBreaker.isOpen = false;
+                        this.circuitBreaker.failureCount = 0;
+                    }, this.circuitBreaker.resetTimeout);
+                }
+
+                const delay = baseDelay * Math.pow(2, attempt); // Exponential backoff
+                if (this.throttleLog('Retry fetchKnownPeers')) {
+                    console.log('PeerManager: Retrying fetchKnownPeers, attempt:', attempt, 'with delay:', delay, 'ms');
+                }
+                await new Promise((resolve) => setTimeout(resolve, delay));
+            } catch (error) {
+                console.error('PeerManager: Error fetching peers:', error);
+                this.circuitBreaker.failureCount++;
+                if (this.circuitBreaker.failureCount >= this.circuitBreaker.maxFailures) {
+                    this.circuitBreaker.isOpen = true;
+                    console.log('PeerManager: Circuit breaker tripped, will reset after 30 seconds.');
+                    setTimeout(() => {
+                        this.circuitBreaker.isOpen = false;
+                        this.circuitBreaker.failureCount = 0;
+                    }, this.circuitBreaker.resetTimeout);
+                }
+                throw error;
             }
-            const delay = 2000 * Math.pow(1.5, attempt);
-            await new Promise((resolve) => setTimeout(resolve, delay));
         }
 
         console.log('PeerManager: No valid peers found in knownPeers after all retries');
@@ -233,8 +289,6 @@ export class PeerManager {
         }
 
         for (const peerUrl of this.currentPeers) {
-            // Note: Gun.js doesn't provide a direct API to check peer status.
-            // We infer status based on the `isConnected` state and recent activity.
             const isPeerConnected = this.isConnected && storedState.peerConnected;
             const lastSeen = storedState.peerConnected ? Date.now() : undefined;
 

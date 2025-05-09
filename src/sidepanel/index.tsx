@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import ReactDOM from 'react-dom/client';
 import { AnnotationUI } from '../components/AnnotationUI';
 import { storage } from '../storage/StorageRepository';
+import ErrorBoundary from '../components/ErrorBoundary'; // Import the ErrorBoundary
 
 function debounce<T extends (...args: any[]) => void>(func: T, wait: number): (...args: Parameters<T>) => void {
     let timeout: NodeJS.Timeout | null = null;
@@ -50,7 +51,7 @@ function App() {
         }
     };
 
-    const debouncedFetchCurrentTabUrl = debounce(fetchCurrentTabUrl, 1000); // Increased to 1000ms for stability
+    const debouncedFetchCurrentTabUrl = debounce(fetchCurrentTabUrl, 2000); // Increased to 2000ms for stability
 
     useEffect(() => {
         chrome.storage.local.get(['storage_initialized'], (result) => {
@@ -126,7 +127,9 @@ function App() {
                     <button onClick={fetchCurrentTabUrl}>Retry</button>
                 </div>
             )}
-            <AnnotationUI url={url} isUrlLoading={isUrlLoading} tabId={tabId} />
+            <ErrorBoundary>
+                <AnnotationUI url={url} isUrlLoading={isUrlLoading} tabId={tabId} />
+            </ErrorBoundary>
         </div>
     );
 }

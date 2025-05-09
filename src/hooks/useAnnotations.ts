@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useStorage } from './useStorage';
 import { Annotation, Comment, Profile } from '@/types';
 import { normalizeUrl } from '../shared/utils/normalizeUrl';
-import { storage as storageInstance } from '../storage/StorageRepository';
+import { storage as storageInstance, StorageRepository } from '../storage/StorageRepository';
 
 interface UseAnnotationsProps {
     url: string;
@@ -21,6 +21,19 @@ interface UseAnnotationsResult {
     handleDeleteComment: (annotationId: string, commentId: string) => Promise<void>;
 }
 
+function debounce<T extends (...args: any[]) => void>(func: T, wait: number): (...args: Parameters<T>) => void {
+    let timeout: NodeJS.Timeout | null = null;
+    return (...args: Parameters<T>) => {
+        if (timeout) {
+            clearTimeout(timeout);
+        }
+        timeout = setTimeout(() => {
+            func(...args);
+            timeout = null;
+        }, wait);
+    };
+}
+
 export const useAnnotations = ({ url, did, tabId }: UseAnnotationsProps): UseAnnotationsResult => {
     const { storage, error: storageError, isLoading: storageLoading } = useStorage();
     const [annotations, setAnnotations] = useState<Annotation[]>([]);
@@ -31,6 +44,8 @@ export const useAnnotations = ({ url, did, tabId }: UseAnnotationsProps): UseAnn
     const abortControllerRef = useRef<AbortController | null>(null);
     const isFetchingRef = useRef<boolean>(false);
     const hasReceivedDataRef = useRef<boolean>(false);
+    const unsubscribeRef = useRef<(() => void) | null>(null);
+    const subscriptionPromiseRef = useRef<Promise<void> | null>(null);
 
     const handleDeleteComment = useCallback(async (annotationId: string, commentId: string) => {
         if (!storage) {
@@ -63,19 +78,50 @@ export const useAnnotations = ({ url, did, tabId }: UseAnnotationsProps): UseAnn
             console.log(`useAnnotations: Ignoring update for stale URL: ${url}`);
             return;
         }
-        const validAnnotations = newAnnotations.filter(
-            a => !a.isDeleted && a.id && a.author && a.content && a.author.startsWith('did:')
-        ).map(a => ({
+
+        const validAnnotations = newAnnotations.filter((a: any) => {
+            const isValid =
+                a &&
+                typeof a === 'object' &&
+                !a.isDeleted &&
+                a.id &&
+                typeof a.id === 'string' &&
+                a.author &&
+                typeof a.author === 'string' &&
+                a.author.startsWith('did:') &&
+                a.content &&
+                typeof a.content === 'string';
+            if (!isValid && process.env.NODE_ENV === 'development') {
+                console.log(`useAnnotations: Skipping invalid annotation:`, a);
+            }
+            return isValid;
+        }).map(a => ({
             ...a,
-            comments: a.comments ? a.comments.filter(
-                c => !c.isDeleted && c.id && c.author && c.content && c.author.startsWith('did:')
-            ) : []
+            comments: a.comments
+                ? a.comments.filter((c: any) => {
+                    const isValidComment =
+                        c &&
+                        typeof c === 'object' &&
+                        !c.isDeleted &&
+                        c.id &&
+                        typeof c.id === 'string' &&
+                        c.author &&
+                        typeof c.author === 'string' &&
+                        c.author.startsWith('did:') &&
+                        c.content &&
+                        typeof c.content === 'string';
+                    if (!isValidComment && process.env.NODE_ENV === 'development') {
+                        console.log(`useAnnotations: Skipping invalid comment:`, c);
+                    }
+                    return isValidComment;
+                })
+                : [],
         }));
+
         setAnnotations(validAnnotations);
         hasReceivedDataRef.current = true;
 
         if (validAnnotations.length === 0) {
-            console.log('useAnnotations: No annotations found, exiting loading state');
             setLoading(false);
             isFetchingRef.current = false;
             return;
@@ -123,27 +169,41 @@ export const useAnnotations = ({ url, did, tabId }: UseAnnotationsProps): UseAnn
         });
     }, [url, storage]);
 
+    const debouncedUpdateAnnotations = useCallback(
+        debounce((newAnnotations: Annotation[]) => {
+            updateAnnotations(newAnnotations);
+        }, 1500), // Increased to 1500ms to reduce update frequency
+        [updateAnnotations]
+    );
+
     const fetchAnnotations = useCallback(async () => {
         if (!url || !storage || isFetchingRef.current) return;
         const normalizedUrl = normalizeUrl(url);
         isFetchingRef.current = true;
         setLoading(true);
+
+        if (unsubscribeRef.current) {
+            if (typeof unsubscribeRef.current === 'function') {
+                unsubscribeRef.current();
+            }
+            unsubscribeRef.current = null;
+        }
+
         try {
-            // Initial fetch
             const initialAnnotations = await storage.getAnnotations(normalizedUrl);
             if (initialAnnotations.length > 0) {
                 updateAnnotations(initialAnnotations);
             }
 
-            // Real-time subscription
-            storage.getAnnotations(normalizedUrl, (newAnnotations) => {
-                updateAnnotations(newAnnotations);
+            const subscriptionPromise = storage.getAnnotations(normalizedUrl, (newAnnotations) => {
+                debouncedUpdateAnnotations(newAnnotations);
+            }).then(unsubscribe => {
+                unsubscribeRef.current = unsubscribe;
             });
+            subscriptionPromiseRef.current = subscriptionPromise;
 
-            // Timeout to ensure loading doesn't persist if no data is received
             setTimeout(() => {
                 if (isFetchingRef.current && !hasReceivedDataRef.current) {
-                    console.log('useAnnotations: No data received after timeout, exiting loading state');
                     setLoading(false);
                     isFetchingRef.current = false;
                 }
@@ -155,7 +215,7 @@ export const useAnnotations = ({ url, did, tabId }: UseAnnotationsProps): UseAnn
             setLoading(false);
             isFetchingRef.current = false;
         }
-    }, [url, storage, updateAnnotations]);
+    }, [url, storage, debouncedUpdateAnnotations]);
 
     useEffect(() => {
         setAnnotations([]);
@@ -165,13 +225,9 @@ export const useAnnotations = ({ url, did, tabId }: UseAnnotationsProps): UseAnn
         isFetchingRef.current = false;
         hasReceivedDataRef.current = false;
 
-        if (!url) {
-            console.log('useAnnotations: No URL provided, skipping fetch');
-            return;
-        }
+        if (!url) return;
 
         if (storageLoading || !storage) {
-            console.log('useAnnotations: Waiting for storage to initialize');
             setLoading(true);
             return;
         }
@@ -180,7 +236,22 @@ export const useAnnotations = ({ url, did, tabId }: UseAnnotationsProps): UseAnn
         fetchAnnotations();
 
         return () => {
-            console.log('useAnnotations: Cleaning up for URL:', currentUrlRef.current);
+            if (subscriptionPromiseRef.current) {
+                subscriptionPromiseRef.current.then(() => {
+                    if (unsubscribeRef.current && typeof unsubscribeRef.current === 'function') {
+                        unsubscribeRef.current();
+                    }
+                    unsubscribeRef.current = null;
+                }).catch(err => {
+                    console.error('useAnnotations: Error during subscription cleanup:', err);
+                });
+            } else {
+                if (unsubscribeRef.current && typeof unsubscribeRef.current === 'function') {
+                    unsubscribeRef.current();
+                }
+                unsubscribeRef.current = null;
+            }
+            subscriptionPromiseRef.current = null;
             storageInstance.cleanupAnnotationsListeners(normalizeUrl(url));
             if (abortControllerRef.current) {
                 abortControllerRef.current.abort();

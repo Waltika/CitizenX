@@ -1,9 +1,10 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useUserProfile } from '../hooks/useUserProfile';
 import { useAnnotations } from '../hooks/useAnnotations';
 import { AnnotationList } from './AnnotationList';
 import { SettingsPanel } from './SettingsPanel';
 import { Toast } from './Toast';
+import { Annotation, Comment } from '@/types';
 import './styles/variables.css';
 import './styles/common.css';
 import './AnnotationUI.css';
@@ -28,9 +29,16 @@ interface AnnotationUIProps {
     tabId?: number;
 }
 
+interface PendingComment {
+    tempId: string;
+    annotationId: string;
+    content: string;
+    timestamp: number;
+}
+
 export const AnnotationUI: React.FC<AnnotationUIProps> = ({ url, isUrlLoading, tabId }) => {
     const { did, profile, loading: profileLoading, error: profileError, authenticate, signOut, exportIdentity, importIdentity, createProfile, updateProfile } = useUserProfile();
-    const { annotations, profiles, error: annotationsError, loading: annotationsLoading, handleSaveAnnotation, handleDeleteAnnotation, handleSaveComment, handleDeleteComment } = useAnnotations({ url, did, tabId });
+    const { annotations: rawAnnotations, profiles, error: annotationsError, loading: annotationsLoading, handleSaveAnnotation, handleDeleteAnnotation, handleSaveComment: originalHandleSaveComment, handleDeleteComment } = useAnnotations({ url, did, tabId });
     const [annotationText, setAnnotationText] = useState('');
     const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
     const [profileHandle, setProfileHandle] = useState('');
@@ -38,6 +46,7 @@ export const AnnotationUI: React.FC<AnnotationUIProps> = ({ url, isUrlLoading, t
     const [toastMessage, setToastMessage] = useState<string>('');
     const [showToast, setShowToast] = useState<boolean>(false);
     const [justImported, setJustImported] = useState(false);
+    const [pendingComments, setPendingComments] = useState<PendingComment[]>([]);
 
     const editorRef = useRef<HTMLDivElement>(null);
     const quillRef = useRef<Quill | null>(null);
@@ -71,20 +80,76 @@ export const AnnotationUI: React.FC<AnnotationUIProps> = ({ url, isUrlLoading, t
     }, []);
 
     useEffect(() => {
-        console.log('AnnotationUI: Profile modal conditions - loading:', profileLoading, 'did:', did, 'profile:', profile);
         if (!profileLoading && did && !justImported) {
             if (!profile || !profile.handle) {
-                console.log('AnnotationUI: Opening Update Profile modal');
                 setIsProfileModalOpen(true);
             }
         }
     }, [profileLoading, did, profile, justImported]);
 
     useEffect(() => {
-        console.log('AnnotationUI: annotationsLoading changed:', annotationsLoading);
-    }, [annotationsLoading]);
+        setPendingComments([]);
+    }, [url]);
 
-    const handleSave = async () => {
+    const deduplicateComments = useCallback((annotations: Annotation[]) => {
+        return annotations.map(annotation => {
+            if (!annotation.comments) return annotation;
+            const seenComments = new Map<string, any>();
+            const uniqueComments = annotation.comments.filter((comment: Comment) => {
+                if (!comment || !comment.id) return false;
+
+                const pendingMatch = pendingComments.find(pending =>
+                    pending.annotationId === annotation.id &&
+                    pending.content === comment.content &&
+                    Math.abs(pending.timestamp - comment.timestamp) < 1000
+                );
+
+                if (pendingMatch) return false;
+
+                if (seenComments.has(comment.id)) return false;
+
+                const key = `${comment.content}-${comment.timestamp}`;
+                if (seenComments.has(key)) return false;
+
+                seenComments.set(comment.id, comment);
+                seenComments.set(key, comment);
+                return true;
+            });
+
+            return { ...annotation, comments: uniqueComments };
+        });
+    }, [pendingComments]);
+
+    const validAnnotations = useMemo(() => {
+        const deduplicated = deduplicateComments(rawAnnotations);
+        return deduplicated
+            .filter((annotation) => annotation.id && annotation.author && annotation.content)
+            .sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+    }, [rawAnnotations, deduplicateComments]);
+
+    const handleSaveComment = useCallback(async (annotationId: string, content: string) => {
+        const timestamp = Date.now();
+        const tempCommentId = `temp-${timestamp}`;
+        const pendingComment: PendingComment = {
+            tempId: tempCommentId,
+            annotationId,
+            content,
+            timestamp,
+        };
+
+        setPendingComments(prev => [...prev, pendingComment]);
+
+        try {
+            await originalHandleSaveComment(annotationId, content);
+            setPendingComments(prev => prev.filter(pc => pc.tempId !== tempCommentId));
+        } catch (error) {
+            console.error('AnnotationUI: Failed to save comment:', error);
+            setPendingComments(prev => prev.filter(pc => pc.tempId !== tempCommentId));
+            throw error;
+        }
+    }, [originalHandleSaveComment]);
+
+    const handleSave = useCallback(async () => {
         if (!annotationText.trim()) return;
 
         let validatedTabId: number | undefined = tabId;
@@ -101,9 +166,7 @@ export const AnnotationUI: React.FC<AnnotationUIProps> = ({ url, isUrlLoading, t
                 });
                 if (tab.url && !tab.url.startsWith('chrome://') && !tab.url.startsWith('chrome-extension://')) {
                     validatedTabId = tab.id;
-                    console.log('AnnotationUI: Valid tabId for screenshot capture:', validatedTabId);
                 } else {
-                    console.warn('AnnotationUI: Cannot capture screenshot, tab URL is restricted:', tab.url);
                     handleShowToast('Cannot capture screenshot for this page');
                     validatedTabId = undefined;
                 }
@@ -113,7 +176,6 @@ export const AnnotationUI: React.FC<AnnotationUIProps> = ({ url, isUrlLoading, t
                 validatedTabId = undefined;
             }
         } else if (!tabId) {
-            console.warn('AnnotationUI: No tabId provided for screenshot capture');
             handleShowToast('No active tab available for screenshot');
         }
 
@@ -127,9 +189,9 @@ export const AnnotationUI: React.FC<AnnotationUIProps> = ({ url, isUrlLoading, t
             console.error('AnnotationUI: Failed to save annotation:', error);
             handleShowToast('Failed to save annotation');
         }
-    };
+    }, [annotationText, tabId, handleSaveAnnotation]);
 
-    const handleProfileSave = async () => {
+    const handleProfileSave = useCallback(async () => {
         if (profileHandle.trim()) {
             if (profile) {
                 await updateProfile(profileHandle, profilePicture);
@@ -140,27 +202,26 @@ export const AnnotationUI: React.FC<AnnotationUIProps> = ({ url, isUrlLoading, t
             setProfileHandle('');
             setProfilePicture(undefined);
         }
-    };
+    }, [profile, profileHandle, profilePicture, updateProfile, createProfile]);
 
-    const handleShowToast = (message: string) => {
-        console.log('AnnotationUI: Showing toast with message:', message);
+    const handleShowToast = useCallback((message: string) => {
         setToastMessage(message);
         setShowToast(true);
-    };
+    }, []);
 
-    const handleCloseSettings = (justImported?: boolean) => {
+    const handleCloseSettings = useCallback((justImported?: boolean) => {
         if (justImported) {
             setJustImported(true);
         }
-    };
+    }, []);
 
-    const handleBeforeImport = () => {
+    const handleBeforeImport = useCallback(() => {
         setJustImported(true);
-    };
+    }, []);
 
-    const handleResetJustImported = () => {
+    const handleResetJustImported = useCallback(() => {
         setJustImported(false);
-    };
+    }, []);
 
     useEffect(() => {
         const setupChromeMessageListener = () => {
@@ -176,7 +237,9 @@ export const AnnotationUI: React.FC<AnnotationUIProps> = ({ url, isUrlLoading, t
             };
 
             chrome.runtime.onMessage.addListener(handleMessage);
-            return () => chrome.runtime.onMessage.removeListener(handleMessage);
+            return () => {
+                chrome.runtime.onMessage.removeListener(handleMessage);
+            };
         };
 
         if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.onMessage) {
@@ -184,17 +247,7 @@ export const AnnotationUI: React.FC<AnnotationUIProps> = ({ url, isUrlLoading, t
         }
     }, [url]);
 
-    const validAnnotations = useMemo(
-        () => annotations
-            .filter((annotation) => annotation.id && annotation.author && annotation.content)
-            .sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0)),
-        [annotations]
-    );
-
     const onDeleteCommentProp = did ? handleDeleteComment : undefined;
-    console.log('AnnotationUI: Passing onDeleteComment to AnnotationList - did:', did, 'annotationsLoading:', annotationsLoading, 'onDeleteComment:', onDeleteCommentProp);
-
-    console.log('AnnotationUI: Rendering with annotations:', validAnnotations, 'profiles:', profiles, 'loading:', annotationsLoading);
 
     return (
         <div className="annotation-ui-container">

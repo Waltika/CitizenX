@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useImperativeHandle, forwardRef, memo } from 'react';
 import { Annotation, Profile } from '@/types';
 import { storage } from '../storage/StorageRepository';
+import Quill from 'quill';
 import './AnnotationList.css';
 
 interface CommentListProps {
@@ -11,33 +12,109 @@ interface CommentListProps {
     onSaveComment?: (annotationId: string, content: string) => Promise<void>;
     onDeleteComment?: (annotationId: string, commentId: string) => Promise<void>;
     commentInput: string;
-    editorRef: (el: HTMLDivElement | null) => void;
+    setCommentInput: (annotationId: string, content: string) => void;
     handleSaveComment: () => Promise<void>;
     onShowToast: (message: string) => void;
 }
 
-export const CommentList: React.FC<CommentListProps> = ({
-                                                            annotation,
-                                                            profiles,
-                                                            isExpanded,
-                                                            onToggleComments,
-                                                            onSaveComment,
-                                                            onDeleteComment,
-                                                            commentInput,
-                                                            editorRef,
-                                                            handleSaveComment,
-                                                            onShowToast,
-                                                        }) => {
+export interface CommentListRef {
+    clearEditor: () => void;
+}
+
+// Use forwardRef to allow the parent to call methods on this component
+export const CommentList = forwardRef<CommentListRef, CommentListProps>(({
+                                                                             annotation,
+                                                                             profiles,
+                                                                             isExpanded,
+                                                                             onToggleComments,
+                                                                             onSaveComment,
+                                                                             onDeleteComment,
+                                                                             commentInput,
+                                                                             setCommentInput,
+                                                                             handleSaveComment,
+                                                                             onShowToast,
+                                                                         }, ref) => {
     const [currentDID, setCurrentDID] = useState<string | null>(null);
+    const editorContainerRef = useRef<HTMLDivElement | null>(null);
+    const quillInstance = useRef<Quill | null>(null);
+    const isMounted = useRef<boolean>(false);
 
     useEffect(() => {
         const fetchDID = async () => {
+            if (!isMounted.current) return; // Skip if unmounted
             const did = await storage.getCurrentDID();
             setCurrentDID(did);
             console.log('CommentList: Fetched currentDID:', did);
         };
         fetchDID();
+
+        return () => {
+            console.log('CommentList: Cleaning up fetchDID effect');
+        };
     }, []);
+
+    // Initialize Quill editor with lazy loading
+    useEffect(() => {
+        isMounted.current = true;
+
+        let wrapper: HTMLDivElement | null = null;
+        if (editorContainerRef.current && !quillInstance.current) {
+            console.log(`CommentList: Initializing Quill editor for annotation ${annotation.id}`);
+            wrapper = document.createElement('div');
+            wrapper.className = 'quill-wrapper';
+            editorContainerRef.current.appendChild(wrapper);
+
+            try {
+                quillInstance.current = new Quill(wrapper, {
+                    theme: 'snow',
+                    modules: {
+                        toolbar: [
+                            ['bold', 'italic', 'underline'],
+                            [{ 'list': 'ordered' }, { 'list': 'bullet' }],
+                            ['link'],
+                        ],
+                    },
+                    placeholder: 'Add a comment...',
+                });
+
+                // Set initial content
+                if (commentInput && isMounted.current) {
+                    quillInstance.current.root.innerHTML = commentInput;
+                }
+
+                quillInstance.current.on('text-change', () => {
+                    if (!isMounted.current) return;
+                    const content = quillInstance.current!.root.innerHTML || '';
+                    setCommentInput(annotation.id, content === '<p><br></p>' ? '' : content);
+                });
+            } catch (error) {
+                console.error(`CommentList: Failed to initialize Quill editor for annotation ${annotation.id}:`, error);
+            }
+        }
+
+        return () => {
+            console.log(`CommentList: Cleaning up Quill editor for annotation ${annotation.id}`);
+            isMounted.current = false;
+            if (editorContainerRef.current && wrapper) {
+                editorContainerRef.current.removeChild(wrapper);
+            }
+            if (quillInstance.current) {
+                quillInstance.current.off('text-change');
+                quillInstance.current = null;
+            }
+        };
+    }, [annotation.id, setCommentInput]);
+
+    // Expose a clearEditor method to the parent via ref
+    useImperativeHandle(ref, () => ({
+        clearEditor: () => {
+            if (quillInstance.current && isMounted.current) {
+                console.log(`CommentList: Clearing Quill editor content for annotation ${annotation.id}`);
+                quillInstance.current.setContents([]);
+                setCommentInput(annotation.id, '');
+            }
+        },
+    }), [annotation.id, setCommentInput]);
 
     const handleDeleteComment = async (commentId: string) => {
         console.log('CommentList: Delete button clicked for comment:', commentId);
@@ -108,21 +185,38 @@ export const CommentList: React.FC<CommentListProps> = ({
                     })}
                 </div>
             )}
+            {/* Always render the Quill editor and Add Comment button at the end */}
             <div className="add-comment-section">
                 <div
-                    ref={editorRef}
+                    ref={editorContainerRef}
                     className="quill-editor"
                 ></div>
+                {onSaveComment && (
+                    <button
+                        onClick={handleSaveComment}
+                        disabled={!commentInput?.trim()}
+                        className="add-comment-button"
+                    >
+                        Add Comment
+                    </button>
+                )}
             </div>
-            {onSaveComment && (
-                <button
-                    onClick={handleSaveComment}
-                    disabled={!commentInput?.trim()}
-                    className="add-comment-button"
-                >
-                    Add Comment
-                </button>
-            )}
         </div>
     );
-};
+});
+
+// Memoize CommentList to prevent re-renders unless props change
+export default memo(CommentList, (prevProps, nextProps) => {
+    return (
+        prevProps.annotation === nextProps.annotation &&
+        prevProps.isExpanded === nextProps.isExpanded &&
+        prevProps.profiles === nextProps.profiles &&
+        prevProps.onToggleComments === nextProps.onToggleComments &&
+        prevProps.onSaveComment === nextProps.onSaveComment &&
+        prevProps.onDeleteComment === nextProps.onDeleteComment &&
+        prevProps.commentInput === nextProps.commentInput &&
+        prevProps.setCommentInput === nextProps.setCommentInput &&
+        prevProps.handleSaveComment === nextProps.handleSaveComment &&
+        prevProps.onShowToast === nextProps.onShowToast
+    );
+});

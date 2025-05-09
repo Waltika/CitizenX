@@ -2,14 +2,12 @@ import { GunRepository } from './GunRepository';
 import { Annotation, Comment, Profile } from '@/types';
 import { normalizeUrl } from '../shared/utils/normalizeUrl';
 
-// Define PeerStatus interface to match the one in GunRepository and PeerManager
 interface PeerStatus {
     url: string;
     connected: boolean;
     lastSeen?: number;
 }
 
-// Singleton instance
 export class StorageRepositorySingleton {
     private static instance: StorageRepository;
 
@@ -38,6 +36,7 @@ export class StorageRepository {
         this.repository = new GunRepository({
             peers: bootstrapPeers,
             radisk: false,
+            // TODO: Add disablePeerPolling option once GunRepository.ts is available
         });
     }
 
@@ -61,23 +60,19 @@ export class StorageRepository {
     async initialize(): Promise<void> {
         const storedState = await this.getStoredState();
         if (storedState.initialized) {
-            console.log('StorageRepository: Already initialized, using stored state');
             this.initialized = true;
             return;
         }
 
         if (this.initializing) {
-            console.log('StorageRepository: Initialization already in progress, waiting...');
             return this.initializationPromise!;
         }
 
-        console.log('StorageRepository: Initializing...');
         this.initializing = true;
         this.initializationPromise = this.repository.initialize().then(() => {
             this.initialized = true;
             this.initializing = false;
             this.updateStoredState({ initialized: true });
-            console.log('StorageRepository: Initialized successfully');
         }).catch((error) => {
             console.warn('StorageRepository: Initialization failed, proceeding with local storage:', error);
             this.initialized = true;
@@ -119,10 +114,11 @@ export class StorageRepository {
         return this.repository.getPeerStatus();
     }
 
-    async getAnnotations(url: string, callback?: (annotations: Annotation[]) => void): Promise<Annotation[]> {
+    async getAnnotations(url: string): Promise<Annotation[]>;
+    async getAnnotations(url: string, callback: (annotations: Annotation[]) => void): Promise<() => void>;
+    async getAnnotations(url: string, callback?: (annotations: Annotation[]) => void): Promise<Annotation[] | (() => void)> {
         await this.initialize();
         const normalizedUrl = normalizeUrl(url);
-        console.log('StorageRepository: Fetching annotations for normalized URL:', normalizedUrl);
         return this.repository.getAnnotations(normalizedUrl, callback);
     }
 
