@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useStorage } from './useStorage';
 import { Annotation, Comment, Profile } from '@/types';
 import { normalizeUrl } from '../shared/utils/normalizeUrl';
-import { storage } from '../storage/StorageRepository';
+import { storage as storageInstance } from '../storage/StorageRepository';
 
 interface UseAnnotationsProps {
     url: string;
@@ -29,8 +29,8 @@ export const useAnnotations = ({ url, did, tabId }: UseAnnotationsProps): UseAnn
     const [loading, setLoading] = useState<boolean>(false);
     const currentUrlRef = useRef<string | null>(null);
     const abortControllerRef = useRef<AbortController | null>(null);
-    const annotationCache = useRef(new Map<string, Annotation>());
     const isFetchingRef = useRef<boolean>(false);
+    const hasReceivedDataRef = useRef<boolean>(false);
 
     const handleDeleteComment = useCallback(async (annotationId: string, commentId: string) => {
         if (!storage) {
@@ -44,19 +44,83 @@ export const useAnnotations = ({ url, did, tabId }: UseAnnotationsProps): UseAnn
         try {
             await storage.deleteComment(normalizeUrl(url), annotationId, commentId);
             if (currentUrlRef.current === normalizeUrl(url)) {
-                if (annotationCache.current.has(annotationId)) {
-                    const updatedAnnotation = {
-                        ...annotationCache.current.get(annotationId)!,
-                        comments: annotationCache.current.get(annotationId)!.comments.filter(c => c.id !== commentId)
-                    };
-                    annotationCache.current.set(annotationId, updatedAnnotation);
-                    setAnnotations([...annotationCache.current.values()]);
-                }
+                setAnnotations(prev =>
+                    prev.map(a =>
+                        a.id === annotationId
+                            ? { ...a, comments: a.comments.filter(c => c.id !== commentId) }
+                            : a
+                    )
+                );
             }
-        } catch (error : any) {
+        } catch (error) {
             console.error('Failed to delete comment:', error);
-            setError('Failed to delete comment: ' + (error.message || 'Unknown error'));
+            setError('Failed to delete comment: ' + (error instanceof Error ? error.message : 'Unknown error'));
         }
+    }, [url, storage]);
+
+    const updateAnnotations = useCallback((newAnnotations: Annotation[]) => {
+        if (currentUrlRef.current !== normalizeUrl(url)) {
+            console.log(`useAnnotations: Ignoring update for stale URL: ${url}`);
+            return;
+        }
+        const validAnnotations = newAnnotations.filter(
+            a => !a.isDeleted && a.id && a.author && a.content && a.author.startsWith('did:')
+        ).map(a => ({
+            ...a,
+            comments: a.comments ? a.comments.filter(
+                c => !c.isDeleted && c.id && c.author && c.content && c.author.startsWith('did:')
+            ) : []
+        }));
+        setAnnotations(validAnnotations);
+        hasReceivedDataRef.current = true;
+
+        if (validAnnotations.length === 0) {
+            console.log('useAnnotations: No annotations found, exiting loading state');
+            setLoading(false);
+            isFetchingRef.current = false;
+            return;
+        }
+
+        const authorDids = new Set<string>();
+        validAnnotations.forEach(annotation => {
+            authorDids.add(annotation.author);
+            (annotation.comments || []).forEach(comment => authorDids.add(comment.author));
+        });
+
+        Promise.all(
+            Array.from(authorDids).map(did =>
+                new Promise<{ did: string; profile: Profile | null }>((resolve) => {
+                    chrome.storage.local.get([`profile_${did}`], (result) => {
+                        if (result[`profile_${did}`]) {
+                            resolve({ did, profile: result[`profile_${did}`] });
+                        } else if (storage) {
+                            storage.getProfile(did).then(profile => {
+                                if (profile) {
+                                    chrome.storage.local.set({ [`profile_${did}`]: profile });
+                                }
+                                resolve({ did, profile });
+                            }).catch(() => resolve({ did, profile: null }));
+                        } else {
+                            resolve({ did, profile: null });
+                        }
+                    });
+                })
+            )
+        ).then(profileResults => {
+            if (currentUrlRef.current !== normalizeUrl(url)) return;
+            const newProfiles = profileResults.reduce((acc: Record<string, Profile>, { did, profile }) => {
+                acc[did] = profile || { did, handle: 'Unknown' };
+                return acc;
+            }, {});
+            setProfiles(prev => ({ ...prev, ...newProfiles }));
+            setLoading(false);
+            isFetchingRef.current = false;
+        }).catch(err => {
+            console.error('useAnnotations: Failed to fetch profiles:', err);
+            setError('Failed to fetch profiles: ' + (err instanceof Error ? err.message : 'Unknown error'));
+            setLoading(false);
+            isFetchingRef.current = false;
+        });
     }, [url, storage]);
 
     const fetchAnnotations = useCallback(async () => {
@@ -65,88 +129,41 @@ export const useAnnotations = ({ url, did, tabId }: UseAnnotationsProps): UseAnn
         isFetchingRef.current = true;
         setLoading(true);
         try {
-            await new Promise<void>((resolve) => {
-                storage.getAnnotations(normalizedUrl, (newAnnotations) => {
-                    if (currentUrlRef.current !== normalizedUrl) {
-                        console.log(`useAnnotations: Ignoring update for stale URL: ${normalizedUrl}`);
-                        return;
-                    }
-                    const validAnnotations = newAnnotations.filter(
-                        a => !a.isDeleted && a.id && a.author && a.content && a.author.startsWith('did:')
-                    ).map(a => ({
-                        ...a,
-                        comments: a.comments ? a.comments.filter(
-                            c => !c.isDeleted && c.id && c.author && c.content && c.author.startsWith('did:')
-                        ) : []
-                    }));
-                    annotationCache.current = new Map(validAnnotations.map(a => [a.id, a]));
-                    setAnnotations([...annotationCache.current.values()]);
+            // Initial fetch
+            const initialAnnotations = await storage.getAnnotations(normalizedUrl);
+            if (initialAnnotations.length > 0) {
+                updateAnnotations(initialAnnotations);
+            }
 
-                    if (validAnnotations.length === 0) {
-                        console.log('useAnnotations: No annotations found, exiting loading state');
-                        setLoading(false);
-                        isFetchingRef.current = false;
-                        resolve();
-                        return;
-                    }
-
-                    const authorDids = new Set<string>();
-                    validAnnotations.forEach(annotation => {
-                        authorDids.add(annotation.author);
-                        (annotation.comments || []).forEach(comment => authorDids.add(comment.author));
-                    });
-
-                    const profilePromises = Array.from(authorDids).map(did =>
-                        storage.getProfile(did).then(profile => ({
-                            did,
-                            profile
-                        }))
-                    );
-
-                    Promise.all(profilePromises).then(profileResults => {
-                        if (currentUrlRef.current !== normalizedUrl) return;
-                        const newProfiles = profileResults.reduce((acc: Record<string, Profile>, { did, profile }) => {
-                            acc[did] = profile || { did, handle: 'Unknown' };
-                            return acc;
-                        }, {});
-                        setProfiles(prev => ({ ...prev, ...newProfiles }));
-                        setLoading(false);
-                        isFetchingRef.current = false;
-                        resolve();
-                    }).catch(err => {
-                        console.error('useAnnotations: Failed to fetch profiles:', err);
-                        setError('Failed to fetch profiles: ' + (err.message || 'Unknown error'));
-                        setLoading(false);
-                        isFetchingRef.current = false;
-                        resolve();
-                    });
-                });
-                // Timeout to ensure callback is not stuck
-                setTimeout(() => {
-                    if (isFetchingRef.current) {
-                        console.warn('useAnnotations: Fetch timeout, exiting loading state');
-                        setLoading(false);
-                        isFetchingRef.current = false;
-                        resolve();
-                    }
-                }, 5000);
+            // Real-time subscription
+            storage.getAnnotations(normalizedUrl, (newAnnotations) => {
+                updateAnnotations(newAnnotations);
             });
-        } catch (err : any) {
+
+            // Timeout to ensure loading doesn't persist if no data is received
+            setTimeout(() => {
+                if (isFetchingRef.current && !hasReceivedDataRef.current) {
+                    console.log('useAnnotations: No data received after timeout, exiting loading state');
+                    setLoading(false);
+                    isFetchingRef.current = false;
+                }
+            }, 3000);
+        } catch (err) {
             if (currentUrlRef.current !== normalizedUrl) return;
             console.error('useAnnotations: Failed to fetch annotations:', err);
-            setError('Failed to fetch annotations: ' + (err.message || 'Unknown error'));
+            setError('Failed to fetch annotations: ' + (err instanceof Error ? err.message : 'Unknown error'));
             setLoading(false);
             isFetchingRef.current = false;
         }
-    }, [url, storage]);
+    }, [url, storage, updateAnnotations]);
 
     useEffect(() => {
         setAnnotations([]);
         setProfiles({});
         setError(null);
         setLoading(false);
-        annotationCache.current.clear();
         isFetchingRef.current = false;
+        hasReceivedDataRef.current = false;
 
         if (!url) {
             console.log('useAnnotations: No URL provided, skipping fetch');
@@ -164,7 +181,7 @@ export const useAnnotations = ({ url, did, tabId }: UseAnnotationsProps): UseAnn
 
         return () => {
             console.log('useAnnotations: Cleaning up for URL:', currentUrlRef.current);
-            storage.cleanupAnnotationsListeners(normalizeUrl(url));
+            storageInstance.cleanupAnnotationsListeners(normalizeUrl(url));
             if (abortControllerRef.current) {
                 abortControllerRef.current.abort();
                 abortControllerRef.current = null;
@@ -172,7 +189,7 @@ export const useAnnotations = ({ url, did, tabId }: UseAnnotationsProps): UseAnn
             currentUrlRef.current = null;
             isFetchingRef.current = false;
         };
-    }, [url, storage, storageLoading]);
+    }, [url, storage, storageLoading, fetchAnnotations]);
 
     const handleSaveAnnotation = useCallback(async (content: string, saveTabId?: number) => {
         if (!did) {
@@ -198,8 +215,7 @@ export const useAnnotations = ({ url, did, tabId }: UseAnnotationsProps): UseAnn
 
         await storage.saveAnnotation(annotation, saveTabId || tabId);
         if (currentUrlRef.current === normalizeUrl(url)) {
-            annotationCache.current.set(annotation.id, annotation);
-            setAnnotations([...annotationCache.current.values()]);
+            setAnnotations(prev => [...prev, annotation]);
         }
     }, [did, url, storage, tabId]);
 
@@ -213,8 +229,7 @@ export const useAnnotations = ({ url, did, tabId }: UseAnnotationsProps): UseAnn
 
         await storage.deleteAnnotation(normalizeUrl(url), annotationId);
         if (currentUrlRef.current === normalizeUrl(url)) {
-            annotationCache.current.delete(annotationId);
-            setAnnotations([...annotationCache.current.values()]);
+            setAnnotations(prev => prev.filter(a => a.id !== annotationId));
         }
     }, [url, storage]);
 
@@ -240,14 +255,13 @@ export const useAnnotations = ({ url, did, tabId }: UseAnnotationsProps): UseAnn
 
         await storage.saveComment(normalizeUrl(url), annotationId, comment);
         if (currentUrlRef.current === normalizeUrl(url)) {
-            if (annotationCache.current.has(annotationId)) {
-                const updatedAnnotation = {
-                    ...annotationCache.current.get(annotationId)!,
-                    comments: [...(annotationCache.current.get(annotationId)!.comments || []), comment]
-                };
-                annotationCache.current.set(annotationId, updatedAnnotation);
-                setAnnotations([...annotationCache.current.values()]);
-            }
+            setAnnotations(prev =>
+                prev.map(a =>
+                    a.id === annotationId
+                        ? { ...a, comments: [...(a.comments || []), comment] }
+                        : a
+                )
+            );
         }
     }, [did, url, storage]);
 

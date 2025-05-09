@@ -203,10 +203,9 @@ export class AnnotationManager {
         const annotationNodes = [this.gun.get(domainShard).get(url)];
         if (subShard) annotationNodes.push(this.gun.get(subShard).get(url));
         const lastProcessed = new Map<string, number>();
-        const debounceInterval = 2000; // Increased to 2 seconds
+        const debounceInterval = 2000;
 
-        const maxRetries = 3;
-        for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        const fetchAnnotations = async (): Promise<Annotation[]> => {
             const loadedAnnotations: Set<string> = new Set();
             let hasNewData = false;
 
@@ -272,9 +271,11 @@ export class AnnotationManager {
                 });
             }
 
-            if (hasNewData || attempt === maxRetries) break;
-            await new Promise((resolve) => setTimeout(resolve, 1000));
-        }
+            return hasNewData ? [...annotations] : [];
+        };
+
+        // Initial fetch
+        const initialAnnotations = await fetchAnnotations();
 
         if (callback) {
             if (!this.annotationCallbacks.has(url)) {
@@ -362,7 +363,7 @@ export class AnnotationManager {
             entry.cleanup = () => annotationNodes.forEach(node => node.map().off());
         }
 
-        return [...annotations];
+        return initialAnnotations;
     }
 
     cleanupAnnotationsListeners(url: string): void {

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useUserProfile } from '../hooks/useUserProfile';
 import { useAnnotations } from '../hooks/useAnnotations';
 import { AnnotationList } from './AnnotationList';
@@ -27,6 +27,8 @@ interface AnnotationUIProps {
     isUrlLoading: boolean;
     tabId?: number;
 }
+
+const MemoizedAnnotationList = React.memo(AnnotationList);
 
 export const AnnotationUI: React.FC<AnnotationUIProps> = ({ url, isUrlLoading, tabId }) => {
     const { did, profile, loading: profileLoading, error: profileError, authenticate, signOut, exportIdentity, importIdentity, createProfile, updateProfile } = useUserProfile();
@@ -184,8 +186,11 @@ export const AnnotationUI: React.FC<AnnotationUIProps> = ({ url, isUrlLoading, t
         }
     }, [url]);
 
-    const validAnnotations = annotations.filter(
-        (annotation) => annotation.id && annotation.author && annotation.content
+    const validAnnotations = useMemo(
+        () => annotations.filter(
+            (annotation) => annotation.id && annotation.author && annotation.content
+        ),
+        [annotations]
     );
 
     const onDeleteCommentProp = did ? handleDeleteComment : undefined;
@@ -232,16 +237,16 @@ export const AnnotationUI: React.FC<AnnotationUIProps> = ({ url, isUrlLoading, t
                     Save
                 </button>
             </div>
-            {(isUrlLoading || annotationsLoading) && annotations.length === 0 ? (
+            {isUrlLoading || annotationsLoading ? (
                 <div className="loading-spinner">
                     <span>Loading annotations...</span>
                 </div>
             ) : (
                 <div className="annotation-list-wrapper">
-                    {validAnnotations.length === 0 && !annotationsLoading && (
+                    {validAnnotations.length === 0 && (
                         <p>No annotations available for this page.</p>
                     )}
-                    <AnnotationList
+                    <MemoizedAnnotationList
                         annotations={validAnnotations}
                         profiles={profiles}
                         onDelete={handleDeleteAnnotation}
