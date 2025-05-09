@@ -1,162 +1,204 @@
-// ProfileManager.ts
 import { Profile } from '@/types';
 
 export class ProfileManager {
     private gun: any;
+    private DID_STORAGE_KEY = 'current_did';
+    private RETRY_ATTEMPTS = 3;
+    private RETRY_DELAY_MS = 2000;
 
     constructor(gun: any) {
         this.gun = gun;
     }
 
     async getCurrentDID(): Promise<string | null> {
-        return new Promise((resolve) => {
-            chrome.storage.local.get(['currentDID'], (result) => {
-                const cachedDID = result.currentDID || null;
-                console.log('ProfileManager: Retrieved cached DID from chrome.storage.local:', cachedDID);
-                if (cachedDID) {
-                    this.gun.get(`user_${cachedDID}`).get('did').once((data: any) => {
-                        if (data && data.did === cachedDID) {
-                            console.log('ProfileManager: Confirmed DID in user-specific namespace:', cachedDID);
-                            resolve(cachedDID);
-                        } else {
-                            console.warn('ProfileManager: DID not found in user-specific namespace, but retaining in chrome.storage.local');
-                            resolve(cachedDID);
-                        }
-                    });
+        let did: string | null = null;
 
-                    setTimeout(() => {
-                        console.warn('ProfileManager: Gun.js did not respond, using cached DID as fallback');
-                        resolve(cachedDID);
-                    }, 1000);
-                } else {
-                    resolve(null);
+        // Try to fetch the DID from the Gun server with retries
+        for (let attempt = 1; attempt <= this.RETRY_ATTEMPTS; attempt++) {
+            try {
+                did = await new Promise<string | null>((resolve) => {
+                    this.gun.get('current_did').once((data: any) => {
+                        resolve(data ? data.value : null);
+                    });
+                });
+
+                if (did !== null) {
+                    console.log('ProfileManager: Retrieved DID from Gun server:', did);
+                    return did;
                 }
+
+                console.log(`ProfileManager: DID not found on server, attempt ${attempt}/${this.RETRY_ATTEMPTS}`);
+                if (attempt < this.RETRY_ATTEMPTS) {
+                    await new Promise(resolve => setTimeout(resolve, this.RETRY_DELAY_MS));
+                }
+            } catch (error) {
+                console.error(`ProfileManager: Error fetching DID from server, attempt ${attempt}/${this.RETRY_ATTEMPTS}:`, error);
+                if (attempt === this.RETRY_ATTEMPTS) break;
+                await new Promise(resolve => setTimeout(resolve, this.RETRY_DELAY_MS));
+            }
+        }
+
+        console.log('ProfileManager: Gun.js did not respond, using cached DID as fallback');
+        // DID not found on server, fall back to chrome.storage.local
+        did = await new Promise<string | null>((resolve) => {
+            chrome.storage.local.get([this.DID_STORAGE_KEY], (result) => {
+                const localDID = result[this.DID_STORAGE_KEY] || null;
+                resolve(localDID);
             });
         });
+
+        if (did !== null) {
+            console.log('ProfileManager: Retrieved cached DID from chrome.storage.local:', did);
+            // Store the DID back to the Gun server
+            console.log('ProfileManager: Storing DID back to server:', did);
+            try {
+                await this.setCurrentDID(did);
+                console.log('ProfileManager: Successfully stored DID back to server');
+            } catch (error) {
+                console.error('ProfileManager: Failed to store DID back to server:', error);
+            }
+        }
+
+        return did;
     }
 
     async setCurrentDID(did: string): Promise<void> {
-        return new Promise((resolve, reject) => {
-            chrome.storage.local.set({ currentDID: did }, () => {
-                console.log('ProfileManager: Set current DID in chrome.storage.local:', did);
-
-                this.gun.get(`user_${did}`).get('did').put({ did }, (ack: any) => {
-                    if (ack.err) {
-                        console.error('ProfileManager: Failed to set user-specific DID:', ack.err);
-                        reject(new Error(ack.err));
-                    } else {
-                        console.log('ProfileManager: Set user-specific DID in Gun.js:', did);
-                        resolve();
-                    }
-                });
+        // Store the DID on the Gun server
+        await new Promise<void>((resolve, reject) => {
+            this.gun.get('current_did').put({ value: did }, (ack: any) => {
+                if (ack.err) {
+                    console.error('ProfileManager: Failed to set DID on server:', ack.err);
+                    reject(new Error(ack.err));
+                } else {
+                    console.log('ProfileManager: Set DID on server:', did);
+                    resolve();
+                }
             });
         });
-    }
 
-    async clearCurrentDID(): Promise<void> {
-        return new Promise((resolve) => {
-            chrome.storage.local.remove('currentDID', () => {
-                console.log('ProfileManager: Cleared current DID from chrome.storage.local');
+        // Also store the DID in chrome.storage.local
+        await new Promise<void>((resolve) => {
+            chrome.storage.local.set({ [this.DID_STORAGE_KEY]: did }, () => {
                 resolve();
             });
         });
     }
 
-    async saveProfile(profile: Profile): Promise<void> {
-        return new Promise((resolve, reject) => {
-            this.gun.get(`user_${profile.did}`).get('profile').put(profile, (ack: any) => {
+    async clearCurrentDID(): Promise<void> {
+        // Clear the DID from the Gun server
+        await new Promise<void>((resolve, reject) => {
+            this.gun.get('current_did').put(null, (ack: any) => {
                 if (ack.err) {
-                    console.error('ProfileManager: Failed to save profile:', ack.err);
+                    console.error('ProfileManager: Failed to clear DID on server:', ack.err);
                     reject(new Error(ack.err));
                 } else {
-                    console.log('ProfileManager: Saved profile:', profile);
+                    console.log('ProfileManager: Cleared DID on server');
                     resolve();
                 }
             });
         });
+
+        // Also clear the DID from chrome.storage.local
+        await new Promise<void>((resolve) => {
+            chrome.storage.local.remove(this.DID_STORAGE_KEY, () => {
+                resolve();
+            });
+        });
     }
 
-    async getProfile(did: string, retries = 5, delay = 500): Promise<Profile | null> {
-        const totalStartTime = Date.now();
-        console.log(`[Timing] Starting getProfile for DID: ${did} at ${new Date().toISOString()}`);
-
-        for (let attempt = 1; attempt <= retries; attempt++) {
-            const attemptStartTime = Date.now();
-            const result = await new Promise<Profile | null>((resolve) => {
-                let nodesProcessed = 0;
-                const totalNodes = 2; // Two queries: 'profiles' and 'user_${did}/profile'
-                let profileFound = false;
-
-                const timeout = setTimeout(() => {
-                    console.log(`Profile fetch attempt ${attempt}/${retries} for DID: ${did} timed out after 2000ms`);
-                    if (!profileFound) {
-                        nodesProcessed = totalNodes;
-                        resolve(null);
-                    }
-                }, 2000); // Increased timeout to 2000ms
-
-                // First query: gun.get('profiles').get(did)
-                this.gun.get('profiles').get(did).once((data: any) => {
-                    if (profileFound) return; // Skip if profile already found
-                    if (data && data.did && data.handle) {
-                        console.log('ProfileManager: Loaded profile from profiles for DID:', did, data);
-                        profileFound = true;
-                        clearTimeout(timeout);
-                        resolve({ did: data.did, handle: data.handle, profilePicture: data.profilePicture });
-                        return;
-                    }
-                    console.log(`ProfileManager: No profile found in profiles for DID on attempt ${attempt}:`, did, data);
-                    nodesProcessed++;
-                    if (nodesProcessed === totalNodes && !profileFound) {
-                        clearTimeout(timeout);
-                        resolve(null);
-                    }
+    async getProfile(did: string): Promise<Profile | null> {
+        const startTime = Date.now();
+        for (let attempt = 1; attempt <= this.RETRY_ATTEMPTS; attempt++) {
+            console.log(`[Timing] Starting getProfile for DID: ${did} at ${new Date().toISOString()}`);
+            try {
+                const profile = await new Promise<Profile | null>((resolve) => {
+                    this.gun.get('profiles').get(did).once((data: any) => {
+                        if (data && data.handle) {
+                            console.log(`ProfileManager: Loaded profile from profiles for DID on attempt ${attempt}: ${did}`, data);
+                            resolve({
+                                did,
+                                handle: data.handle,
+                                profilePicture: data.profilePicture,
+                            });
+                        } else {
+                            this.gun.get(`user_${did}`).get('profile').once((userData: any) => {
+                                if (userData && userData.handle) {
+                                    console.log(`ProfileManager: Loaded profile from user_${did}/profile for DID on attempt ${attempt}: ${did}`, userData);
+                                    resolve({
+                                        did,
+                                        handle: userData.handle,
+                                        profilePicture: userData.profilePicture,
+                                    });
+                                } else {
+                                    console.log(`ProfileManager: No profile found in user_${did}/profile for DID on attempt ${attempt}: ${did}`, userData);
+                                    resolve(null);
+                                }
+                            });
+                        }
+                    });
                 });
 
-                // Second query: gun.get(`user_${did}`).get('profile')
-                this.gun.get(`user_${did}`).get('profile').once((data: any) => {
-                    if (profileFound) return; // Skip if profile already found
-                    if (data && data.did && data.handle) {
-                        console.log('ProfileManager: Loaded profile from user_${did}/profile for DID:', did, data);
-                        profileFound = true;
-                        clearTimeout(timeout);
-                        resolve({ did: data.did, handle: data.handle, profilePicture: data.profilePicture });
-                        return;
-                    }
-                    console.log(`ProfileManager: No profile found in user_${did}/profile for DID on attempt ${attempt}:`, did, data);
-                    nodesProcessed++;
-                    if (nodesProcessed === totalNodes && !profileFound) {
-                        clearTimeout(timeout);
-                        resolve(null);
-                    }
-                });
+                const attemptEndTime = Date.now();
+                console.log(`[Timing] Profile fetch attempt ${attempt}/${this.RETRY_ATTEMPTS} for DID: ${did} took ${attemptEndTime - startTime}ms`);
 
-                // If no data after a short delay, resolve as null
-                setTimeout(() => {
-                    if (nodesProcessed === 0 && !profileFound) {
-                        console.warn('ProfileManager: No profile data emitted for DID on attempt', attempt, did);
-                        clearTimeout(timeout);
-                        resolve(null);
-                    }
-                }, 100);
-            });
+                if (profile) {
+                    const endTime = Date.now();
+                    console.log(`[Timing] Total getProfile time for DID: ${did}: ${endTime - startTime}ms`);
+                    return profile;
+                }
 
-            const attemptEndTime = Date.now();
-            console.log(`[Timing] Profile fetch attempt ${attempt}/${retries} for DID: ${did} took ${attemptEndTime - attemptStartTime}ms`);
-
-            if (result) {
-                const totalEndTime = Date.now();
-                console.log(`[Timing] Total getProfile time for DID: ${did}: ${totalEndTime - totalStartTime}ms`);
-                return result;
+                console.log(`ProfileManager: Retrying getProfile for DID: ${did}, attempt ${attempt}/${this.RETRY_ATTEMPTS}`);
+                if (attempt < this.RETRY_ATTEMPTS) {
+                    await new Promise(resolve => setTimeout(resolve, this.RETRY_DELAY_MS));
+                }
+            } catch (error) {
+                console.error(`ProfileManager: Error fetching profile for DID on attempt ${attempt}/${this.RETRY_ATTEMPTS}: ${did}`, error);
+                if (attempt === this.RETRY_ATTEMPTS) break;
+                await new Promise(resolve => setTimeout(resolve, this.RETRY_DELAY_MS));
             }
-
-            console.log(`ProfileManager: Retrying getProfile for DID: ${did}, attempt ${attempt}/${retries}`);
-            await new Promise((resolve) => setTimeout(resolve, delay));
         }
 
         console.error('ProfileManager: Failed to load profile for DID after retries:', did);
-        const totalEndTime = Date.now();
-        console.log(`[Timing] Total getProfile time for DID: ${did} (failed): ${totalEndTime - totalStartTime}ms`);
-        return null;
+        const endTime = Date.now();
+        console.log(`[Timing] Total getProfile time for DID: ${did}: ${endTime - startTime}ms`);
+        return null; // Return null instead of an incomplete Profile object
+    }
+
+    async saveProfile(profile: Profile): Promise<void> {
+        const did = profile.did;
+        if (!did) {
+            throw new Error('Profile must have a DID');
+        }
+
+        // Store the profile in both the 'profiles' node and the user-specific node
+        await new Promise<void>((resolve, reject) => {
+            this.gun.get('profiles').get(did).put({
+                handle: profile.handle,
+                profilePicture: profile.profilePicture || null,
+            }, (ack: any) => {
+                if (ack.err) {
+                    console.error('ProfileManager: Failed to save profile to profiles node:', ack.err);
+                    reject(new Error(ack.err));
+                } else {
+                    console.log('ProfileManager: Saved profile to profiles node for DID:', did);
+                    resolve();
+                }
+            });
+        });
+
+        await new Promise<void>((resolve, reject) => {
+            this.gun.get(`user_${did}`).get('profile').put({
+                handle: profile.handle,
+                profilePicture: profile.profilePicture || null,
+            }, (ack: any) => {
+                if (ack.err) {
+                    console.error('ProfileManager: Failed to save profile to user-specific node:', ack.err);
+                    reject(new Error(ack.err));
+                } else {
+                    console.log('ProfileManager: Saved profile to user-specific node for DID:', did);
+                    resolve();
+                }
+            });
+        });
     }
 }

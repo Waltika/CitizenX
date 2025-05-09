@@ -51,7 +51,7 @@ function App() {
         }
     };
 
-    const debouncedFetchCurrentTabUrl = debounce(fetchCurrentTabUrl, 2000); // Increased to 2000ms for stability
+    const debouncedFetchCurrentTabUrl = debounce(fetchCurrentTabUrl, 300); // Increased to 2000ms for stability
 
     useEffect(() => {
         chrome.storage.local.get(['storage_initialized'], (result) => {

@@ -36,7 +36,6 @@ export class StorageRepository {
         this.repository = new GunRepository({
             peers: bootstrapPeers,
             radisk: false,
-            // TODO: Add disablePeerPolling option once GunRepository.ts is available
         });
     }
 
