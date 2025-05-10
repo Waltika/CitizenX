@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useImperativeHandle, forwardRef, me
 import { Annotation, Profile } from '@/types';
 import { storage } from '../storage/StorageRepository';
 import Quill from 'quill';
+import DeleteIcon from '../assets/DeleteIcon.svg'; // Import the SVG as a React component
 import './AnnotationList.css';
 
 interface CommentListProps {
@@ -21,7 +22,6 @@ export interface CommentListRef {
     clearEditor: () => void;
 }
 
-// Use forwardRef to allow the parent to call methods on this component
 export const CommentList = forwardRef<CommentListRef, CommentListProps>(({
                                                                              annotation,
                                                                              profiles,
@@ -41,7 +41,7 @@ export const CommentList = forwardRef<CommentListRef, CommentListProps>(({
 
     useEffect(() => {
         const fetchDID = async () => {
-            if (!isMounted.current) return; // Skip if unmounted
+            if (!isMounted.current) return;
             const did = await storage.getCurrentDID();
             setCurrentDID(did);
             console.log('CommentList: Fetched currentDID:', did);
@@ -53,7 +53,6 @@ export const CommentList = forwardRef<CommentListRef, CommentListProps>(({
         };
     }, []);
 
-    // Initialize Quill editor with lazy loading
     useEffect(() => {
         isMounted.current = true;
 
@@ -77,7 +76,6 @@ export const CommentList = forwardRef<CommentListRef, CommentListProps>(({
                     placeholder: 'Add a comment...',
                 });
 
-                // Set initial content
                 if (commentInput && isMounted.current) {
                     quillInstance.current.root.innerHTML = commentInput;
                 }
@@ -105,7 +103,6 @@ export const CommentList = forwardRef<CommentListRef, CommentListProps>(({
         };
     }, [annotation.id, setCommentInput]);
 
-    // Expose a clearEditor method to the parent via ref
     useImperativeHandle(ref, () => ({
         clearEditor: () => {
             if (quillInstance.current && isMounted.current) {
@@ -166,12 +163,7 @@ export const CommentList = forwardRef<CommentListRef, CommentListProps>(({
                                                 className="comment-delete-button"
                                                 title="Delete Comment"
                                             >
-                                                <svg className="delete-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                                    <polyline points="3 6 5 6 21 6"></polyline>
-                                                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-                                                    <line x1="10" y1="11" x2="10" y2="17"></line>
-                                                    <line x1="14" y1="11" x2="14" y2="17"></line>
-                                                </svg>
+                                                <DeleteIcon className="delete-icon" width="16" height="16" />
                                             </button>
                                         )}
                                     </div>
@@ -185,7 +177,6 @@ export const CommentList = forwardRef<CommentListRef, CommentListProps>(({
                     })}
                 </div>
             )}
-            {/* Always render the Quill editor and Add Comment button at the end */}
             <div className="add-comment-section">
                 <div
                     ref={editorContainerRef}
@@ -205,7 +196,6 @@ export const CommentList = forwardRef<CommentListRef, CommentListProps>(({
     );
 });
 
-// Memoize CommentList to prevent re-renders unless props change
 export default memo(CommentList, (prevProps, nextProps) => {
     return (
         prevProps.annotation === nextProps.annotation &&
