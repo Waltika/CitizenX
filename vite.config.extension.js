@@ -123,5 +123,11 @@ export default defineConfig({
         base: './',
         minify: true,
         chunkSizeWarningLimit: 2000,
+    },
+    optimizeDeps: {
+        include: ['gun', 'gun/sea'],
+    },
+    esbuild: {
+        treeShaking: false,
     }
 });

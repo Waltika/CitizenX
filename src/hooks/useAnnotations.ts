@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useStorage } from './useStorage';
+import { useUserProfile } from './useUserProfile';
 import { Annotation, Comment, Profile } from '@/types';
 import { normalizeUrl } from '../shared/utils/normalizeUrl';
 import { storage as storageInstance, StorageRepository } from '../storage/StorageRepository';
@@ -15,6 +16,7 @@ interface UseAnnotationsResult {
     profiles: Record<string, Profile>;
     error: string | null;
     loading: boolean;
+    isInitialized: boolean;
     handleSaveAnnotation: (content: string, tabId?: number, captureScreenshot?: boolean) => Promise<void>;
     handleDeleteAnnotation: (annotationId: string) => Promise<void>;
     handleSaveComment: (annotationId: string, content: string) => Promise<void>;
@@ -42,10 +44,12 @@ function debounce<T extends (...args: any[]) => void>(func: T, wait: number): (.
 
 export const useAnnotations = ({ url, did, tabId: hookTabId }: UseAnnotationsProps): UseAnnotationsResult => {
     const { storage, error: storageError, isLoading: storageLoading } = useStorage();
+    const { privateKey, publicKey, authenticate } = useUserProfile();
     const [annotations, setAnnotations] = useState<Annotation[]>([]);
     const [profiles, setProfiles] = useState<Record<string, Profile>>({});
     const [error, setError] = useState<string | null>(null);
     const [loading, setLoading] = useState<boolean>(false);
+    const [isInitialized, setIsInitialized] = useState<boolean>(false);
     const [pendingAnnotations, setPendingAnnotations] = useState<PendingAnnotation[]>([]);
     const currentUrlRef = useRef<string | null>(null);
     const abortControllerRef = useRef<AbortController | null>(null);
@@ -53,6 +57,12 @@ export const useAnnotations = ({ url, did, tabId: hookTabId }: UseAnnotationsPro
     const hasReceivedDataRef = useRef<boolean>(false);
     const unsubscribeRef = useRef<(() => void) | null>(null);
     const subscriptionPromiseRef = useRef<Promise<void> | null>(null);
+
+    useEffect(() => {
+        if (!storageLoading && storage) {
+            setIsInitialized(true);
+        }
+    }, [storageLoading, storage]);
 
     const handleDeleteComment = useCallback(async (annotationId: string, commentId: string) => {
         console.log('useAnnotations: handleDeleteComment called - annotationId:', annotationId, 'commentId:', commentId);
@@ -75,6 +85,7 @@ export const useAnnotations = ({ url, did, tabId: hookTabId }: UseAnnotationsPro
                     )
                 );
             }
+            console.log('useAnnotations: Successfully deleted comment:', commentId);
         } catch (error) {
             console.error('Failed to delete comment:', error);
             setError('Failed to delete comment: ' + (error instanceof Error ? error.message : 'Unknown error'));
@@ -88,7 +99,6 @@ export const useAnnotations = ({ url, did, tabId: hookTabId }: UseAnnotationsPro
             return;
         }
 
-        // Deduplicate annotations and comments
         const seenAnnotations = new Map<string, Annotation>();
         const deduplicatedAnnotations = newAnnotations.reduce((acc: Annotation[], annotation: any) => {
             const isValid =
@@ -110,10 +120,8 @@ export const useAnnotations = ({ url, did, tabId: hookTabId }: UseAnnotationsPro
                 return acc;
             }
 
-            // Skip duplicates by ID
             if (seenAnnotations.has(annotation.id)) return acc;
 
-            // Deduplicate comments within the annotation
             const comments = annotation.comments || [];
             const seenComments = new Map<string, any>();
             const uniqueComments = comments.filter((c: any) => {
@@ -157,7 +165,7 @@ export const useAnnotations = ({ url, did, tabId: hookTabId }: UseAnnotationsPro
         if (deduplicatedAnnotations.length === 0) {
             setLoading(false);
             isFetchingRef.current = false;
-            setError(null); // Clear any existing error when there are no annotations
+            setError(null);
             return;
         }
 
@@ -226,7 +234,7 @@ export const useAnnotations = ({ url, did, tabId: hookTabId }: UseAnnotationsPro
 
         try {
             const initialAnnotations = await storage.getAnnotations(normalizedUrl);
-            hasReceivedDataRef.current = true; // Set this immediately after the initial fetch, even if empty
+            hasReceivedDataRef.current = true;
             updateAnnotations(initialAnnotations);
 
             const subscriptionPromise = storage.getAnnotations(normalizedUrl, (newAnnotations) => {
@@ -303,16 +311,33 @@ export const useAnnotations = ({ url, did, tabId: hookTabId }: UseAnnotationsPro
         setPendingAnnotations([]);
     }, [url]);
 
-    const handleSaveAnnotation = useCallback(async (content: string, saveTabId?: number, captureScreenshot?: boolean) => {
-        const shouldCaptureScreenshot = captureScreenshot ?? true; // Ensure the flag is always a boolean
+    const handleSaveAnnotation = useCallback(async (content: string, saveTabId?: number, captureScreenshot: boolean = false) => {
+        const shouldCaptureScreenshot = captureScreenshot;
         console.log('useAnnotations: handleSaveAnnotation called - content:', content, 'saveTabId:', saveTabId, 'captureScreenshot:', shouldCaptureScreenshot);
+
         if (!did) {
+            console.error('useAnnotations: User not authenticated - no DID provided');
             throw new Error('User not authenticated');
         }
+        if (!privateKey || !publicKey || typeof privateKey !== 'string' || typeof publicKey !== 'string' || privateKey.length === 0 || publicKey.length === 0) {
+            console.warn('useAnnotations: Invalid or incomplete key pair, attempting to authenticate');
+            try {
+                await authenticate();
+                if (!privateKey || !publicKey || typeof privateKey !== 'string' || typeof publicKey !== 'string' || privateKey.length === 0 || publicKey.length === 0) {
+                    console.error('useAnnotations: Authentication failed to provide valid key pair');
+                    throw new Error('Authentication failed to provide valid key pair');
+                }
+            } catch (err) {
+                console.error('useAnnotations: Authentication failed:', err);
+                throw new Error('Failed to authenticate user');
+            }
+        }
         if (!storage) {
+            console.error('useAnnotations: Storage not initialized');
             throw new Error('Storage not initialized');
         }
         if (!url) {
+            console.error('useAnnotations: No URL provided for annotation');
             throw new Error('No URL provided for annotation');
         }
 
@@ -338,29 +363,66 @@ export const useAnnotations = ({ url, did, tabId: hookTabId }: UseAnnotationsPro
         };
 
         try {
-            await storage.saveAnnotation(annotation, saveTabId, shouldCaptureScreenshot);
+            const keyPair = { pub: publicKey, priv: privateKey };
+            console.log('useAnnotations: Saving annotation with DID:', did, 'keyPair:', {
+                pub: keyPair.pub.slice(0, 4) + '...',
+                priv: keyPair.priv.slice(0, 4) + '...'
+            });
+            console.log('useAnnotations: Annotation object:', annotation);
+            await storage.saveAnnotation(annotation, saveTabId, shouldCaptureScreenshot, did, keyPair);
             setPendingAnnotations(prev => prev.filter(pa => pa.tempId !== tempId));
+            console.log('useAnnotations: Successfully saved annotation:', annotation.id);
         } catch (error) {
             console.error('useAnnotations: Failed to save annotation:', error);
             setPendingAnnotations(prev => prev.filter(pa => pa.tempId !== tempId));
-            throw error;
+            throw new Error(`Failed to save annotation: ${error instanceof Error ? error.message : 'Unknown error'}`);
         }
-    }, [did, url, storage]);
+    }, [did, privateKey, publicKey, authenticate, url, storage]);
 
     const handleDeleteAnnotation = useCallback(async (annotationId: string) => {
         console.log('useAnnotations: handleDeleteAnnotation called - annotationId:', annotationId);
         if (!storage) {
+            console.error('useAnnotations: Storage not initialized');
             throw new Error('Storage not initialized');
         }
         if (!url) {
+            console.error('useAnnotations: No URL provided for deletion');
             throw new Error('No URL provided for deletion');
         }
-
-        await storage.deleteAnnotation(normalizeUrl(url), annotationId);
-        if (currentUrlRef.current === normalizeUrl(url)) {
-            setAnnotations(prev => prev.filter(a => a.id !== annotationId));
+        if (!did) {
+            console.error('useAnnotations: User not authenticated - no DID provided');
+            throw new Error('User not authenticated');
         }
-    }, [url, storage]);
+        if (!privateKey || !publicKey || typeof privateKey !== 'string' || typeof publicKey !== 'string' || privateKey.length === 0 || publicKey.length === 0) {
+            console.warn('useAnnotations: Invalid or incomplete key pair, attempting to authenticate');
+            try {
+                await authenticate();
+                if (!privateKey || !publicKey || typeof privateKey !== 'string' || typeof publicKey !== 'string' || privateKey.length === 0 || publicKey.length === 0) {
+                    console.error('useAnnotations: Authentication failed to provide valid key pair');
+                    throw new Error('Authentication failed to provide valid key pair');
+                }
+            } catch (err) {
+                console.error('useAnnotations: Authentication failed:', err);
+                throw new Error('Failed to authenticate user');
+            }
+        }
+
+        try {
+            const keyPair = { pub: publicKey, priv: privateKey };
+            console.log('useAnnotations: Deleting annotation with DID:', did, 'keyPair:', {
+                pub: keyPair.pub.slice(0, 4) + '...',
+                priv: keyPair.priv.slice(0, 4) + '...'
+            });
+            await storage.deleteAnnotation(normalizeUrl(url), annotationId, did, keyPair);
+            if (currentUrlRef.current === normalizeUrl(url)) {
+                setAnnotations(prev => prev.filter(a => a.id !== annotationId));
+            }
+            console.log('useAnnotations: Successfully deleted annotation:', annotationId);
+        } catch (error) {
+            console.error('useAnnotations: Failed to delete annotation:', error);
+            throw new Error(`Failed to delete annotation: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        }
+    }, [url, storage, did, privateKey, publicKey, authenticate]);
 
     const handleSaveComment = useCallback(async (annotationId: string, content: string) => {
         console.log('useAnnotations: handleSaveComment called - annotationId:', annotationId, 'content:', content);
@@ -400,6 +462,7 @@ export const useAnnotations = ({ url, did, tabId: hookTabId }: UseAnnotationsPro
         profiles,
         error: error || storageError,
         loading: loading || storageLoading,
+        isInitialized,
         handleSaveAnnotation,
         handleDeleteAnnotation,
         handleSaveComment,

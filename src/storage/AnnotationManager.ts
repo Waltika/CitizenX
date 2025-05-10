@@ -1,5 +1,6 @@
-import { Annotation, Comment } from '@/types';
 import { normalizeUrl } from '../shared/utils/normalizeUrl';
+import { Annotation, Comment } from '@/types';
+import SEA from 'gun/sea';
 
 type AnnotationUpdateCallback = (annotations: Annotation[]) => void;
 
@@ -15,6 +16,10 @@ export class AnnotationManager {
 
     constructor(gun: any) {
         this.gun = gun;
+        console.log('AnnotationManager: Initialized with SEA:', !!this.gun.SEA);
+        if (!this.gun.SEA) {
+            console.warn('AnnotationManager: Gun.js SEA module not available, using direct SEA import');
+        }
     }
 
     private getShardKey(url: string): { domainShard: string; subShard?: string } {
@@ -41,6 +46,10 @@ export class AnnotationManager {
             hash = hash & hash;
         }
         return Math.abs(hash);
+    }
+
+    private generateNonce(): string {
+        return Math.random().toString(36).substring(2) + Date.now();
     }
 
     private async getValidTabId(providedTabId?: number): Promise<number | undefined> {
@@ -154,11 +163,52 @@ export class AnnotationManager {
         });
     }
 
-    async saveAnnotation(annotation: Annotation, tabId?: number, captureScreenshot: boolean = true): Promise<void> {
-        console.log('AnnotationManager: Saving annotation with tabId:', tabId, 'captureScreenshot:', captureScreenshot);
+    async saveAnnotation(annotation: Annotation, tabId?: number, captureScreenshot: boolean = true, did?: string, keyPair?: { pub: string; priv: string }): Promise<void> {
+        console.log('AnnotationManager: Saving annotation with tabId:', tabId, 'captureScreenshot:', captureScreenshot, 'did:', did);
         if (!annotation.id || !annotation.url || !annotation.content || !annotation.author) {
             console.error('AnnotationManager: Missing required fields in annotation:', annotation);
             throw new Error('Missing required fields in annotation');
+        }
+        if (!did || !keyPair) {
+            console.error('AnnotationManager: DID and keyPair are required for signing');
+            throw new Error('DID and keyPair are required for signing');
+        }
+        if (!keyPair.pub || !keyPair.priv || typeof keyPair.pub !== 'string' || typeof keyPair.priv !== 'string' || keyPair.pub.length === 0 || keyPair.priv.length === 0) {
+            console.error('AnnotationManager: Invalid or incomplete keyPair:', keyPair);
+            throw new Error('Invalid or incomplete keyPair: Both pub and priv must be non-empty strings');
+        }
+
+        const sea = this.gun.SEA || SEA;
+        if (!sea) {
+            console.error('AnnotationManager: No SEA module available');
+            throw new Error('SEA module not loaded');
+        }
+
+        const nonce = this.generateNonce();
+        const dataToSign = {
+            id: annotation.id,
+            url: annotation.url,
+            content: annotation.content,
+            author: annotation.author,
+            timestamp: annotation.timestamp,
+            nonce
+        };
+
+        let signature: string;
+        try {
+            console.log('AnnotationManager: Attempting to sign annotation with keyPair:', {
+                pub: keyPair.pub.slice(0, 4) + '...',
+                priv: keyPair.priv.slice(0, 4) + '...'
+            });
+            signature = await sea.sign(JSON.stringify(dataToSign), keyPair);
+            if (!signature) {
+                console.error('AnnotationManager: Signature generation returned empty result');
+                throw new Error('Signature generation returned empty result');
+            }
+            console.log('AnnotationManager: Successfully generated signature:', signature.slice(0, 10) + '...');
+        } catch (error) {
+            console.error('AnnotationManager: Failed to sign annotation:', error);
+            throw new Error(`Failed to sign annotation: ${error instanceof Error ? error.message : 'Unknown error'}`);
         }
 
         let screenshot: string | undefined;
@@ -175,6 +225,8 @@ export class AnnotationManager {
 
         const updatedAnnotation: Partial<Annotation> = {
             ...annotationWithoutComments,
+            signature,
+            nonce
         };
         if (screenshot) {
             updatedAnnotation.screenshot = screenshot;
@@ -187,6 +239,7 @@ export class AnnotationManager {
 
         await new Promise<void>((resolve, reject) => {
             targetNode.get(annotation.id).put(updatedAnnotation, (ack: any) => {
+                console.log('AnnotationManager: Gun put response:', ack);
                 if (ack.err) {
                     console.error('AnnotationManager: Failed to save annotation:', ack.err);
                     reject(new Error(ack.err));
@@ -199,9 +252,188 @@ export class AnnotationManager {
 
         if (comments && comments.length > 0) {
             for (const comment of comments) {
-                await this.saveComment(annotation.url, annotation.id, comment);
+                await this.saveComment(annotation.url, annotation.id, comment, did, keyPair);
             }
         }
+    }
+
+    async saveComment(url: string, annotationId: string, comment: Comment, did?: string, keyPair?: { pub: string; priv: string }): Promise<void> {
+        const { domainShard, subShard } = this.getShardKey(url);
+        const targetNode = subShard ? this.gun.get(subShard).get(url) : this.gun.get(domainShard).get(url);
+
+        if (!did || !keyPair) {
+            console.error('AnnotationManager: DID and keyPair are required for signing comment');
+            throw new Error('DID and keyPair are required for signing');
+        }
+
+        const sea = this.gun.SEA || SEA;
+        if (!sea) {
+            console.error('AnnotationManager: No SEA module available');
+            throw new Error('SEA module not loaded');
+        }
+
+        const nonce = this.generateNonce();
+        const dataToSign = {
+            id: comment.id,
+            content: typeof comment.content === 'string' ? comment.content : comment.content.__html,
+            author: comment.author,
+            timestamp: comment.timestamp,
+            annotationId: comment.annotationId,
+            nonce
+        };
+
+        let signature: string;
+        try {
+            console.log('AnnotationManager: Attempting to sign comment with keyPair:', {
+                pub: keyPair.pub.slice(0, 4) + '...',
+                priv: keyPair.priv.slice(0, 4) + '...'
+            });
+            signature = await sea.sign(JSON.stringify(dataToSign), keyPair);
+            if (!signature) {
+                console.error('AnnotationManager: Comment signature generation returned empty result');
+                throw new Error('Comment signature generation returned empty result');
+            }
+            console.log('AnnotationManager: Successfully generated comment signature:', signature.slice(0, 10) + '...');
+        } catch (error) {
+            console.error('AnnotationManager: Failed to sign comment:', error);
+            throw new Error(`Failed to sign comment: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        }
+
+        const signedComment = {
+            ...comment,
+            signature,
+            nonce
+        };
+
+        return new Promise((resolve, reject) => {
+            targetNode.get(annotationId).get('comments').get(comment.id).put(signedComment, (ack: any) => {
+                if (ack.err) {
+                    console.error('AnnotationManager: Failed to save comment:', ack.err);
+                    reject(new Error(ack.err));
+                } else {
+                    console.log('AnnotationManager: Saved comment:', signedComment);
+                    resolve();
+                }
+            });
+        });
+    }
+
+    async deleteAnnotation(url: string, id: string, did: string, keyPair: { pub: string; priv: string }): Promise<void> {
+        const { domainShard, subShard } = this.getShardKey(url);
+        const targetNode = subShard ? this.gun.get(subShard).get(url) : this.gun.get(domainShard).get(url);
+        const key = `${domainShard}/${url}/${id}`;
+
+        const sea = this.gun.SEA || SEA;
+        if (!sea) {
+            console.error('AnnotationManager: No SEA module available');
+            throw new Error('SEA module not loaded');
+        }
+
+        const timestamp = Date.now();
+        const nonce = this.generateNonce();
+        const dataToSign = {
+            key,
+            timestamp,
+            nonce
+        };
+
+        let signature: string;
+        try {
+            console.log('AnnotationManager: Attempting to sign deletion for key:', key);
+            signature = await sea.sign(JSON.stringify(dataToSign), keyPair);
+            if (!signature) {
+                console.error('AnnotationManager: Deletion signature generation returned empty result');
+                throw new Error('Deletion signature generation returned empty result');
+            }
+            console.log('AnnotationManager: Successfully generated deletion signature:', signature.slice(0, 10) + '...');
+        } catch (error) {
+            console.error('AnnotationManager: Failed to sign deletion:', error);
+            throw new Error(`Failed to sign deletion: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        }
+
+        await new Promise<void>((resolve, reject) => {
+            this.gun.get('deletions').get(key).put({
+                author: did,
+                signature,
+                timestamp,
+                nonce
+            }, (ack: any) => {
+                if (ack.err) {
+                    console.error('AnnotationManager: Failed to store deletion signature for key:', key, ack.err);
+                    reject(new Error(ack.err));
+                } else {
+                    console.log('AnnotationManager: Stored deletion signature for key:', key);
+                    targetNode.get(id).put({ isDeleted: true }, (ack: any) => {
+                        if (ack.err) {
+                            console.error('AnnotationManager: Failed to mark annotation as deleted:', ack.err);
+                            reject(new Error(ack.err));
+                        } else {
+                            console.log('AnnotationManager: Successfully marked annotation as deleted for key:', key);
+                            resolve();
+                        }
+                    });
+                }
+            });
+        });
+    }
+
+    async deleteComment(url: string, annotationId: string, commentId: string, did: string, keyPair: { pub: string; priv: string }): Promise<void> {
+        const { domainShard, subShard } = this.getShardKey(url);
+        const targetNode = subShard ? this.gun.get(subShard).get(url) : this.gun.get(domainShard).get(url);
+        const key = `${domainShard}/${url}/${annotationId}/comments/${commentId}`;
+
+        const sea = this.gun.SEA || SEA;
+        if (!sea) {
+            console.error('AnnotationManager: No SEA module available');
+            throw new Error('SEA module not loaded');
+        }
+
+        const timestamp = Date.now();
+        const nonce = this.generateNonce();
+        const dataToSign = {
+            key,
+            timestamp,
+            nonce
+        };
+
+        let signature: string;
+        try {
+            console.log('AnnotationManager: Attempting to sign comment deletion for key:', key);
+            signature = await sea.sign(JSON.stringify(dataToSign), keyPair);
+            if (!signature) {
+                console.error('AnnotationManager: Comment deletion signature generation returned empty result');
+                throw new Error('Comment deletion signature generation returned empty result');
+            }
+            console.log('AnnotationManager: Successfully generated comment deletion signature:', signature.slice(0, 10) + '...');
+        } catch (error) {
+            console.error('AnnotationManager: Failed to sign comment deletion:', error);
+            throw new Error(`Failed to sign comment deletion: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        }
+
+        await new Promise<void>((resolve, reject) => {
+            this.gun.get('deletions').get(key).put({
+                author: did,
+                signature,
+                timestamp,
+                nonce
+            }, (ack: any) => {
+                if (ack.err) {
+                    console.error('AnnotationManager: Failed to store comment deletion signature for key:', key, ack.err);
+                    reject(new Error(ack.err));
+                } else {
+                    console.log('AnnotationManager: Stored comment deletion signature for key:', key);
+                    targetNode.get(annotationId).get('comments').get(commentId).put({ isDeleted: true }, (ack: any) => {
+                        if (ack.err) {
+                            console.error('AnnotationManager: Failed to mark comment as deleted:', ack.err);
+                            reject(new Error(ack.err));
+                        } else {
+                            console.log('AnnotationManager: Successfully marked comment as deleted for key:', key);
+                            resolve();
+                        }
+                    });
+                }
+            });
+        });
     }
 
     async getAnnotations(url: string, callback?: AnnotationUpdateCallback): Promise<Annotation[]> {
@@ -247,7 +479,9 @@ export class AnnotationManager {
                                         author: comment.author,
                                         timestamp: comment.timestamp || Date.now(),
                                         isDeleted: comment.isDeleted || false,
-                                        annotationId: comment.annotationId || annotation.id
+                                        annotationId: comment.annotationId || annotation.id,
+                                        signature: comment.signature,
+                                        nonce: comment.nonce
                                     };
                                     if (!commentData.isDeleted) commentList.push(commentData);
                                 }
@@ -265,6 +499,9 @@ export class AnnotationManager {
                             isDeleted: annotation.isDeleted || false,
                             text: annotation.text || '',
                             screenshot: annotation.screenshot,
+                            signature: annotation.signature || '',
+                            nonce: annotation.nonce,
+                            metadata: annotation.metadata
                         };
 
                         if (!annotationData.isDeleted) {
@@ -281,7 +518,6 @@ export class AnnotationManager {
             return hasNewData ? [...annotations] : [];
         };
 
-        // Initial fetch
         const initialAnnotations = await fetchAnnotations();
 
         if (callback) {
@@ -294,12 +530,24 @@ export class AnnotationManager {
             const onUpdate = async (annotation: any, key: string) => {
                 const now = Date.now();
                 const timestamp = new Date().toISOString();
-                if (!key || typeof key !== 'string' || key.includes('Marker') || !annotation || !annotation.id) {
-                    console.warn(`[${timestamp}] Skipping invalid update or marker:`, { annotation, key });
+                if (
+                    !key ||
+                    typeof key !== 'string' ||
+                    key.includes('Marker') ||
+                    !annotation ||
+                    !annotation.id ||
+                    typeof annotation.id !== 'string' ||
+                    !annotation.author ||
+                    typeof annotation.author !== 'string' ||
+                    !annotation.author.startsWith('did:') ||
+                    !annotation.content ||
+                    typeof annotation.content !== 'string'
+                ) {
+                    console.warn(`[${timestamp}] Skipping invalid update or marker for URL: ${url}, Key: ${key}`, { annotation });
                     return;
                 }
                 if (lastProcessed.has(key) && now - lastProcessed.get(key)! < debounceInterval) {
-                    console.log(`[${timestamp}] Skipping duplicate update for key: ${key}`);
+                    console.log(`[${timestamp}] Skipping duplicate update for URL: ${url}, Key: ${key}`);
                     return;
                 }
                 lastProcessed.set(key, now);
@@ -335,7 +583,9 @@ export class AnnotationManager {
                                     author: comment.author,
                                     timestamp: comment.timestamp || Date.now(),
                                     isDeleted: comment.isDeleted || false,
-                                    annotationId: ''
+                                    annotationId: comment.annotationId || '',
+                                    signature: comment.signature,
+                                    nonce: comment.nonce
                                 };
                                 if (!commentData.isDeleted) commentList.push(commentData);
                             }
@@ -358,6 +608,9 @@ export class AnnotationManager {
                             isDeleted: annotation.isDeleted || false,
                             text: annotation.text || '',
                             screenshot: annotation.screenshot,
+                            signature: annotation.signature || '',
+                            nonce: annotation.nonce,
+                            metadata: annotation.metadata
                         });
                         annotations.splice(0, annotations.length, ...updatedAnnotations);
                     }
@@ -366,7 +619,7 @@ export class AnnotationManager {
                 entry.callbacks.forEach(cb => cb([...annotations]));
             };
 
-            annotationNodes.forEach(node => node.map().on(onUpdate, { change: true }));
+            annotationNodes.forEach(node => node.map().on(onUpdate, { change: true, filter: { isDeleted: false } }));
             entry.cleanup = () => annotationNodes.forEach(node => node.map().off());
         }
 
@@ -379,64 +632,6 @@ export class AnnotationManager {
             entry.cleanup();
             this.annotationCallbacks.delete(url);
             console.log('AnnotationManager: Cleaned up listeners for URL:', url);
-        }
-    }
-
-    async deleteAnnotation(url: string, id: string): Promise<void> {
-        const { domainShard, subShard } = this.getShardKey(url);
-        const targetNode = subShard ? this.gun.get(subShard).get(url) : this.gun.get(domainShard).get(url);
-
-        return new Promise((resolve, reject) => {
-            const timestamp = new Date().toISOString();
-            console.log(`[${timestamp}] Starting deletion for URL: ${url}, ID: ${id}`);
-
-            targetNode.get(id).put({ isDeleted: true }, (ack: any) => {
-                const markTimestamp = new Date().toISOString();
-                if (ack.err) {
-                    console.error(`[${markTimestamp}] Failed to mark annotation as deleted for URL: ${url}, ID: ${id}, Error:`, ack.err);
-                    reject(new Error(ack.err));
-                } else {
-                    console.log(`[${markTimestamp}] Successfully marked annotation as deleted for URL: ${url}, ID: ${id}`);
-                    resolve();
-                }
-            });
-        });
-    }
-
-    async saveComment(url: string, annotationId: string, comment: Comment): Promise<void> {
-        const { domainShard, subShard } = this.getShardKey(url);
-        const targetNode = subShard ? this.gun.get(subShard).get(url) : this.gun.get(domainShard).get(url);
-
-        return new Promise((resolve, reject) => {
-            targetNode.get(annotationId).get('comments').get(comment.id).put(comment, (ack: any) => {
-                if (ack.err) {
-                    console.error('AnnotationManager: Failed to save comment:', ack.err);
-                    reject(new Error(ack.err));
-                } else {
-                    console.log('AnnotationManager: Saved comment:', comment);
-                    resolve();
-                }
-            });
-        });
-    }
-
-    async deleteComment(url: string, annotationId: string, commentId: string, userDid: string): Promise<void> {
-        const response = await fetch(`${this.serverUrl}/api/comments`, {
-            method: 'DELETE',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-User-DID': userDid,
-            },
-            body: JSON.stringify({ url, annotationId, commentId }),
-        });
-
-        if (!response.ok) {
-            throw new Error(`Failed to delete comment: ${response.statusText}`);
-        }
-
-        const result = await response.json();
-        if (!result.success) {
-            throw new Error('Failed to delete comment');
         }
     }
 }

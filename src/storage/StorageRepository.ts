@@ -121,17 +121,20 @@ export class StorageRepository {
         return this.repository.getAnnotations(normalizedUrl, callback);
     }
 
-    async saveAnnotation(annotation: Annotation, tabId?: number, captureScreenshot: boolean = true): Promise<void> {
+    async saveAnnotation(annotation: Annotation, tabId?: number, captureScreenshot: boolean = true, did?: string, keyPair?: {
+        pub: string;
+        priv: any;
+    }): Promise<void> {
         console.log('StorageRepository: saveAnnotation called with tabId:', tabId, 'captureScreenshot:', captureScreenshot);
         await this.initialize();
         const normalizedAnnotation = { ...annotation, url: normalizeUrl(annotation.url) };
-        await this.repository.saveAnnotation(normalizedAnnotation, tabId, captureScreenshot);
+        await this.repository.saveAnnotation(normalizedAnnotation, tabId, captureScreenshot, did, keyPair);
     }
 
-    async deleteAnnotation(url: string, id: string): Promise<void> {
+    async deleteAnnotation(url: string, id: string, did: string, keyPair: { pub: string; priv: string }): Promise<void> {
         await this.initialize();
         const normalizedUrl = normalizeUrl(url);
-        await this.repository.deleteAnnotation(normalizedUrl, id);
+        await this.repository.deleteAnnotation(normalizedUrl, id, did, keyPair);
     }
 
     async saveComment(url: string, annotationId: string, comment: Comment): Promise<void> {

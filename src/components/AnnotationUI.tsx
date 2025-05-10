@@ -16,11 +16,12 @@ interface AnnotationUIProps {
     url: string;
     isUrlLoading: boolean;
     tabId?: number;
+    storageInitialized: boolean;
 }
 
-export const AnnotationUI: React.FC<AnnotationUIProps> = ({ url, isUrlLoading, tabId }) => {
+export const AnnotationUI: React.FC<AnnotationUIProps> = ({ url, isUrlLoading, tabId, storageInitialized }) => {
     const { did, profile, loading: profileLoading, error: profileError, authenticate, signOut, exportIdentity, importIdentity, createProfile, updateProfile } = useUserProfile();
-    const { annotations: rawAnnotations, profiles, error: annotationsError, loading: annotationsLoading, handleSaveAnnotation, handleDeleteAnnotation, handleSaveComment: originalHandleSaveComment, handleDeleteComment } = useAnnotations({ url, did, tabId });
+    const { annotations: rawAnnotations, profiles, error: annotationsError, loading: annotationsLoading, isInitialized, handleSaveAnnotation, handleDeleteAnnotation, handleSaveComment: originalHandleSaveComment, handleDeleteComment } = useAnnotations({ url, did, tabId });
     const [toastMessage, setToastMessage] = useState<string>('');
     const [showToast, setShowToast] = useState<boolean>(false);
 
@@ -32,8 +33,16 @@ export const AnnotationUI: React.FC<AnnotationUIProps> = ({ url, isUrlLoading, t
         setShowToast(true);
     }, []);
 
-    const onDeleteCommentProp = did ? handleDeleteComment : undefined;
-    const onSaveCommentProp = did ? (annotationId: string, content: string) => handleSaveComment(originalHandleSaveComment, annotationId, content) : undefined;
+    console.log('AnnotationUI: Passing onDeleteCommentProp:', typeof handleDeleteComment, 'onSaveCommentProp:', typeof handleSaveComment);
+
+    if (isUrlLoading || !storageInitialized || !isInitialized) {
+        console.log('AnnotationUI: Delaying render - isUrlLoading:', isUrlLoading, 'storageInitialized:', storageInitialized, 'isInitialized:', isInitialized);
+        return <div>Loading...</div>;
+    }
+
+    if (profileError || annotationsError) {
+        return <div>Error: {profileError || annotationsError}</div>;
+    }
 
     return (
         <div className="annotation-ui-container">
@@ -62,8 +71,8 @@ export const AnnotationUI: React.FC<AnnotationUIProps> = ({ url, isUrlLoading, t
                 annotationsLoading={annotationsLoading}
                 isUrlLoading={isUrlLoading}
                 onDelete={handleDeleteAnnotation}
-                onDeleteComment={onDeleteCommentProp}
-                onSaveComment={onSaveCommentProp}
+                onDeleteComment={handleDeleteComment}
+                onSaveComment={(annotationId, content) => handleSaveComment(originalHandleSaveComment, annotationId, content)}
                 currentUrl={url}
                 onShowToast={handleShowToast}
             />

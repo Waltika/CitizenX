@@ -5,8 +5,8 @@ import { shortenUrl } from '../utils/shortenUrl';
 import { stripHtml } from '../utils/stripHtml';
 import { ShareModal } from './ShareModal';
 import { CommentList, CommentListRef } from './CommentList';
-import DeleteIcon from '../assets/DeleteIcon.svg'; // Import the SVG as a React component
-import ShareIcon from '../assets/ShareIcon.svg'; // Import the SVG as a React component
+import DeleteIcon from '../assets/DeleteIcon.svg';
+import ShareIcon from '../assets/ShareIcon.svg';
 import './AnnotationList.css';
 
 interface AnnotationListProps {
@@ -37,7 +37,9 @@ export const AnnotationList: React.FC<AnnotationListProps> = ({
                                                                   annotations,
                                                                   profiles,
                                                                   onDelete,
-                                                                  onDeleteComment,
+                                                                  onDeleteComment = async (annotationId, commentId) => {
+                                                                      console.log('AnnotationList: Using default no-op onDeleteComment for annotationId:', annotationId, 'commentId:', commentId);
+                                                                  },
                                                                   onSaveComment,
                                                                   currentUrl,
                                                                   onShowToast,
@@ -49,7 +51,7 @@ export const AnnotationList: React.FC<AnnotationListProps> = ({
     const [expandedComments, setExpandedComments] = useState<Record<string, boolean>>({});
     const commentListRefs = useRef<Record<string, React.RefObject<CommentListRef>>>({});
 
-    console.log('AnnotationList: Received onDeleteComment prop:', onDeleteComment);
+    console.log('AnnotationList: Received onDeleteComment prop:', typeof onDeleteComment);
 
     useEffect(() => {
         const newExpandedState = annotations.reduce((acc, annotation) => {

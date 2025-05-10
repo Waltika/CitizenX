@@ -12,7 +12,12 @@ interface PeerStatus {
 export class PeerManager {
     private gun: any;
     private currentPeers: string[] | undefined;
-    private initialPeers: string[];
+    private initialPeers: string[] = [
+        'https://citizen-x-bootsrap.onrender.com/gun',
+        'https://gun-manhattan.herokuapp.com/gun',
+        'https://peer1.gun.eco/gun',
+        'https://peer2.gun.eco/gun'
+    ];
     private isConnected: boolean = false;
     private lastLogTime: Map<string, number> = new Map();
     private fetchAttempts: number = 0;
@@ -20,13 +25,14 @@ export class PeerManager {
     private STORAGE_KEY = 'gun_repository_state';
     private CLIENT_PEER_ID_KEY = 'client_peer_id';
     private clientPeerId: string;
-    private circuitBreaker = { isOpen: false, failureCount: 0, maxFailures: 3, resetTimeout: 30000 }; // 30 seconds
+    private circuitBreaker = { isOpen: false, failureCount: 0, maxFailures: 3, resetTimeout: 60000 }; // 60 seconds
 
     constructor(gun: any, initialPeers: string[], fallbackPeers: string[]) {
         this.gun = gun;
-        this.currentPeers = initialPeers;
-        this.initialPeers = fallbackPeers;
-        this.clientPeerId = ''; // Will be set in initializeClientPeerId
+        this.currentPeers = initialPeers.length > 0 ? initialPeers : this.initialPeers;
+        this.initialPeers = fallbackPeers.length > 0 ? fallbackPeers : this.initialPeers;
+        this.clientPeerId = '';
+        this.initializeClientPeerId();
     }
 
     private async initializeClientPeerId(): Promise<void> {
@@ -82,25 +88,25 @@ export class PeerManager {
                 const updatedPeers = [...new Set([...(this.currentPeers ?? []), ...this.initialPeers])];
                 if (!this.arraysEqual(updatedPeers, this.currentPeers)) {
                     this.currentPeers = updatedPeers;
-                    console.log('PeerManager: Reverted to initial peers:', this.currentPeers);
+                    console.log('PeerManager: Updated to peer list:', this.currentPeers);
                     this.gun.opt({ peers: this.currentPeers });
                 }
-                this.discoverPeers();
+                this.handleConnectionLost();
             }
         }, 30 * 1000);
     }
 
     async discoverPeers(): Promise<void> {
-        await this.initializeClientPeerId(); // Ensure clientPeerId is set before proceeding
+        await this.initializeClientPeerId();
 
         this.fetchKnownPeers().then((peers) => {
             const updatedPeers = [...new Set([...(this.currentPeers ?? []), ...peers, ...this.initialPeers])];
             if (this.arraysEqual(updatedPeers, this.currentPeers)) {
-                console.log('PeerManager: Initial peer list unchanged:', this.currentPeers);
+                console.log('PeerManager: Peer list unchanged:', this.currentPeers);
                 return;
             }
             this.currentPeers = updatedPeers;
-            console.log('PeerManager: Discovered initial peers:', this.currentPeers);
+            console.log('PeerManager: Discovered peers:', this.currentPeers);
             this.gun.opt({ peers: this.currentPeers });
         });
 
@@ -113,6 +119,11 @@ export class PeerManager {
                 if (this.throttleLog(`Skipping duplicate update for peer ${id}`)) {
                     console.log(`PeerManager: Skipping duplicate update for peer ${id}`);
                 }
+                return;
+            }
+
+            if (id === this.clientPeerId) {
+                console.log('PeerManager: Skipping own client peer ID:', id);
                 return;
             }
 
@@ -164,15 +175,15 @@ export class PeerManager {
     private async fetchKnownPeers(): Promise<string[]> {
         if (this.circuitBreaker.isOpen) {
             console.log('PeerManager: Circuit breaker open, skipping fetchKnownPeers.');
-            return [];
+            return this.currentPeers ?? this.initialPeers;
         }
 
         const storedState = await this.getStoredState();
         if (storedState.initialized && !storedState.peerConnected && this.fetchAttempts >= this.maxFetchAttempts) {
             if (this.throttleLog('Max fetch attempts reached')) {
-                console.warn('PeerManager: Max fetch attempts reached, stopping retries');
+                console.warn('PeerManager: Max fetch attempts reached, returning current peers');
             }
-            return [];
+            return this.currentPeers ?? this.initialPeers;
         }
 
         if (!this.isConnected) {
@@ -197,6 +208,10 @@ export class PeerManager {
                 const peers: string[] = await new Promise((resolve) => {
                     const peerList: string[] = [];
                     this.gun.get('knownPeers').map().once((peer: KnownPeer, id: string) => {
+                        if (id === this.clientPeerId) {
+                            console.log('PeerManager: Skipping own client peer ID in fetch:', id);
+                            return;
+                        }
                         console.log('PeerManager: Raw peer data from knownPeers:', id, peer);
                         if (!peer || !peer.url || !peer.timestamp) {
                             return;
@@ -215,28 +230,28 @@ export class PeerManager {
 
                 if (peers.length > 0) {
                     this.fetchAttempts = 0;
-                    this.circuitBreaker.failureCount = 0; // Reset circuit breaker on success
+                    this.circuitBreaker.failureCount = 0;
                     await this.updateStoredState({ initialized: true, peerConnected: true });
                     return peers;
                 }
 
                 if (attempt === maxRetries) {
-                    console.log('PeerManager: No valid peers found in knownPeers after', attempt, 'attempts');
+                    console.log('PeerManager: No valid peers found after', attempt, 'attempts');
                     await this.updateStoredState({ initialized: true, peerConnected: false });
-                    return [];
+                    return this.currentPeers ?? this.initialPeers;
                 }
 
                 this.circuitBreaker.failureCount++;
                 if (this.circuitBreaker.failureCount >= this.circuitBreaker.maxFailures) {
                     this.circuitBreaker.isOpen = true;
-                    console.log('PeerManager: Circuit breaker tripped, will reset after 30 seconds.');
+                    console.log('PeerManager: Circuit breaker tripped, will reset after 60 seconds.');
                     setTimeout(() => {
                         this.circuitBreaker.isOpen = false;
                         this.circuitBreaker.failureCount = 0;
                     }, this.circuitBreaker.resetTimeout);
                 }
 
-                const delay = baseDelay * Math.pow(2, attempt); // Exponential backoff
+                const delay = baseDelay * Math.pow(2, attempt);
                 if (this.throttleLog('Retry fetchKnownPeers')) {
                     console.log('PeerManager: Retrying fetchKnownPeers, attempt:', attempt, 'with delay:', delay, 'ms');
                 }
@@ -246,19 +261,21 @@ export class PeerManager {
                 this.circuitBreaker.failureCount++;
                 if (this.circuitBreaker.failureCount >= this.circuitBreaker.maxFailures) {
                     this.circuitBreaker.isOpen = true;
-                    console.log('PeerManager: Circuit breaker tripped, will reset after 30 seconds.');
+                    console.log('PeerManager: Circuit breaker tripped, will reset after 60 seconds.');
                     setTimeout(() => {
                         this.circuitBreaker.isOpen = false;
                         this.circuitBreaker.failureCount = 0;
                     }, this.circuitBreaker.resetTimeout);
                 }
-                throw error;
+                if (attempt === maxRetries) {
+                    throw error;
+                }
             }
         }
 
-        console.log('PeerManager: No valid peers found in knownPeers after all retries');
+        console.log('PeerManager: No valid peers found after all retries');
         await this.updateStoredState({ initialized: true, peerConnected: false });
-        return [];
+        return this.currentPeers ?? this.initialPeers;
     }
 
     private arraysEqual(arr1: string[] | undefined, arr2: string[] | undefined): boolean {
@@ -276,7 +293,7 @@ export class PeerManager {
         }
         this.currentPeers = updatedPeers;
         this.gun.opt({ peers: this.currentPeers });
-        console.log('Updated peers:', this.currentPeers);
+        console.log('PeerManager: Updated peers:', this.currentPeers);
     }
 
     async getPeerStatus(): Promise<PeerStatus[]> {
@@ -306,5 +323,12 @@ export class PeerManager {
 
     setConnected(connected: boolean): void {
         this.isConnected = connected;
+        console.log('PeerManager: Connection status updated:', connected);
+    }
+
+    handleConnectionLost(): void {
+        console.log('PeerManager: Handling connection loss, initiating reconnection...');
+        this.setConnected(false);
+        this.discoverPeers();
     }
 }

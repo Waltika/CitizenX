@@ -13,7 +13,9 @@ export interface Annotation {
     timestamp: number;
     comments: Comment[];
     isDeleted: boolean;
-    screenshot?: string; // Base64-encoded screenshot
+    screenshot?: string;
+    signature?: string;
+    nonce?: string; // Added for SEA signing
     metadata?: {
         title: string;
         favicon: string | null;
@@ -33,4 +35,10 @@ export interface Comment {
     author: string;
     timestamp: number;
     isDeleted: boolean;
+    signature?: string;
+    nonce?: string; // Added for SEA signing
+}
+
+export interface TrustedHTML {
+    __html: string;
 }

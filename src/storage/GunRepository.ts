@@ -2,6 +2,7 @@ import Gun from 'gun';
 import 'gun/lib/webrtc';
 import 'gun/lib/radix';
 import 'gun/lib/radisk';
+import SEA from 'gun/sea';
 import { PeerManager } from './PeerManager';
 import { AnnotationManager } from './AnnotationManager';
 import { CommentManager } from './CommentManager';
@@ -31,6 +32,9 @@ export class GunRepository {
     private initializationResolve: ((value?: void | PromiseLike<void>) => void) | null = null;
     private initialPeers: string[] = [
         'https://citizen-x-bootsrap.onrender.com/gun',
+        'https://gun-manhattan.herokuapp.com/gun',
+        'https://peer1.gun.eco/gun',
+        'https://peer2.gun.eco/gun'
     ];
     private STORAGE_KEY = 'gun_repository_state';
 
@@ -48,6 +52,16 @@ export class GunRepository {
             webrtc: true,
         });
 
+        if (!this.gun.SEA) {
+            console.warn('GunRepository: Attaching SEA manually');
+            this.gun.SEA = SEA;
+        }
+
+        console.log('GunRepository: Initialized gun instance with SEA:', !!this.gun.SEA);
+        if (!this.gun.SEA) {
+            console.error('GunRepository: SEA module not loaded on gun instance');
+        }
+
         this.peerManager = new PeerManager(this.gun, this.options.peers ?? [], this.initialPeers);
         this.annotationManager = new AnnotationManager(this.gun);
         this.commentManager = new CommentManager(this.gun);
@@ -56,6 +70,13 @@ export class GunRepository {
 
         this.peerManager.startConnectionCheck();
         this.cleanupManager.startCleanupJob();
+
+        this.gun.on('out', (msg: any) => {
+            if (msg.err === 'WebSocket disconnected') {
+                console.log('GunRepository: Detected WebSocket disconnection, triggering reconnect');
+                this.peerManager.handleConnectionLost();
+            }
+        });
     }
 
     private async getStoredState(): Promise<{ initialized: boolean; peerConnected: boolean }> {
@@ -91,12 +112,12 @@ export class GunRepository {
             });
         }
 
-        console.log('GunRepository: Initializing...');
+        console.log('GunRepository: Initializing with peers:', this.options.peers);
         return new Promise((resolve) => {
             this.initializationResolve = resolve;
 
             const onHi = (peer: any) => {
-                console.log('GunRepository: Connected to peer:', peer);
+                console.log('GunRepository: Connected to peer:', peer.url);
                 this.peerManager.setConnected(true);
                 this.updateStoredState({ initialized: true, peerConnected: true });
                 this.cleanupListeners?.();
@@ -105,16 +126,17 @@ export class GunRepository {
             };
 
             const onBye = (peer: any) => {
-                console.log('GunRepository: Disconnected from peer:', peer);
+                console.log('GunRepository: Disconnected from peer:', peer.url);
                 this.peerManager.setConnected(false);
                 this.updateStoredState({ initialized: true, peerConnected: false });
+                this.peerManager.handleConnectionLost();
             };
 
             this.gun.on('hi', onHi);
             this.gun.on('bye', onBye);
 
             const timeout = setTimeout(() => {
-                console.warn('GunRepository: No connection established after timeout, proceeding with local storage');
+                console.warn('GunRepository: No connection established after 10s, proceeding with local storage');
                 this.updateStoredState({ initialized: true, peerConnected: false });
                 this.cleanupListeners?.();
                 this.initializationResolve?.();
@@ -130,7 +152,7 @@ export class GunRepository {
             this.cleanupListeners = cleanup;
         }).then(async () => {
             console.log('GunRepository: Initialization complete, starting peer discovery');
-            this.peerManager.discoverPeers();
+            await this.peerManager.discoverPeers();
             await this.cleanupManager.migrateAnnotations();
         });
     }
@@ -177,13 +199,16 @@ export class GunRepository {
         this.annotationManager.cleanupAnnotationsListeners(url);
     }
 
-    async saveAnnotation(annotation: Annotation, tabId?: number, captureScreenshot: boolean = true): Promise<void> {
-        console.log('GunRepository: saveAnnotation called with tabId:', tabId, 'captureScreenshot:', captureScreenshot);
-        return this.annotationManager.saveAnnotation(annotation, tabId, captureScreenshot);
+    async saveAnnotation(annotation: Annotation, tabId?: number, captureScreenshot: boolean = true, did?: string, keyPair?: { pub: string; priv: string }): Promise<void> {
+        console.log('GunRepository: saveAnnotation called with tabId:', tabId, 'captureScreenshot:', captureScreenshot, 'did:', did);
+        if (!did || !keyPair) {
+            throw new Error('DID and keyPair are required for signing annotations');
+        }
+        await this.annotationManager.saveAnnotation(annotation, tabId, captureScreenshot, did, keyPair);
     }
 
-    async deleteAnnotation(url: string, id: string): Promise<void> {
-        return this.annotationManager.deleteAnnotation(url, id);
+    async deleteAnnotation(url: string, id: string, did: string, keyPair: { pub: string; priv: string }): Promise<void> {
+        return this.annotationManager.deleteAnnotation(url, id, did, keyPair);
     }
 
     async saveComment(url: string, annotationId: string, comment: Comment): Promise<void> {

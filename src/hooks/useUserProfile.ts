@@ -9,6 +9,8 @@ interface UseUserProfileReturn {
     profile: Profile | null;
     loading: boolean;
     error: string | null;
+    privateKey: string | null;
+    publicKey: string | null;
     authenticate: () => Promise<void>;
     signOut: () => Promise<void>;
     exportIdentity: (passphrase: string) => Promise<string>;
@@ -21,6 +23,7 @@ export const useUserProfile = (): UseUserProfileReturn => {
     const { storage, error: storageError, isLoading: storageLoading } = useStorage();
     const [did, setDid] = useState<string | null>(null);
     const [privateKey, setPrivateKey] = useState<string | null>(null);
+    const [publicKey, setPublicKey] = useState<string | null>(null);
     const [profile, setProfile] = useState<Profile | null>(null);
     const [loading, setLoading] = useState<boolean>(true);
     const [error, setError] = useState<string | null>(null);
@@ -44,18 +47,33 @@ export const useUserProfile = (): UseUserProfileReturn => {
                         setDid(storedDid);
                         console.log('useUserProfile: Loaded DID from storage:', storedDid);
 
-                        // Load the private key from chrome.storage.local
-                        const storedPrivateKey = await new Promise<string | null>((resolve) => {
-                            chrome.storage.local.get(['privateKey'], (result) => {
-                                resolve(result.privateKey || null);
+                        // Load the key pair from chrome.storage.local
+                        const storedKeyPair = await new Promise<{ publicKey?: string; privateKey?: string } | null>((resolve) => {
+                            chrome.storage.local.get(['publicKey', 'privateKey'], (result) => {
+                                resolve(result);
                             });
                         });
 
-                        if (storedPrivateKey) {
-                            setPrivateKey(storedPrivateKey);
-                            console.log('useUserProfile: Loaded private key from storage');
+                        if (
+                            storedKeyPair?.privateKey &&
+                            storedKeyPair?.publicKey &&
+                            typeof storedKeyPair.privateKey === 'string' &&
+                            typeof storedKeyPair.publicKey === 'string' &&
+                            storedKeyPair.privateKey.length > 0 &&
+                            storedKeyPair.publicKey.length > 0
+                        ) {
+                            setPrivateKey(storedKeyPair.privateKey);
+                            setPublicKey(storedKeyPair.publicKey);
+                            console.log('useUserProfile: Loaded key pair from storage:', {
+                                publicKey: storedKeyPair.publicKey.slice(0, 4) + '...',
+                                privateKey: storedKeyPair.privateKey.slice(0, 4) + '...'
+                            });
                         } else {
-                            console.warn('useUserProfile: Private key not found in storage');
+                            console.warn('useUserProfile: Incomplete or invalid key pair in storage, clearing DID');
+                            await storage.clearCurrentDID();
+                            await new Promise<void>((resolve) => {
+                                chrome.storage.local.remove(['publicKey', 'privateKey'], () => resolve());
+                            });
                         }
 
                         const userProfile = await storage.getProfile(storedDid);
@@ -69,7 +87,7 @@ export const useUserProfile = (): UseUserProfileReturn => {
                         console.warn('useUserProfile: Invalid DID in storage, clearing...');
                         await storage.clearCurrentDID();
                         await new Promise<void>((resolve) => {
-                            chrome.storage.local.remove('privateKey', () => resolve());
+                            chrome.storage.local.remove(['publicKey', 'privateKey'], () => resolve());
                         });
                     }
                 }
@@ -100,13 +118,26 @@ export const useUserProfile = (): UseUserProfileReturn => {
             setError(null);
 
             if (!did) {
-                const { did: newDid, privateKey: newPrivateKey } = await generateDID();
+                const { did: newDid, keyPair: newKeyPair } = await generateDID();
                 if (validateDID(newDid)) {
+                    if (!newKeyPair.pub || !newKeyPair.priv || typeof newKeyPair.pub !== 'string' || typeof newKeyPair.priv !== 'string' || newKeyPair.pub.length === 0 || newKeyPair.priv.length === 0) {
+                        throw new Error('Generated key pair is invalid or incomplete');
+                    }
                     setDid(newDid);
-                    setPrivateKey(newPrivateKey);
+                    setPrivateKey(newKeyPair.priv);
+                    setPublicKey(newKeyPair.pub);
                     await storage.setCurrentDID(newDid);
                     await new Promise<void>((resolve) => {
-                        chrome.storage.local.set({ privateKey: newPrivateKey }, () => resolve());
+                        chrome.storage.local.set({ publicKey: newKeyPair.pub, privateKey: newKeyPair.priv }, () => {
+                            if (chrome.runtime.lastError) {
+                                console.error('useUserProfile: Failed to store key pair:', chrome.runtime.lastError);
+                                setError('Failed to store key pair');
+                                resolve();
+                            } else {
+                                console.log('useUserProfile: Stored key pair in storage');
+                                resolve();
+                            }
+                        });
                     });
                     console.log('useUserProfile: Created and saved new DID:', newDid);
                 } else {
@@ -135,10 +166,20 @@ export const useUserProfile = (): UseUserProfileReturn => {
         try {
             await storage.clearCurrentDID();
             await new Promise<void>((resolve) => {
-                chrome.storage.local.remove('privateKey', () => resolve());
+                chrome.storage.local.remove(['publicKey', 'privateKey'], () => {
+                    if (chrome.runtime.lastError) {
+                        console.error('useUserProfile: Failed to clear key pair:', chrome.runtime.lastError);
+                        setError('Failed to clear key pair');
+                        resolve();
+                    } else {
+                        console.log('useUserProfile: Cleared key pair from storage');
+                        resolve();
+                    }
+                });
             });
             setDid(null);
             setPrivateKey(null);
+            setPublicKey(null);
             setProfile(null);
             setError(null);
             console.log('useUserProfile: Signed out');
@@ -157,26 +198,26 @@ export const useUserProfile = (): UseUserProfileReturn => {
             throw new Error('Storage not initialized');
         }
 
-        if (!did || !privateKey) {
-            throw new Error('Not authenticated');
+        if (!did || !privateKey || !publicKey || typeof privateKey !== 'string' || typeof publicKey !== 'string' || privateKey.length === 0 || publicKey.length === 0) {
+            throw new Error('Not authenticated or invalid key pair');
         }
 
         try {
-            // Include the DID, private key, and profile in the export
+            // Include the DID, key pair, and profile in the export
             const exportData = {
                 did,
-                privateKey,
+                keyPair: { pub: publicKey, priv: privateKey },
                 profile: profile || { did, handle: 'Unknown' },
             };
             const dataString = JSON.stringify(exportData);
             const exportedData = await exportKeyPair(dataString, passphrase);
             console.log('useUserProfile: Exported identity:', exportedData);
             return exportedData;
-        } catch (err : any) {
+        } catch (err: any) {
             console.error('useUserProfile: Export identity failed:', err);
             throw new Error('Failed to export identity: ' + (err.message || 'Unknown error'));
         }
-    }, [storageLoading, storage, did, privateKey, profile]);
+    }, [storageLoading, storage, did, privateKey, publicKey, profile]);
 
     const importIdentity = useCallback(async (data: string, passphrase: string) => {
         if (storageLoading) {
@@ -189,16 +230,34 @@ export const useUserProfile = (): UseUserProfileReturn => {
 
         try {
             const decryptedData = await importKeyPair(data, passphrase);
-            const { did: importedDid, privateKey: importedPrivateKey, profile: importedProfile } = JSON.parse(decryptedData);
+            const { did: importedDid, keyPair: importedKeyPair, profile: importedProfile } = JSON.parse(decryptedData);
             if (!validateDID(importedDid)) {
                 throw new Error('Invalid DID format');
             }
+            if (
+                !importedKeyPair?.pub ||
+                !importedKeyPair?.priv ||
+                typeof importedKeyPair.pub !== 'string' ||
+                typeof importedKeyPair.priv !== 'string' ||
+                importedKeyPair.pub.length === 0 ||
+                importedKeyPair.priv.length === 0
+            ) {
+                throw new Error('Invalid key pair format');
+            }
 
             setDid(importedDid);
-            setPrivateKey(importedPrivateKey);
+            setPrivateKey(importedKeyPair.priv);
+            setPublicKey(importedKeyPair.pub);
             await storage.setCurrentDID(importedDid);
             await new Promise<void>((resolve) => {
-                chrome.storage.local.set({ privateKey: importedPrivateKey }, () => resolve());
+                chrome.storage.local.set({ publicKey: importedKeyPair.pub, privateKey: importedKeyPair.priv }, () => {
+                    if (chrome.runtime.lastError) {
+                        console.error('useUserProfile: Failed to store imported key pair:', chrome.runtime.lastError);
+                        throw new Error('Failed to store imported key pair');
+                    }
+                    console.log('useUserProfile: Stored imported key pair');
+                    resolve();
+                });
             });
             console.log('useUserProfile: Imported identity:', importedDid);
 
@@ -213,13 +272,13 @@ export const useUserProfile = (): UseUserProfileReturn => {
                     console.log('useUserProfile: Loaded profile after import:', userProfile);
                 }
             }
-        } catch (err : any) {
+        } catch (err: any) {
             console.error('useUserProfile: Import identity failed:', err);
             let errorMessage = 'Failed to import identity';
             if (err.message.includes('OperationError') || err.message.includes('Failed to decrypt')) {
                 errorMessage = 'Failed to import identity: Incorrect passphrase or corrupted data';
-            } else if (err.message.includes('Invalid DID format')) {
-                errorMessage = 'Failed to import identity: Invalid DID format';
+            } else if (err.message.includes('Invalid DID format') || err.message.includes('Invalid key pair format')) {
+                errorMessage = 'Failed to import identity: ' + err.message;
             } else {
                 errorMessage = 'Failed to import identity: ' + (err.message || 'Unknown error');
             }
@@ -294,6 +353,8 @@ export const useUserProfile = (): UseUserProfileReturn => {
         profile,
         loading: loading || storageLoading,
         error: error || storageError,
+        privateKey,
+        publicKey,
         authenticate,
         signOut,
         exportIdentity,

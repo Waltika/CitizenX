@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import ReactDOM from 'react-dom/client';
 import { AnnotationUI } from '../components/AnnotationUI';
 import { storage } from '../storage/StorageRepository';
-import ErrorBoundary from '../components/ErrorBoundary'; // Import the ErrorBoundary
+import ErrorBoundary from '../components/ErrorBoundary';
 
 function debounce<T extends (...args: any[]) => void>(func: T, wait: number): (...args: Parameters<T>) => void {
     let timeout: NodeJS.Timeout | null = null;
@@ -51,7 +51,7 @@ function App() {
         }
     };
 
-    const debouncedFetchCurrentTabUrl = debounce(fetchCurrentTabUrl, 300); // Increased to 2000ms for stability
+    const debouncedFetchCurrentTabUrl = debounce(fetchCurrentTabUrl, 200);
 
     useEffect(() => {
         chrome.storage.local.get(['storage_initialized'], (result) => {
@@ -64,7 +64,7 @@ function App() {
             console.log('index.tsx: Initializing storage...');
             storage.initialize()
                 .then(() => {
-                    console.log('index.tsx: Storage initialized');
+                    console.log('index.tsx: Storage initialized successfully');
                     setStorageInitialized(true);
                     chrome.storage.local.set({ storage_initialized: true });
                 })
@@ -128,7 +128,12 @@ function App() {
                 </div>
             )}
             <ErrorBoundary>
-                <AnnotationUI url={url} isUrlLoading={isUrlLoading} tabId={tabId} />
+                <AnnotationUI
+                    url={url}
+                    isUrlLoading={isUrlLoading}
+                    tabId={tabId}
+                    storageInitialized={storageInitialized}
+                />
             </ErrorBoundary>
         </div>
     );

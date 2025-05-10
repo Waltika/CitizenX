@@ -18,6 +18,7 @@ export class ProfileManager {
             try {
                 did = await new Promise<string | null>((resolve) => {
                     this.gun.get('current_did').once((data: any) => {
+                        console.log('ProfileManager: Retrieved DID from Gun server:', data?.value);
                         resolve(data ? data.value : null);
                     });
                 });
@@ -43,13 +44,14 @@ export class ProfileManager {
         did = await new Promise<string | null>((resolve) => {
             chrome.storage.local.get([this.DID_STORAGE_KEY], (result) => {
                 const localDID = result[this.DID_STORAGE_KEY] || null;
+                console.log('ProfileManager: Retrieved cached DID from chrome.storage.local:', localDID);
                 resolve(localDID);
             });
         });
 
         if (did !== null) {
             console.log('ProfileManager: Retrieved cached DID from chrome.storage.local:', did);
-            // Store the DID back to the Gun server
+            // Store the DID back to the Gun server (optional, retained for compatibility)
             console.log('ProfileManager: Storing DID back to server:', did);
             try {
                 await this.setCurrentDID(did);
@@ -77,31 +79,30 @@ export class ProfileManager {
         });
 
         // Also store the DID in chrome.storage.local
-        await new Promise<void>((resolve) => {
+        await new Promise<void>((resolve, reject) => {
             chrome.storage.local.set({ [this.DID_STORAGE_KEY]: did }, () => {
-                resolve();
+                if (chrome.runtime.lastError) {
+                    console.error('ProfileManager: Failed to set DID in chrome.storage.local:', chrome.runtime.lastError);
+                    reject(new Error(chrome.runtime.lastError.message));
+                } else {
+                    console.log('ProfileManager: Set DID in chrome.storage.local:', did);
+                    resolve();
+                }
             });
         });
     }
 
     async clearCurrentDID(): Promise<void> {
-        // Clear the DID from the Gun server
+        // Only clear the DID from chrome.storage.local, not Gun.js
         await new Promise<void>((resolve, reject) => {
-            this.gun.get('current_did').put(null, (ack: any) => {
-                if (ack.err) {
-                    console.error('ProfileManager: Failed to clear DID on server:', ack.err);
-                    reject(new Error(ack.err));
+            chrome.storage.local.remove(this.DID_STORAGE_KEY, () => {
+                if (chrome.runtime.lastError) {
+                    console.error('ProfileManager: Failed to clear DID from chrome.storage.local:', chrome.runtime.lastError);
+                    reject(new Error(chrome.runtime.lastError.message));
                 } else {
-                    console.log('ProfileManager: Cleared DID on server');
+                    console.log('ProfileManager: Cleared DID from chrome.storage.local');
                     resolve();
                 }
-            });
-        });
-
-        // Also clear the DID from chrome.storage.local
-        await new Promise<void>((resolve) => {
-            chrome.storage.local.remove(this.DID_STORAGE_KEY, () => {
-                resolve();
             });
         });
     }
@@ -161,7 +162,7 @@ export class ProfileManager {
         console.error('ProfileManager: Failed to load profile for DID after retries:', did);
         const endTime = Date.now();
         console.log(`[Timing] Total getProfile time for DID: ${did}: ${endTime - startTime}ms`);
-        return null; // Return null instead of an incomplete Profile object
+        return null;
     }
 
     async saveProfile(profile: Profile): Promise<void> {
