@@ -245,7 +245,6 @@ export const useAnnotations = ({ url, did, tabId: hookTabId }: UseAnnotationsPro
                 if (isFetchingRef.current && !hasReceivedDataRef.current) {
                     setLoading(false);
                     isFetchingRef.current = false;
-                    setError('Timeout: Unable to fetch annotations');
                 }
             }, 5000);
         } catch (err) {

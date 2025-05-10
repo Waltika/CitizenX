@@ -31,29 +31,17 @@ export const AnnotationListWrapper: React.FC<AnnotationListWrapperProps> = ({
     return (
         <div className="annotation-list-wrapper">
             {annotationsError && <div className="error-text">{annotationsError}</div>}
-            {isUrlLoading || annotationsLoading ? (
-                <div className="loading-spinner">
-                    <span>Loading annotations...</span>
-                </div>
-            ) : (
-                <>
-                    {annotations.length === 0 ? (
-                        <div className="no-annotations-wrapper">
-                            <p className="no-annotations-message">No annotations available for this page.</p>
-                        </div>
-                    ) : (
-                        <AnnotationList
-                            annotations={annotations}
-                            profiles={profiles}
-                            onDelete={onDelete}
-                            onDeleteComment={onDeleteComment}
-                            onSaveComment={onSaveComment}
-                            currentUrl={currentUrl}
-                            onShowToast={onShowToast}
-                        />
-                    )}
-                </>
-            )}
+            <>
+                <AnnotationList
+                    annotations={annotations}
+                    profiles={profiles}
+                    onDelete={onDelete}
+                    onDeleteComment={onDeleteComment}
+                    onSaveComment={onSaveComment}
+                    currentUrl={currentUrl}
+                    onShowToast={onShowToast}
+                />
+            </>
         </div>
     );
 };
