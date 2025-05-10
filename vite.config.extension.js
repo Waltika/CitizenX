@@ -1,6 +1,6 @@
-// vite.config.extension.js
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
+import svgr from 'vite-plugin-svgr';
 import { resolve } from 'path';
 import { copyFile, mkdir, rename, rm } from 'fs/promises';
 import { existsSync } from 'fs';
@@ -38,6 +38,7 @@ function postBuildPlugin() {
             } catch (error) {
                 console.error('Failed to copy manifest.json:', error);
             }
+
             const srcIndexPath = resolve(outDir, 'src/sidepanel/index.html');
             const destIndexPath = resolve(outDir, 'index.html');
             if (existsSync(srcIndexPath)) {
@@ -55,6 +56,25 @@ function postBuildPlugin() {
 export default defineConfig({
     plugins: [
         react(),
+        svgr({
+            svgrOptions: {
+                icon: true,
+                svgo: true,
+                svgoConfig: {
+                    plugins: [
+                        {
+                            name: 'preset-default',
+                            params: {
+                                overrides: {
+                                    removeViewBox: false,
+                                },
+                            },
+                        },
+                    ],
+                },
+            },
+            include: '**/*.svg',
+        }),
         postBuildPlugin()
     ],
     resolve: {

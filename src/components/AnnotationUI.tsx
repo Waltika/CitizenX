@@ -21,6 +21,7 @@ import Quill from 'quill';
 import 'quill/dist/quill.snow.css';
 
 import citizenxLogo from '../assets/citizenx-logo.png';
+import CameraIcon from '../assets/CameraIcon.svg'; // Import the SVG as a React component
 import { normalizeUrl } from "../shared/utils/normalizeUrl";
 
 interface AnnotationUIProps {
@@ -301,21 +302,7 @@ export const AnnotationUI: React.FC<AnnotationUIProps> = ({ url, isUrlLoading, t
                         className={`screenshot-toggle-button ${captureScreenshot ? 'active' : ''}`}
                         title="Capture the visible part of the annotated page"
                     >
-                        <svg
-                            className="camera-icon"
-                            width="16"
-                            height="16"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth="2"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                        >
-                            <rect className="frame" x="2" y="2" width="20" height="20" rx="2" ry="2" />
-                            <path d="M21 19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path>
-                            <circle cx="12" cy="13" r="4"></circle>
-                        </svg>
+                        <CameraIcon className="camera-icon" width="16" height="16" />
                         <span className="tooltip">Capture the visible part of the annotated page</span>
                     </button>
                     <button
