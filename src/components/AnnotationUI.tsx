@@ -36,9 +36,9 @@ interface PendingComment {
     timestamp: number;
 }
 
-export const AnnotationUI: React.FC<AnnotationUIProps> = ({ url, isUrlLoading, tabId }) => {
+export const AnnotationUI: React.FC<AnnotationUIProps> = ({ url, isUrlLoading, tabId: originalTabId }) => {
     const { did, profile, loading: profileLoading, error: profileError, authenticate, signOut, exportIdentity, importIdentity, createProfile, updateProfile } = useUserProfile();
-    const { annotations: rawAnnotations, profiles, error: annotationsError, loading: annotationsLoading, handleSaveAnnotation, handleDeleteAnnotation, handleSaveComment: originalHandleSaveComment, handleDeleteComment } = useAnnotations({ url, did, tabId });
+    const { annotations: rawAnnotations, profiles, error: annotationsError, loading: annotationsLoading, handleSaveAnnotation, handleDeleteAnnotation, handleSaveComment: originalHandleSaveComment, handleDeleteComment } = useAnnotations({ url, did, tabId: originalTabId });
     const [annotationText, setAnnotationText] = useState('');
     const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
     const [profileHandle, setProfileHandle] = useState('');
@@ -47,6 +47,7 @@ export const AnnotationUI: React.FC<AnnotationUIProps> = ({ url, isUrlLoading, t
     const [showToast, setShowToast] = useState<boolean>(false);
     const [justImported, setJustImported] = useState(false);
     const [pendingComments, setPendingComments] = useState<PendingComment[]>([]);
+    const [captureScreenshot, setCaptureScreenshot] = useState<boolean>(true);
 
     const editorRef = useRef<HTMLDivElement>(null);
     const quillRef = useRef<Quill | null>(null);
@@ -163,11 +164,11 @@ export const AnnotationUI: React.FC<AnnotationUIProps> = ({ url, isUrlLoading, t
     const handleSave = useCallback(async () => {
         if (!annotationText.trim()) return;
 
-        let validatedTabId: number | undefined = tabId;
-        if (typeof chrome !== 'undefined' && chrome.tabs && tabId) {
+        let validatedTabId: number | undefined = undefined; // Default to no screenshot
+        if (captureScreenshot && typeof chrome !== 'undefined' && chrome.tabs && originalTabId) {
             try {
                 const tab = await new Promise<chrome.tabs.Tab>((resolve, reject) => {
-                    chrome.tabs.get(tabId, (tab) => {
+                    chrome.tabs.get(originalTabId, (tab) => {
                         if (chrome.runtime.lastError) {
                             reject(new Error(chrome.runtime.lastError.message));
                         } else {
@@ -176,23 +177,26 @@ export const AnnotationUI: React.FC<AnnotationUIProps> = ({ url, isUrlLoading, t
                     });
                 });
                 if (tab.url && !tab.url.startsWith('chrome://') && !tab.url.startsWith('chrome-extension://')) {
+                    console.log('AnnotationUI: Screenshot capture enabled, validating tabId:', tab.id);
                     validatedTabId = tab.id;
                 } else {
+                    console.log('AnnotationUI: Cannot capture screenshot for this page');
                     handleShowToast('Cannot capture screenshot for this page');
-                    validatedTabId = undefined;
                 }
             } catch (error) {
                 console.error('AnnotationUI: Failed to validate tabId:', error);
                 handleShowToast('Failed to access tab for screenshot');
-                validatedTabId = undefined;
             }
-        } else if (!tabId) {
+        } else if (!captureScreenshot) {
+            console.log('AnnotationUI: Screenshot capture disabled');
+        } else if (!originalTabId) {
+            console.log('AnnotationUI: No active tab available for screenshot');
             handleShowToast('No active tab available for screenshot');
         }
 
         try {
-            console.log('AnnotationUI: Saving annotation - content:', annotationText);
-            await handleSaveAnnotation(annotationText, validatedTabId);
+            console.log('AnnotationUI: Saving annotation - content:', annotationText, 'captureScreenshot:', captureScreenshot, 'validatedTabId:', validatedTabId);
+            await handleSaveAnnotation(annotationText, validatedTabId, captureScreenshot);
             setAnnotationText('');
             if (quillRef.current) {
                 quillRef.current.setContents([]);
@@ -201,7 +205,11 @@ export const AnnotationUI: React.FC<AnnotationUIProps> = ({ url, isUrlLoading, t
             console.error('AnnotationUI: Failed to save annotation:', error);
             handleShowToast('Failed to save annotation');
         }
-    }, [annotationText, tabId, handleSaveAnnotation, handleShowToast]);
+    }, [annotationText, originalTabId, handleSaveAnnotation, handleShowToast, captureScreenshot]);
+
+    const toggleScreenshotCapture = useCallback(() => {
+        setCaptureScreenshot((prev) => !prev);
+    }, []);
 
     const handleProfileSave = useCallback(async () => {
         if (profileHandle.trim()) {
@@ -287,13 +295,37 @@ export const AnnotationUI: React.FC<AnnotationUIProps> = ({ url, isUrlLoading, t
             </div>
             <div className="annotation-input">
                 <div ref={editorRef} className="quill-editor"></div>
-                <button
-                    onClick={handleSave}
-                    className="annotation-save-button"
-                    disabled={!annotationText.trim() || !did || !url || isUrlLoading}
-                >
-                    Save
-                </button>
+                <div className="button-group">
+                    <button
+                        onClick={toggleScreenshotCapture}
+                        className={`screenshot-toggle-button ${captureScreenshot ? 'active' : ''}`}
+                        title="Capture the visible part of the annotated page"
+                    >
+                        <svg
+                            className="camera-icon"
+                            width="16"
+                            height="16"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                        >
+                            <rect className="frame" x="2" y="2" width="20" height="20" rx="2" ry="2" />
+                            <path d="M21 19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path>
+                            <circle cx="12" cy="13" r="4"></circle>
+                        </svg>
+                        <span className="tooltip">Capture the visible part of the annotated page</span>
+                    </button>
+                    <button
+                        onClick={handleSave}
+                        className="annotation-save-button"
+                        disabled={!annotationText.trim() || !did || !url || isUrlLoading}
+                    >
+                        Save
+                    </button>
+                </div>
             </div>
             {isUrlLoading || annotationsLoading ? (
                 <div className="loading-spinner">

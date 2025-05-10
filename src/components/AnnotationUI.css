@@ -48,3 +48,121 @@
     max-width: 80%;
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
 }
+
+/* Button group for screenshot toggle and save button */
+.button-group {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end; /* Align buttons to the right */
+    gap: 0.1rem;
+    margin-top: 0.5rem;
+}
+
+/* Screenshot toggle button */
+.screenshot-toggle-button {
+    margin-left: auto;
+    margin-right: auto;
+    margin-top: auto;
+    margin-bottom: auto;
+    background: none;
+    color: #2c7a7b; /* Teal color when active */
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    display: flex;
+    height: 2rem; /* Consistent height */
+    width: 2rem; /* Consistent width */
+}
+
+.screenshot-toggle-button.active {
+    color: #2c7a7b; /* Active state color */
+}
+
+.screenshot-toggle-button:not(.active) {
+    color: #d1d5db; /* Grayed out when inactive */
+}
+
+.screenshot-toggle-button:hover {
+    color: #4a999a; /* Hover state for active button */
+}
+
+/* Tooltip for screenshot toggle button */
+.screenshot-toggle-button .tooltip {
+    visibility: hidden;
+    width: 250px; /* Adjusted width for better readability */
+    min-width: 250px; /* Prevent it from becoming too narrow */
+    max-width: calc(100% - 20px); /* Ensure it fits within viewport with some padding */
+    background-color: #333;
+    color: #fff;
+    text-align: center;
+    border-radius: 5px;
+    padding: 5px;
+    position: absolute;
+    z-index: 1;
+    bottom: 125%; /* Position above the button */
+    left: calc(50% + 130px); /* Center the tooltip (160px / 2 = 80px) */
+    transform: translateX(max(-50%, -100% + 1.5rem)); /* Ensure it doesn't bleed out of viewport */
+    font-size: 0.75rem;
+    opacity: 0;
+    transition: opacity 0.3s;
+    white-space: nowrap; /* Prevent excessive wrapping */
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Ensure the tooltip has an arrow pointing to the button */
+.screenshot-toggle-button .tooltip::after {
+    content: '';
+    position: absolute;
+    top: 100%; /* Arrow pointing down */
+    left: 50%; /* Center the arrow */
+    transform: translateX(-50%);
+    border-width: 5px;
+    border-style: solid;
+    border-color: #333 transparent transparent transparent;
+}
+
+.screenshot-toggle-button:hover .tooltip {
+    visibility: visible;
+    opacity: 1;
+}
+
+/* Camera icon */
+.camera-icon {
+    width: 1rem;
+    height: 1rem;
+    display: block; /* Ensure SVG behaves as a block for centering */
+}
+
+/* Style the SVG frame */
+.camera-icon .frame {
+    stroke: currentColor; /* Match the button's color (teal or gray) */
+    stroke-width: 1;
+    fill: none;
+}
+
+/* Save button */
+.annotation-save-button {
+    padding: 0 1rem; /* Increased padding for wider appearance */
+    min-width: 60px; /* Ensure a minimum width for better balance */
+    background: #2c7a7b;
+    color: #fff;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 0.8rem;
+    height: 2rem; /* Match the height of the screenshot toggle button */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 2rem; /* Ensure vertical centering of text */
+}
+
+.annotation-save-button:hover {
+    background-color: #4a999a;
+}
+
+.annotation-save-button:disabled {
+    background: #d1d5db;
+    cursor: not-allowed;
+}

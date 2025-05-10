@@ -15,7 +15,7 @@ interface UseAnnotationsResult {
     profiles: Record<string, Profile>;
     error: string | null;
     loading: boolean;
-    handleSaveAnnotation: (content: string, tabId?: number) => Promise<void>;
+    handleSaveAnnotation: (content: string, tabId?: number, captureScreenshot?: boolean) => Promise<void>;
     handleDeleteAnnotation: (annotationId: string) => Promise<void>;
     handleSaveComment: (annotationId: string, content: string) => Promise<void>;
     handleDeleteComment: (annotationId: string, commentId: string) => Promise<void>;
@@ -40,7 +40,7 @@ function debounce<T extends (...args: any[]) => void>(func: T, wait: number): (.
     };
 }
 
-export const useAnnotations = ({ url, did, tabId }: UseAnnotationsProps): UseAnnotationsResult => {
+export const useAnnotations = ({ url, did, tabId: hookTabId }: UseAnnotationsProps): UseAnnotationsResult => {
     const { storage, error: storageError, isLoading: storageLoading } = useStorage();
     const [annotations, setAnnotations] = useState<Annotation[]>([]);
     const [profiles, setProfiles] = useState<Record<string, Profile>>({});
@@ -304,8 +304,9 @@ export const useAnnotations = ({ url, did, tabId }: UseAnnotationsProps): UseAnn
         setPendingAnnotations([]);
     }, [url]);
 
-    const handleSaveAnnotation = useCallback(async (content: string, saveTabId?: number) => {
-        console.log('useAnnotations: handleSaveAnnotation called - content:', content);
+    const handleSaveAnnotation = useCallback(async (content: string, saveTabId?: number, captureScreenshot?: boolean) => {
+        const shouldCaptureScreenshot = captureScreenshot ?? true; // Ensure the flag is always a boolean
+        console.log('useAnnotations: handleSaveAnnotation called - content:', content, 'saveTabId:', saveTabId, 'captureScreenshot:', shouldCaptureScreenshot);
         if (!did) {
             throw new Error('User not authenticated');
         }
@@ -338,14 +339,14 @@ export const useAnnotations = ({ url, did, tabId }: UseAnnotationsProps): UseAnn
         };
 
         try {
-            await storage.saveAnnotation(annotation, saveTabId || tabId);
+            await storage.saveAnnotation(annotation, saveTabId, shouldCaptureScreenshot);
             setPendingAnnotations(prev => prev.filter(pa => pa.tempId !== tempId));
         } catch (error) {
             console.error('useAnnotations: Failed to save annotation:', error);
             setPendingAnnotations(prev => prev.filter(pa => pa.tempId !== tempId));
             throw error;
         }
-    }, [did, url, storage, tabId]);
+    }, [did, url, storage]);
 
     const handleDeleteAnnotation = useCallback(async (annotationId: string) => {
         console.log('useAnnotations: handleDeleteAnnotation called - annotationId:', annotationId);

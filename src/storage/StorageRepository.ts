@@ -121,10 +121,11 @@ export class StorageRepository {
         return this.repository.getAnnotations(normalizedUrl, callback);
     }
 
-    async saveAnnotation(annotation: Annotation, tabId?: number): Promise<void> {
+    async saveAnnotation(annotation: Annotation, tabId?: number, captureScreenshot: boolean = true): Promise<void> {
+        console.log('StorageRepository: saveAnnotation called with tabId:', tabId, 'captureScreenshot:', captureScreenshot);
         await this.initialize();
         const normalizedAnnotation = { ...annotation, url: normalizeUrl(annotation.url) };
-        await this.repository.saveAnnotation(normalizedAnnotation, tabId);
+        await this.repository.saveAnnotation(normalizedAnnotation, tabId, captureScreenshot);
     }
 
     async deleteAnnotation(url: string, id: string): Promise<void> {

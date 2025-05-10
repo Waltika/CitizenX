@@ -177,8 +177,9 @@ export class GunRepository {
         this.annotationManager.cleanupAnnotationsListeners(url);
     }
 
-    async saveAnnotation(annotation: Annotation, tabId?: number): Promise<void> {
-        return this.annotationManager.saveAnnotation(annotation, tabId);
+    async saveAnnotation(annotation: Annotation, tabId?: number, captureScreenshot: boolean = true): Promise<void> {
+        console.log('GunRepository: saveAnnotation called with tabId:', tabId, 'captureScreenshot:', captureScreenshot);
+        return this.annotationManager.saveAnnotation(annotation, tabId, captureScreenshot);
     }
 
     async deleteAnnotation(url: string, id: string): Promise<void> {

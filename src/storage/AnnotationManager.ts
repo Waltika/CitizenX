@@ -119,7 +119,12 @@ export class AnnotationManager {
         }
     }
 
-    async captureScreenshot(providedTabId?: number): Promise<string> {
+    async captureScreenshot(providedTabId?: number, captureScreenshot: boolean = true): Promise<string | undefined> {
+        if (!captureScreenshot) {
+            console.log('AnnotationManager: Skipping screenshot capture as per request');
+            return undefined;
+        }
+
         const tabId = await this.getValidTabId(providedTabId);
         if (!tabId) {
             throw new Error('No valid tabId available for screenshot capture');
@@ -149,8 +154,8 @@ export class AnnotationManager {
         });
     }
 
-    async saveAnnotation(annotation: Annotation, tabId?: number): Promise<void> {
-        console.log('AnnotationManager: Saving annotation with tabId:', tabId);
+    async saveAnnotation(annotation: Annotation, tabId?: number, captureScreenshot: boolean = true): Promise<void> {
+        console.log('AnnotationManager: Saving annotation with tabId:', tabId, 'captureScreenshot:', captureScreenshot);
         if (!annotation.id || !annotation.url || !annotation.content || !annotation.author) {
             console.error('AnnotationManager: Missing required fields in annotation:', annotation);
             throw new Error('Missing required fields in annotation');
@@ -158,8 +163,10 @@ export class AnnotationManager {
 
         let screenshot: string | undefined;
         try {
-            screenshot = await this.captureScreenshot(tabId);
-            console.log('AnnotationManager: Captured screenshot for annotation:', annotation.id);
+            screenshot = await this.captureScreenshot(tabId, captureScreenshot);
+            if (screenshot) {
+                console.log('AnnotationManager: Captured screenshot for annotation:', annotation.id);
+            }
         } catch (error) {
             console.error('AnnotationManager: Failed to capture screenshot:', error);
         }
