@@ -3,7 +3,7 @@
 ## Overview
 CitizenX is a browser extension that enables users to annotate web pages and share those annotations in a decentralized manner using Gun.js. The project leverages React for the UI, TypeScript for type safety, and Vite as the build tool. A companion pinning service enhances data persistence and scalability. The current focus is on ensuring annotations and user profiles are persisted and displayed correctly across devices and browsers, with secure SEA (Security, Encryption, Authentication) signing using nonces to prevent replay attacks. Plans include page history tracking, notifications, and multi-browser support in the future.
 
-As of May 10, 2025, the core functionality of creating, storing, and sharing annotations is working, along with displaying annotations on non-Chrome browsers. Domain-based sharding and sub-sharding for high-traffic domains are partially implemented to improve scalability. Support for advanced users to specify their primary server is in place, and security measures (SEA with nonces) protect against unauthorized changes. Issues with author names displaying as "Unknown" and comment deletion have been resolved. The `gun-server.js` `put` hook has been refined to eliminate noisy `souls: undefined` logs. A pinning service supports persistent storage, but validation is needed to ensure deleted items do not reappear after server restarts. Full sharding adoption is pending migration and testing.
+As of May 10, 2025, the core functionality of creating, storing, and sharing annotations is working, along with displaying annotations on non-Chrome browsers. Domain-based sharding and sub-sharding for high-traffic domains are partially implemented to improve scalability. Support for advanced users to specify their primary server is in place, and security measures (SEA with nonces) protect against unauthorized changes. Issues with author names displaying as "Unknown" and comment deletion have been resolved. The `gun-server.js` `put` hook has been refined to eliminate noisy `souls: undefined` logs. The `/api/annotations` endpoint issue was fixed to retrieve annotations correctly. A pinning service supports persistent storage, but validation is needed to ensure deleted items do not reappear after server restarts. Full sharding adoption is pending migration and testing.
 
 ## Current Status
 
@@ -43,6 +43,7 @@ As of May 10, 2025, the core functionality of creating, storing, and sharing ann
   - The `/api/annotations` endpoint fetches annotations from sharded and legacy nodes, ensuring compatibility during migration.
   - Mobile browsers (e.g., Chrome on Android) are detected using `/android|iphone|ipad|ipod|mobile/i.test(userAgent)` and redirected to `/view-annotations`, as they cannot install extensions.
   - Fixed an issue where Chrome on Android was incorrectly identified as non-Chrome by correcting the user-agent check in `check-extension.js`.
+  - Fixed an issue where `/api/annotations` returned `{"error":"No annotations found for this URL"}` for valid URLs (e.g., `https://www.aaa.com/International`) due to overzealous deduplication. Resolved by clearing `annotationCache` and `loadedAnnotations` per request, increasing the fetch timeout to 5000ms, and adding debug logging in `gun-server.js`. The endpoint now retrieves annotations correctly, matching the extension’s behavior.
 - **SSR Limitation**: The `/view-annotations` endpoint fails to render due to `AnnotationList` using React hooks (`useState`), which are not supported in server-side rendering. A temporary workaround (`AnnotationListServer.tsx`) was reverted to focus on scalability and security.
 
 ### Sharing (Req 10)
@@ -66,7 +67,7 @@ As of May 10, 2025, the core functionality of creating, storing, and sharing ann
 - **Functionality**: Designed a security model to ensure annotations and comments can only be modified or deleted by their creator and to protect against hacking:
   - **Signed Annotations and Comments**: Each annotation and comment is signed with the creator’s private key using Gun.js SEA, including a nonce to prevent replay attacks. Signatures and nonces are stored in Gun.js (e.g., `annotations/<url>/<annotationId>/signature`, `nonce`). Clients verify signatures on read, discarding tampered data.
   - **Signed Write Requests**: Write operations (create, update, delete) are signed with SEA, including nonces, and stored in `writeRequests`. Servers verify the signature, nonce, and ensure the requester’s DID matches the annotation/comment’s `author` before applying the write.
-  - **Immutable Versioning**: Annotations and comments are stored as immutable versions (`annotations/<url>/<annotationId>/versions/<timestamp>`), with updates creating new versions. Deletions use tombstones (`isDeleted: true`).
+  - **Immutable Versioning**: Annotations are stored as immutable versions (`annotations/<url>/<annotationId>/versions/<timestamp>`), with updates creating new versions. Deletions use tombstones (`isDeleted: true`).
   - **Attack Mitigation**: Protect against malicious peers, data injection, DID spoofing, replay attacks, and DoS attacks through:
     - **Signature Verification**: Enforced in `AnnotationManager.ts` and `gun-server.js` for all writes, including nonce checks.
     - **Nonce and Timestamp Checks**: Nonces and timestamps in `writeRequests` are verified within a 5-minute window.
@@ -128,7 +129,7 @@ As of May 10, 2025, the core functionality of creating, storing, and sharing ann
 2. **Citizen-Pinning-Service**:
    - **Purpose**: Enhances data persistence and scalability by managing Gun.js nodes, migrating legacy data, and ensuring sharded node consistency.
    - **Key Scripts**:
-     - `gun-server.js`: Main server script, hosting the Gun.js node and API endpoints (`/api/annotations`, `/api/comments`, `/api/shorten`). Fixed `TypeError` in `put` hook by removing explicit event propagation and refined logging to skip `souls: undefined` writes, ensuring clean logs during startup.
+     - `gun-server.js`: Main server script, hosting the Gun.js node and API endpoints (`/api/annotations`, `/api/comments`, `/api/shorten`). Fixed `TypeError` in `put` hook by removing explicit event propagation and refined logging to skip `souls: undefined` writes, ensuring clean logs during startup. Fixed `/api/annotations` issue by clearing `annotationCache` per request, increasing timeout to 5000ms, and adding debug logging.
      - `cleanup-sharded-node.js`: Cleans sharded nodes by removing tombstones and inconsistent data.
      - `migrate-legacy-data.js`: Migrates legacy annotations from the `annotations` node to sharded nodes (`annotations_<domain>`).
      - `sync-comment-states.js`: Synchronizes comment states across nodes to ensure consistency.
@@ -143,6 +144,7 @@ As of May 10, 2025, the core functionality of creating, storing, and sharing ann
      - Refined `put` hook in `gun-server.js` to skip processing for `souls: undefined` or invalid `data`, eliminating noisy logs during startup (e.g., `Put hook triggered for souls: undefined`).
      - Maintained SEA verification with nonces for user data writes and deletions, ensuring security.
      - Preserved `publicUrl` as `https://citizen-x-bootsrap.onrender.com` for local testing and render.com deployment.
+     - Fixed `/api/annotations` deduplication issue to ensure consistent annotation retrieval.
 
 3. **Static Pages**:
    - `/view-annotations`: Displays annotations for non-Chrome browsers, with a clickable link to the annotated page (opens in a new tab). Styled with white `#fff`, teal `#2c7a7b`, Inter font, and includes a loading spinner.
@@ -173,7 +175,7 @@ As of May 10, 2025, the core functionality of creating, storing, and sharing ann
 4. **Non-Chrome Browsers**:
    - The `/check-extension` page redirects non-Chrome users to `/view-annotations`, which fetches annotations from the Render server and displays them, mimicking the extension’s UI.
    - Mobile browsers (e.g., Chrome on Android) are detected and redirected to `/view-annotations`.
-   - The `/api/annotations` endpoint on the Render server fetches annotations and user profiles, including the correct `authorHandle` with retries and caching to handle replication delays.
+   - The `/api/annotations` endpoint on the Render server fetches annotations and user profiles, including the correct `authorHandle` with retries and caching to handle replication delays. Fixed deduplication issue to ensure consistent annotation retrieval.
 
 ### Network Setup
 - **Current**: Single-node setup using a Gun.js bootstrap node on Render (`https://citizen-x-bootsrap.onrender.com`) with persistent storage (`/var/data/gun-data`, `radata/`), supported by the citizen-pinning-service.
@@ -222,6 +224,9 @@ As of May 10, 2025, the core functionality of creating, storing, and sharing ann
 - **TypeScript and Code Quality**:
   - Verify `useUserProfile.ts` provides robust `keyPair` handling for SEA signing.
   - Audit `AnnotationManager.ts` and `gun-server.js` for consistent nonce usage.
+- **Deployment Validation**:
+  - Validate the `/api/annotations` fix (clearing `annotationCache`, 5000ms timeout) by testing with various URLs and high-traffic scenarios.
+  - Investigate potential data consistency issues across peers (e.g., `https://gun-manhattan.herokuapp.com/gun`) to ensure all valid annotations are retrieved consistently.
 
 ## File Structure
 - **CitizenX Extension**:
@@ -257,7 +262,7 @@ As of May 10, 2025, the core functionality of creating, storing, and sharing ann
 
 - **Citizen-Pinning-Service**:
   - **Scripts**:
-    - `gun-server.js`: Main Gun.js server and API endpoints. Refined `put` hook to skip `souls: undefined` writes, ensuring clean logs.
+    - `gun-server.js`: Main Gun.js server and API endpoints. Refined `put` hook to skip `souls: undefined` writes, ensuring clean logs. Fixed `/api/annotations` deduplication issue.
     - `cleanup-sharded-node.js`: Cleans sharded nodes.
     - `migrate-legacy-data.js`: Migrates legacy data to sharded nodes.
     - `sync-comment-states.js`: Synchronizes comment states.
@@ -273,7 +278,8 @@ As of May 10, 2025, the core functionality of creating, storing, and sharing ann
 - **TypeScript Fixes**: Resolved errors in `AnnotationManager.ts` (`nonce`, `gun` references), `GunRepository.ts`, `StorageRepository.ts`, and `useAnnotations.ts` (`deleteAnnotation` arguments). Ensured `useAnnotations.ts` uses `privateKey` and `publicKey` from `useUserProfile.ts` for SEA signing.
 - **Server Improvements**: Fixed `TypeError` in `gun-server.js` `put` hook and eliminated `souls: undefined` logs by skipping invalid writes. Maintained `publicUrl` as `https://citizen-x-bootsrap.onrender.com`.
 - **Comment Deletion**: Fixed accidental annotation deletion in `CommentList.tsx` by ensuring `onDeleteComment` is passed correctly. Verified DID-based ownership checks.
-- **Pending Tasks**: Complete sharding migration, validate tombstone persistence, implement hiding/reporting/ranking, enhance real-time updates, and verify `useUserProfile.ts` `keyPair` handling.
+- **/api/annotations Fix**: Resolved issue where `/api/annotations` returned `{"error":"No annotations found for this URL"}` for valid URLs (e.g., `https://www.aaa.com/International`) due to deduplication overreach. Fixed by clearing `annotationCache` and `loadedAnnotations` per request, increasing timeout to 5000ms, and adding debug logging in `gun-server.js`. The endpoint now retrieves annotations correctly, matching the extension’s behavior.
+- **Pending Tasks**: Validate the `/api/annotations` fix, complete sharding migration, validate tombstone persistence, implement hiding/reporting/ranking features, and verify `useUserProfile.ts` `keyPair` handling.
 
 ## Last Updated
 May 10, 2025

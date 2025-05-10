@@ -69,11 +69,11 @@ A decentralized Chrome extension for annotating websites in order to bring a kno
 
 11. **View Annotations on Non-Chrome Browsers**
    - **Description**: Redirect users clicking an annotation sharing URL on non-Chrome browsers (e.g., mobile, Safari, Firefox) to a page on `https://citizenx.app` that displays the annotated page’s URL as a clickable link (opening in a new tab). Reuse the extension’s UI, DID, and code to allow viewing and interacting with annotations, mimicking the extension’s functionality.
-   - **Status**: Partially Implemented. The `/view-annotations` page displays annotations with a clickable link to the annotated page (opens in a new tab). Styled with white `#fff`, teal `#2c7a7b`, Inter font, and includes a loading spinner.
+   - **Status**: Implemented. The `/view-annotations` page displays annotations with a clickable link to the annotated page (opens in a new tab). Styled with white `#fff`, teal `#2c7a7b`, Inter font, and includes a loading spinner.
    - **Mobile Detection**: Added a mobile check (`/android|iphone|ipad|ipod|mobile/i.test(userAgent)`) in `check-extension.js` to redirect mobile browsers (e.g., Chrome on Android) to `/view-annotations`, as they cannot install extensions.
    - **Author Display Fix**: Fixed an issue where authors were displayed as "Unknown" by updating the `/api/annotations` endpoint to fetch user profiles from Gun.js with retries (up to 5 attempts) and in-memory caching (5-minute TTL), ensuring the correct `authorHandle` (e.g., "Waltika") is included in the response. Extended the fix to the extension by improving profile fetching in `useAnnotations.ts` to handle real-time updates.
    - **SSR Limitation**: The `/view-annotations` endpoint fails to render due to `AnnotationList` using React hooks (`useState`), which are not supported in server-side rendering. A temporary workaround (`AnnotationListServer.tsx`) was reverted to focus on scalability and security—even though it’s still in the file structure, it’s not currently used.
-   - **Deployment Issue (May 10, 2025)**: The `/api/annotations` endpoint (`https://citizen-x-bootsrap.onrender.com/api/annotations?url=https://www.aaa.com/International`) returns `{"error":"No annotations found for this URL"}`, despite the extension loading annotations correctly. Server logs show the endpoint queries the correct shard (`annotations_www_aaa_com`) but skips valid annotations as duplicates or deleted, likely due to overzealous deduplication (`loadedAnnotations`, `annotationCache`). Fixed by clearing `annotationCache` per request, increasing the fetch timeout to 5000ms, and adding debug logging in `gun-server.js`. Validation is needed to confirm the fix and investigate data consistency issues.
+   - **Deployment Issue (May 10, 2025)**: The `/api/annotations` endpoint (`https://citizen-x-bootsrap.onrender.com/api/annotations?url=https://www.aaa.com/International`) initially returned `{"error":"No annotations found for this URL"}`, despite the extension loading annotations correctly. Server logs showed the endpoint queried the correct shard (`annotations_www_aaa_com`) but skipped valid annotations as duplicates or deleted due to overzealous deduplication (`loadedAnnotations`, `annotationCache`). Fixed by clearing `annotationCache` and `loadedAnnotations` per request, increasing the fetch timeout to 5000ms, and adding debug logging in `gun-server.js`. The fix was successful, and the endpoint now retrieves annotations correctly, aligning with the extension’s behavior. Validation is recommended to confirm the fix’s stability and investigate potential data consistency issues across peers.
 
 12. **Screenshots for Shared Annotations**
    - **Description**: Provide a screenshot of the top of the annotated page for both the annotation feature on non-Chrome browsers and the sharing functionality. Store the screenshot with the annotations, but only once.
@@ -134,7 +134,7 @@ A decentralized Chrome extension for annotating websites in order to bring a kno
    - **Status**: Implemented in v1.0 (Req 10).
 
 4. **Structured Data in Annotations**
-   - **Description**: Enrich annotationsemporal with structured data to enable complex reasoning.
+   - **Description**: Enrich annotations with structured data to enable complex reasoning.
    - **Status**: Pending.
 
 6. **AI-Powered Structured Information Extraction**
@@ -268,4 +268,30 @@ A decentralized Chrome extension for annotating websites in order to bring a kno
 - **Collaborative Deletion and Moderation**:
   - Add hiding and reporting for comments and annotations in `CommentList.tsx` and `AnnotationList.tsx`.
   - Implement opinion preference toggle and age verification in settings panel.
-  - Develop truthfulness ranking in `AnnotationManager.ts`
+  - Develop truthfulness ranking in `AnnotationManager.ts` with diversity weighting.
+  - Create `ModeratorPanel.tsx` for admin voting on reported content.
+  - Test deletion, hiding, reporting, ranking, and age filtering workflows.
+
+- **Real-Time Updates**:
+  - Remove initial fetch dependency in `useAnnotations.ts`, relying on `map().on()` for incremental updates.
+  - Implement debouncing with `lodash/debounce` (100ms delay) to batch updates.
+  - Pre-fetch profiles for known authors to minimize display delays.
+  - Test simultaneous updates to ensure smooth UI updates without flickering.
+
+- **TypeScript and Code Quality**:
+  - Ensure all TypeScript errors are resolved (e.g., completed fixes for `nonce`, `deleteAnnotation` arguments).
+  - Verify `useUserProfile.ts` provides robust `keyPair` handling for SEA signing.
+  - Audit `AnnotationManager.ts` and `gun-server.js` for consistent nonce usage.
+
+- **Deployment Validation**:
+  - Validate the `/api/annotations` fix (clearing `annotationCache`, 5000ms timeout) by testing with various URLs and high-traffic scenarios.
+  - Investigate potential data consistency issues across peers (e.g., `https://gun-manhattan.herokuapp.com/gun`) to ensure all valid annotations are retrieved consistently by both the extension and endpoint.
+  - Monitor peer connections for duplicates and optimize if needed.
+
+- **Stopping Point (May 10, 2025)**:
+  - SEA implementation with nonces is complete for annotations, comments, and deletions, with signatures verified in `AnnotationManager.ts` and `gun-server.js`.
+  - TypeScript errors resolved in `AnnotationManager.ts`, `GunRepository.ts`, `StorageRepository.ts`, and `useAnnotations.ts`, ensuring `nonce` support and correct `deleteAnnotation` arguments.
+  - `gun-server.js` `put` hook refined to skip `souls: undefined` writes, eliminating noisy logs. `publicUrl` remains `https://citizen-x-bootsrap.onrender.com`.
+  - Comment deletion fixed in `CommentList.tsx` with proper `onDeleteComment` prop passing and DID-based ownership checks.
+  - `/api/annotations` issue resolved by clearing `annotationCache` per request, increasing timeout to 5000ms, and adding debug logging. The endpoint now retrieves annotations correctly, matching the extension’s behavior.
+  - Pending tasks include validating the `/api/annotations` fix, completing sharding migration, validating persistence, and implementing hiding/reporting/ranking features.
